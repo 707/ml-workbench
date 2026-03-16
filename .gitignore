@@ -1,0 +1,11 @@
+# Active ticket pointer — each developer sets their own locally
+.ai/tickets/active.md
+
+# Per-developer tracker config — each developer sets their own locally
+.claude/project.json
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
