@@ -191,9 +191,9 @@ def compare(api_key: str, preset: str, custom: str):
     question = custom.strip() if custom.strip() else preset
 
     if not api_key.strip():
-        return "", "No API key provided.", "", "No API key provided."
+        return "", "No API key provided.", "", "No API key provided.", ""
     if not question:
-        return "", "No question provided.", "", "No question provided."
+        return "", "No question provided.", "", "No question provided.", ""
 
     r1_result, llama_result = run_comparison(api_key.strip(), question)
 

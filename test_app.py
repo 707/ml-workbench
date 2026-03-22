@@ -463,3 +463,197 @@ class TestRunComparison:
         called_models = [call.args[1] for call in mock_call.call_args_list]
         assert any("deepseek" in m for m in called_models)
         assert any("llama" in m for m in called_models)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — _format_usage
+# ---------------------------------------------------------------------------
+
+
+class TestFormatUsage:
+    """Unit tests for _format_usage(usage) — Markdown formatter."""
+
+    def test_basic_output_contains_prompt_and_completion(self):
+        """Must include prompt_tokens and completion_tokens in output."""
+        from app import _format_usage
+
+        out = _format_usage({"prompt_tokens": 10, "completion_tokens": 50, "reasoning_tokens": 0})
+
+        assert "10" in out
+        assert "50" in out
+
+    def test_no_reasoning_tokens_omits_reasoning_line(self):
+        """If reasoning_tokens is 0, no 'Reasoning tokens' line appears."""
+        from app import _format_usage
+
+        out = _format_usage({"prompt_tokens": 5, "completion_tokens": 30, "reasoning_tokens": 0})
+
+        assert "Reasoning" not in out
+
+    def test_with_reasoning_tokens_includes_reasoning_and_answer_lines(self):
+        """If reasoning_tokens > 0, both reasoning and answer-token lines appear."""
+        from app import _format_usage
+
+        out = _format_usage({"prompt_tokens": 10, "completion_tokens": 400, "reasoning_tokens": 350})
+
+        assert "Reasoning" in out
+        assert "Answer" in out
+        assert "350" in out
+
+    def test_answer_tokens_computed_as_completion_minus_reasoning(self):
+        """Answer tokens = completion - reasoning when reasoning > 0."""
+        from app import _format_usage
+
+        out = _format_usage({"prompt_tokens": 10, "completion_tokens": 400, "reasoning_tokens": 350})
+
+        # answer tokens = 400 - 350 = 50
+        assert "50" in out
+
+    def test_returns_string(self):
+        """Return type is always str."""
+        from app import _format_usage
+
+        result = _format_usage({})
+
+        assert isinstance(result, str)
+
+    def test_empty_dict_returns_string_with_zeros(self):
+        """Empty dict — all counts default to 0, no crash."""
+        from app import _format_usage
+
+        out = _format_usage({})
+
+        assert "0" in out
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — compare (Gradio handler)
+# ---------------------------------------------------------------------------
+
+
+class TestCompare:
+    """Unit tests for compare(api_key, preset, custom) — mocked run_comparison."""
+
+    def _r1_result(self, reasoning="step", answer="R1 answer"):
+        return {
+            "reasoning": reasoning,
+            "answer": answer,
+            "usage": {"prompt_tokens": 10, "completion_tokens": 100, "reasoning_tokens": 80},
+        }
+
+    def _llama_result(self, answer="Llama answer"):
+        return {
+            "answer": answer,
+            "usage": {"prompt_tokens": 10, "completion_tokens": 40, "reasoning_tokens": 0},
+        }
+
+    def test_missing_api_key_returns_error_message(self):
+        """Empty api_key should return error strings without calling run_comparison."""
+        from app import compare
+
+        r1_reasoning, r1_answer, r1_stats, llama_answer, llama_stats = compare(
+            "", "preset question", ""
+        )
+
+        assert "No API key" in r1_answer
+        assert "No API key" in llama_answer
+
+    def test_custom_question_overrides_preset(self):
+        """Non-empty custom question is used instead of preset."""
+        from app import compare
+
+        with patch("app.run_comparison") as mock_run:
+            mock_run.return_value = (self._r1_result(), self._llama_result())
+
+            compare("key", "preset", "custom question")
+
+        _, called_question = mock_run.call_args.args
+        assert called_question == "custom question"
+
+    def test_preset_used_when_custom_is_empty(self):
+        """Empty custom uses preset question."""
+        from app import compare
+
+        with patch("app.run_comparison") as mock_run:
+            mock_run.return_value = (self._r1_result(), self._llama_result())
+
+            compare("key", "preset question", "")
+
+        _, called_question = mock_run.call_args.args
+        assert called_question == "preset question"
+
+    def test_returns_five_values(self):
+        """compare() must return exactly 5 values."""
+        from app import compare
+
+        with patch("app.run_comparison") as mock_run:
+            mock_run.return_value = (self._r1_result(), self._llama_result())
+
+            result = compare("key", "preset", "")
+
+        assert len(result) == 5
+
+    def test_r1_error_result_surfaces_error_text(self):
+        """If R1 returns an error dict, the answer field shows the error."""
+        from app import compare
+
+        with patch("app.run_comparison") as mock_run:
+            mock_run.return_value = ({"error": "timeout"}, self._llama_result())
+
+            _, r1_answer, _, _, _ = compare("key", "preset", "")
+
+        assert "Error" in r1_answer
+        assert "timeout" in r1_answer
+
+    def test_llama_error_result_surfaces_error_text(self):
+        """If Llama returns an error dict, the answer field shows the error."""
+        from app import compare
+
+        with patch("app.run_comparison") as mock_run:
+            mock_run.return_value = (self._r1_result(), {"error": "503"})
+
+            _, _, _, llama_answer, _ = compare("key", "preset", "")
+
+        assert "Error" in llama_answer
+        assert "503" in llama_answer
+
+    def test_custom_whitespace_only_falls_back_to_preset(self):
+        """Whitespace-only custom input should be treated as empty."""
+        from app import compare
+
+        with patch("app.run_comparison") as mock_run:
+            mock_run.return_value = (self._r1_result(), self._llama_result())
+
+            compare("key", "preset q", "   ")
+
+        _, called_question = mock_run.call_args.args
+        assert called_question == "preset q"
+
+    def test_no_question_returns_error_message(self):
+        """Empty preset and empty custom should return 'No question' error."""
+        from app import compare
+
+        r1_reasoning, r1_answer, r1_stats, llama_answer, llama_stats = compare(
+            "valid-key", "", ""
+        )
+
+        assert "No question" in r1_answer
+        assert "No question" in llama_answer
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — build_ui (smoke test)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildUi:
+    """Smoke tests for build_ui() — verifies Gradio Blocks is constructed."""
+
+    def test_build_ui_returns_gradio_blocks(self):
+        """build_ui() must return a Gradio Blocks instance without raising."""
+        import gradio as gr
+        from app import build_ui
+
+        demo = build_ui()
+
+        assert isinstance(demo, gr.Blocks)

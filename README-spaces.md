@@ -1,0 +1,47 @@
+---
+title: Reasoning Model Comparison
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: "4.0"
+app_file: app.py
+pinned: false
+license: mit
+---
+
+# Reasoning Model Comparison
+
+Compare how **DeepSeek-R1** (reasoning model) and **Llama-3.1-8B** (standard model) respond to the same question side-by-side. R1's full thinking trace is shown alongside its final answer so you can see how much reasoning it actually does — and whether that reasoning helps.
+
+## How to use
+
+1. Enter your [OpenRouter](https://openrouter.ai) API key (both models have free-tier access).
+2. Pick a preset question or type your own.
+3. Click **Compare**.
+
+The left panel shows R1's reasoning trace and final answer with token counts. The right panel shows Llama's response.
+
+## Preset questions
+
+These are chosen to expose the "overthinking" failure mode of reasoning models:
+
+| Question | Why interesting |
+|----------|----------------|
+| How many r's are in "strawberry"? | Tokenization trap — letter-counting spiral |
+| Bat and ball cost $1.10... | CRT problem — intuitive wrong answer is $0.10, correct is $0.05 |
+| Is 9677 a prime number? | Forces real arithmetic vs pattern recall |
+| Monty Hall problem | Famous model-confuser — counterintuitive correct answer |
+| Fold paper 42 times | Exponential growth — tests step-by-step reasoning vs approximation |
+
+## Models
+
+- **DeepSeek-R1** (`deepseek/deepseek-r1`) — reasoning model with visible thinking trace
+- **Llama-3.1-8B Instruct** (`meta-llama/llama-3.1-8b-instruct`) — standard instruction-tuned model
+
+Both are free-tier on OpenRouter.
+
+## Notes
+
+- Rename this file to `README.md` when deploying to HuggingFace Spaces (the YAML frontmatter must be in `README.md`).
+- API key is not stored; it is used only for the duration of the request.
