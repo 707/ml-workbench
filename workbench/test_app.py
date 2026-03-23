@@ -657,3 +657,323 @@ class TestBuildUi:
         demo = build_ui()
 
         assert isinstance(demo, gr.Blocks)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — FREE_MODELS registry
+# ---------------------------------------------------------------------------
+
+
+class TestFreeModels:
+    """Unit tests for the FREE_MODELS registry."""
+
+    def test_free_models_is_non_empty(self):
+        """FREE_MODELS must contain at least one entry."""
+        from app import FREE_MODELS
+
+        assert len(FREE_MODELS) > 0
+
+    def test_free_models_contains_2_tuples_of_strings(self):
+        """Every entry must be a 2-tuple of (str, str)."""
+        from app import FREE_MODELS
+
+        for entry in FREE_MODELS:
+            assert isinstance(entry, tuple)
+            assert len(entry) == 2
+            assert isinstance(entry[0], str)
+            assert isinstance(entry[1], str)
+
+    def test_free_models_labels_are_non_empty(self):
+        """Display labels (first element) must not be empty strings."""
+        from app import FREE_MODELS
+
+        for label, _ in FREE_MODELS:
+            assert label.strip() != ""
+
+    def test_free_models_ids_are_non_empty(self):
+        """Model IDs (second element) must not be empty strings."""
+        from app import FREE_MODELS
+
+        for _, model_id in FREE_MODELS:
+            assert model_id.strip() != ""
+
+    def test_model_r1_default_present_in_free_models(self):
+        """MODEL_R1 default must be one of the model IDs in FREE_MODELS."""
+        from app import FREE_MODELS, MODEL_R1
+
+        model_ids = [m_id for _, m_id in FREE_MODELS]
+        assert MODEL_R1 in model_ids
+
+    def test_model_llama_default_present_in_free_models(self):
+        """MODEL_LLAMA default must be one of the model IDs in FREE_MODELS."""
+        from app import FREE_MODELS, MODEL_LLAMA
+
+        model_ids = [m_id for _, m_id in FREE_MODELS]
+        assert MODEL_LLAMA in model_ids
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — extended call_openrouter (temperature / max_tokens)
+# ---------------------------------------------------------------------------
+
+
+class TestCallOpenrouterInferenceParams:
+    """Tests for optional temperature and max_tokens kwargs on call_openrouter."""
+
+    def test_temperature_included_in_payload_when_set(self):
+        """temperature kwarg must appear in the POST body when provided."""
+        from app import call_openrouter
+
+        with patch("app.requests.post") as mock_post:
+            mock_post.return_value.json.return_value = {}
+            mock_post.return_value.raise_for_status = MagicMock()
+
+            call_openrouter("key", "model", "q", temperature=0.7)
+
+        _, kwargs = mock_post.call_args
+        assert kwargs["json"]["temperature"] == 0.7
+
+    def test_max_tokens_included_in_payload_when_set(self):
+        """max_tokens kwarg must appear in the POST body when provided."""
+        from app import call_openrouter
+
+        with patch("app.requests.post") as mock_post:
+            mock_post.return_value.json.return_value = {}
+            mock_post.return_value.raise_for_status = MagicMock()
+
+            call_openrouter("key", "model", "q", max_tokens=512)
+
+        _, kwargs = mock_post.call_args
+        assert kwargs["json"]["max_tokens"] == 512
+
+    def test_temperature_absent_when_none(self):
+        """temperature must NOT appear in payload when not provided (None)."""
+        from app import call_openrouter
+
+        with patch("app.requests.post") as mock_post:
+            mock_post.return_value.json.return_value = {}
+            mock_post.return_value.raise_for_status = MagicMock()
+
+            call_openrouter("key", "model", "q")
+
+        _, kwargs = mock_post.call_args
+        assert "temperature" not in kwargs["json"]
+
+    def test_max_tokens_absent_when_none(self):
+        """max_tokens must NOT appear in payload when not provided (None)."""
+        from app import call_openrouter
+
+        with patch("app.requests.post") as mock_post:
+            mock_post.return_value.json.return_value = {}
+            mock_post.return_value.raise_for_status = MagicMock()
+
+            call_openrouter("key", "model", "q")
+
+        _, kwargs = mock_post.call_args
+        assert "max_tokens" not in kwargs["json"]
+
+    def test_both_params_sent_when_both_set(self):
+        """Both temperature and max_tokens appear together when both provided."""
+        from app import call_openrouter
+
+        with patch("app.requests.post") as mock_post:
+            mock_post.return_value.json.return_value = {}
+            mock_post.return_value.raise_for_status = MagicMock()
+
+            call_openrouter("key", "model", "q", temperature=1.0, max_tokens=256)
+
+        _, kwargs = mock_post.call_args
+        assert kwargs["json"]["temperature"] == 1.0
+        assert kwargs["json"]["max_tokens"] == 256
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — _call_model
+# ---------------------------------------------------------------------------
+
+
+class TestCallModel:
+    """Unit tests for _call_model(api_key, model_id, prompt, temperature, max_tokens)."""
+
+    def _make_response(self, content, reasoning=None, reasoning_tokens=0):
+        resp = {
+            "choices": [{"message": {"content": content}}],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 50,
+            },
+        }
+        if reasoning is not None:
+            resp["choices"][0]["message"]["reasoning"] = reasoning
+        if reasoning_tokens > 0:
+            resp["usage"]["completion_tokens_details"] = {"reasoning_tokens": reasoning_tokens}
+        return resp
+
+    def test_returns_dict_with_answer_and_usage(self):
+        """_call_model must return a dict with 'answer' and 'usage' keys."""
+        from app import _call_model
+
+        resp = self._make_response("plain answer")
+        with patch("app.call_openrouter", return_value=resp):
+            result = _call_model("key", "some/model", "q?")
+
+        assert "answer" in result
+        assert "usage" in result
+
+    def test_reasoning_from_dedicated_field(self):
+        """If message.reasoning is present, use it as reasoning."""
+        from app import _call_model
+
+        resp = self._make_response("The answer.", reasoning="deep thought")
+        with patch("app.call_openrouter", return_value=resp):
+            result = _call_model("key", "some/model", "q?")
+
+        assert result["reasoning"] == "deep thought"
+        assert result["answer"] == "The answer."
+
+    def test_reasoning_falls_back_to_think_block(self):
+        """If no message.reasoning field, parse <think> block from content."""
+        from app import _call_model
+
+        resp = self._make_response("<think>my reasoning</think>My answer.")
+        with patch("app.call_openrouter", return_value=resp):
+            result = _call_model("key", "some/model", "q?")
+
+        assert "my reasoning" in result["reasoning"]
+        assert result["answer"] == "My answer."
+
+    def test_no_reasoning_gives_empty_reasoning(self):
+        """Plain content with no reasoning field or think tags → reasoning is ''."""
+        from app import _call_model
+
+        resp = self._make_response("Just the answer.")
+        with patch("app.call_openrouter", return_value=resp):
+            result = _call_model("key", "some/model", "q?")
+
+        assert result["reasoning"] == ""
+        assert result["answer"] == "Just the answer."
+
+    def test_forwards_temperature_to_call_openrouter(self):
+        """temperature kwarg must be passed through to call_openrouter."""
+        from app import _call_model
+
+        resp = self._make_response("answer")
+        with patch("app.call_openrouter", return_value=resp) as mock_call:
+            _call_model("key", "some/model", "q?", temperature=0.5)
+
+        _, kwargs = mock_call.call_args
+        assert kwargs.get("temperature") == 0.5
+
+    def test_forwards_max_tokens_to_call_openrouter(self):
+        """max_tokens kwarg must be passed through to call_openrouter."""
+        from app import _call_model
+
+        resp = self._make_response("answer")
+        with patch("app.call_openrouter", return_value=resp) as mock_call:
+            _call_model("key", "some/model", "q?", max_tokens=128)
+
+        _, kwargs = mock_call.call_args
+        assert kwargs.get("max_tokens") == 128
+
+    def test_calls_openrouter_with_correct_model_id(self):
+        """The model_id argument must be passed to call_openrouter."""
+        from app import _call_model
+
+        resp = self._make_response("answer")
+        with patch("app.call_openrouter", return_value=resp) as mock_call:
+            _call_model("key", "my/custom-model", "q?")
+
+        assert mock_call.call_args.args[1] == "my/custom-model"
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — updated run_comparison (explicit model IDs + params)
+# ---------------------------------------------------------------------------
+
+
+class TestRunComparisonWithModels:
+    """Tests for run_comparison with explicit model_a, model_b, params."""
+
+    def _make_response(self, content):
+        return {
+            "choices": [{"message": {"content": content}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 20},
+        }
+
+    def test_uses_provided_model_a_id(self):
+        """run_comparison must call _call_model with the model_a ID."""
+        from app import run_comparison
+
+        resp = self._make_response("answer")
+        with patch("app.call_openrouter", return_value=resp) as mock_call:
+            run_comparison("key", "q?", model_a="custom/model-a", model_b="custom/model-b")
+
+        called_models = [call.args[1] for call in mock_call.call_args_list]
+        assert "custom/model-a" in called_models
+
+    def test_uses_provided_model_b_id(self):
+        """run_comparison must call _call_model with the model_b ID."""
+        from app import run_comparison
+
+        resp = self._make_response("answer")
+        with patch("app.call_openrouter", return_value=resp) as mock_call:
+            run_comparison("key", "q?", model_a="custom/model-a", model_b="custom/model-b")
+
+        called_models = [call.args[1] for call in mock_call.call_args_list]
+        assert "custom/model-b" in called_models
+
+    def test_params_a_forwarded_to_model_a(self):
+        """params_a temperature/max_tokens must reach call_openrouter for model_a."""
+        from app import run_comparison
+
+        resp = self._make_response("answer")
+        calls_seen = []
+
+        def capture(*args, **kwargs):
+            calls_seen.append((args[1], kwargs))
+            return resp
+
+        with patch("app.call_openrouter", side_effect=capture):
+            run_comparison(
+                "key", "q?",
+                model_a="model-a", model_b="model-b",
+                params_a={"temperature": 0.3, "max_tokens": 64},
+            )
+
+        model_a_call = next(kw for m, kw in calls_seen if m == "model-a")
+        assert model_a_call.get("temperature") == 0.3
+        assert model_a_call.get("max_tokens") == 64
+
+    def test_params_b_forwarded_to_model_b(self):
+        """params_b temperature/max_tokens must reach call_openrouter for model_b."""
+        from app import run_comparison
+
+        resp = self._make_response("answer")
+        calls_seen = []
+
+        def capture(*args, **kwargs):
+            calls_seen.append((args[1], kwargs))
+            return resp
+
+        with patch("app.call_openrouter", side_effect=capture):
+            run_comparison(
+                "key", "q?",
+                model_a="model-a", model_b="model-b",
+                params_b={"temperature": 1.5, "max_tokens": 256},
+            )
+
+        model_b_call = next(kw for m, kw in calls_seen if m == "model-b")
+        assert model_b_call.get("temperature") == 1.5
+        assert model_b_call.get("max_tokens") == 256
+
+    def test_defaults_use_model_r1_and_model_llama(self):
+        """When model_a/model_b omitted, defaults to MODEL_R1 and MODEL_LLAMA."""
+        from app import run_comparison, MODEL_R1, MODEL_LLAMA
+
+        resp = self._make_response("answer")
+        with patch("app.call_openrouter", return_value=resp) as mock_call:
+            run_comparison("key", "q?")
+
+        called_models = [call.args[1] for call in mock_call.call_args_list]
+        assert MODEL_R1 in called_models
+        assert MODEL_LLAMA in called_models

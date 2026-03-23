@@ -5,7 +5,9 @@ Sends a question to DeepSeek-R1 and Llama-3.1-8B simultaneously via OpenRouter,
 parses R1's <think> block, and displays a side-by-side comparison.
 """
 
+import html as _html
 import os
+import re
 import requests
 import gradio as gr
 from collections import defaultdict
@@ -40,6 +42,14 @@ def _check_rate_limit(username: str) -> bool:
 # ---------------------------------------------------------------------------
 # Model IDs
 # ---------------------------------------------------------------------------
+
+FREE_MODELS: list[tuple[str, str]] = [
+    ("Step 3.5 Flash (Reasoning)", "stepfun/step-3.5-flash"),
+    ("Llama-3.1-8B", "meta-llama/llama-3.1-8b-instruct"),
+    ("Gemma-3-27B", "google/gemma-3-27b-it:free"),
+    ("Mistral-7B", "mistralai/mistral-7b-instruct:free"),
+    ("Qwen3-8B", "qwen/qwen3-8b:free"),
+]
 
 MODEL_R1 = "stepfun/step-3.5-flash"
 MODEL_LLAMA = "meta-llama/llama-3.1-8b-instruct"
@@ -83,13 +93,21 @@ def parse_think_block(text: str) -> tuple[str, str]:
     return (reasoning, answer)
 
 
-def call_openrouter(api_key: str, model: str, prompt: str) -> dict:
+def call_openrouter(
+    api_key: str,
+    model: str,
+    prompt: str,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict:
     """POST a chat completion request to OpenRouter.
 
     Args:
-        api_key: OpenRouter API key.
-        model:   Model ID string (e.g. "deepseek/deepseek-r1").
-        prompt:  User question string.
+        api_key:     OpenRouter API key.
+        model:       Model ID string (e.g. "deepseek/deepseek-r1").
+        prompt:      User question string.
+        temperature: Sampling temperature — omitted from payload when None.
+        max_tokens:  Max completion tokens — omitted from payload when None.
 
     Returns:
         Parsed JSON response dict.
@@ -105,6 +123,10 @@ def call_openrouter(api_key: str, model: str, prompt: str) -> dict:
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
 
     response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
     response.raise_for_status()
@@ -136,11 +158,34 @@ def extract_usage(response: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _call_r1(api_key: str, prompt: str) -> dict:
-    """Call DeepSeek-R1 and return a result dict."""
-    response = call_openrouter(api_key, MODEL_R1, prompt)
-    content = response["choices"][0]["message"]["content"]
-    reasoning, answer = parse_think_block(content)
+def _call_model(
+    api_key: str,
+    model_id: str,
+    prompt: str,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict:
+    """Call any model and return a result dict.
+
+    Reasoning detection applies to all models:
+    1. Prefer `message.reasoning` field (OpenRouter native reasoning field).
+    2. Fall back to parsing <think>...</think> tags in `message.content`.
+    """
+    extra: dict = {}
+    if temperature is not None:
+        extra["temperature"] = temperature
+    if max_tokens is not None:
+        extra["max_tokens"] = max_tokens
+    response = call_openrouter(api_key, model_id, prompt, **extra)
+    message = response["choices"][0]["message"]
+    content = message.get("content") or ""
+
+    reasoning_field = message.get("reasoning") or ""
+    if reasoning_field:
+        reasoning, answer = reasoning_field, content
+    else:
+        reasoning, answer = parse_think_block(content)
+
     return {
         "reasoning": reasoning,
         "answer": answer,
@@ -148,47 +193,47 @@ def _call_r1(api_key: str, prompt: str) -> dict:
     }
 
 
-def _call_llama(api_key: str, prompt: str) -> dict:
-    """Call Llama-3.1-8B and return a result dict."""
-    response = call_openrouter(api_key, MODEL_LLAMA, prompt)
-    content = response["choices"][0]["message"]["content"]
-    return {
-        "answer": content,
-        "usage": extract_usage(response),
-    }
-
-
-def run_comparison(api_key: str, question: str) -> tuple[dict, dict]:
-    """Run both models concurrently and return (r1_result, llama_result).
+def run_comparison(
+    api_key: str,
+    question: str,
+    model_a: str = MODEL_R1,
+    model_b: str = MODEL_LLAMA,
+    params_a: dict | None = None,
+    params_b: dict | None = None,
+) -> tuple[dict, dict]:
+    """Run both models concurrently and return (result_a, result_b).
 
     Each result is an independent dict. If one model fails, the other
     result is still returned — the failed model gets {"error": str}.
     """
-    r1_result: dict = {}
-    llama_result: dict = {}
+    params_a = params_a or {}
+    params_b = params_b or {}
+
+    result_a: dict = {}
+    result_b: dict = {}
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
-            executor.submit(_call_r1, api_key, question): "r1",
-            executor.submit(_call_llama, api_key, question): "llama",
+            executor.submit(_call_model, api_key, model_a, question, **params_a): "a",
+            executor.submit(_call_model, api_key, model_b, question, **params_b): "b",
         }
 
         for future in as_completed(futures):
             label = futures[future]
             try:
                 result = future.result()
-                if label == "r1":
-                    r1_result = result
+                if label == "a":
+                    result_a = result
                 else:
-                    llama_result = result
+                    result_b = result
             except Exception as exc:
                 error_dict = {"error": str(exc)}
-                if label == "r1":
-                    r1_result = error_dict
+                if label == "a":
+                    result_a = error_dict
                 else:
-                    llama_result = error_dict
+                    result_b = error_dict
 
-    return r1_result, llama_result
+    return result_a, result_b
 
 
 # ---------------------------------------------------------------------------
@@ -246,10 +291,59 @@ def compare(api_key: str, preset: str, custom: str):
     return r1_reasoning, r1_answer, r1_stats, llama_answer, llama_stats
 
 
+def _stats_to_html(stats_md: str) -> str:
+    """Convert **Key:** Value markdown to inline HTML."""
+    out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", stats_md)
+    return out.replace("  \n", "<br>").replace("\n", "<br>")
+
+
+def _build_card(
+    question: str,
+    r1_reasoning: str,
+    r1_answer: str,
+    r1_stats_md: str,
+    llama_answer: str,
+    llama_stats_md: str,
+    model_a_label: str = "Step 3.5 Flash (Reasoning)",
+    model_b_label: str = "Llama-3.1-8B",
+) -> str:
+    """Render one comparison result as an HTML card."""
+    q = _html.escape(question)
+    r1_ans = _html.escape(r1_answer)
+    r1_trace = _html.escape(r1_reasoning)
+    llama_ans = _html.escape(llama_answer)
+    label_a = _html.escape(model_a_label)
+    label_b = _html.escape(model_b_label)
+
+    return f"""
+<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:20px;background:#fff;">
+  <p style="font-weight:bold;font-size:1.05em;margin:0 0 12px 0;">Q: {q}</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    <div>
+      <strong>{label_a}</strong>
+      <div style="background:#f5f5f5;padding:8px 12px;border-radius:4px;font-size:0.85em;margin:8px 0 10px 0;">{_stats_to_html(r1_stats_md)}</div>
+      <p style="margin:0 0 10px 0;">{r1_ans}</p>
+      <details>
+        <summary style="cursor:pointer;color:#888;font-size:0.85em;">Show reasoning trace</summary>
+        <pre style="white-space:pre-wrap;font-size:0.78em;background:#f9f9f9;padding:10px;border-radius:4px;max-height:300px;overflow-y:auto;margin-top:6px;">{r1_trace}</pre>
+      </details>
+    </div>
+    <div>
+      <strong>{label_b}</strong>
+      <div style="background:#f5f5f5;padding:8px 12px;border-radius:4px;font-size:0.85em;margin:8px 0 10px 0;">{_stats_to_html(llama_stats_md)}</div>
+      <p style="margin:0;">{llama_ans}</p>
+    </div>
+  </div>
+</div>"""
+
+
 def build_ui() -> gr.Blocks:
     """Construct and return the Gradio Blocks UI."""
+    model_choices = [label for label, _ in FREE_MODELS]
+    model_ids = {label: m_id for label, m_id in FREE_MODELS}
+
     with gr.Blocks(title="Reasoning Model Comparison") as demo:
-        gr.Markdown("# Reasoning Model Comparison\nStep 3.5 Flash vs Llama-3.1-8B via OpenRouter")
+        gr.Markdown("# Reasoning Model Comparison\nCompare any two free models via OpenRouter")
 
         # Auth row — HF login button + status message
         with gr.Row():
@@ -269,6 +363,37 @@ def build_ui() -> gr.Blocks:
                 value=SERVER_KEY,
             )
 
+        # Model selection dropdowns with per-model inference controls
+        with gr.Row():
+            with gr.Column():
+                model_a_drop = gr.Dropdown(
+                    choices=model_choices,
+                    value=model_choices[0],
+                    label="Model A",
+                )
+                with gr.Accordion("Model A parameters", open=False):
+                    temp_a = gr.Slider(
+                        minimum=0.0, maximum=2.0, value=1.0, step=0.05,
+                        label="Temperature",
+                    )
+                    max_tokens_a = gr.Number(
+                        value=None, label="Max tokens (blank = no limit)", precision=0,
+                    )
+            with gr.Column():
+                model_b_drop = gr.Dropdown(
+                    choices=model_choices,
+                    value=model_choices[1],
+                    label="Model B",
+                )
+                with gr.Accordion("Model B parameters", open=False):
+                    temp_b = gr.Slider(
+                        minimum=0.0, maximum=2.0, value=1.0, step=0.05,
+                        label="Temperature",
+                    )
+                    max_tokens_b = gr.Number(
+                        value=None, label="Max tokens (blank = no limit)", precision=0,
+                    )
+
         with gr.Row():
             preset = gr.Radio(
                 choices=PRESET_QUESTIONS,
@@ -284,31 +409,8 @@ def build_ui() -> gr.Blocks:
 
         submit_btn = gr.Button("Compare →", variant="primary")
 
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("## Step 3.5 Flash (Reasoning)")
-                r1_reasoning = gr.Textbox(
-                    label="Reasoning Trace",
-                    lines=10,
-                    max_lines=30,
-                    interactive=False,
-                )
-                r1_answer = gr.Textbox(
-                    label="Final Answer",
-                    lines=4,
-                    interactive=False,
-                )
-                r1_stats = gr.Markdown()
-
-            with gr.Column():
-                gr.Markdown("## Llama-3.1-8B")
-                llama_answer = gr.Textbox(
-                    label="Response",
-                    lines=10,
-                    max_lines=30,
-                    interactive=False,
-                )
-                llama_stats = gr.Markdown()
+        history_state = gr.State([])
+        history_html = gr.HTML()
 
         # Update auth message and key visibility when login state changes
         def _on_load(profile: gr.OAuthProfile | None):
@@ -326,11 +428,17 @@ def build_ui() -> gr.Blocks:
 
         demo.load(_on_load, inputs=None, outputs=[auth_msg, key_row])
 
-        # Use server key when user is logged in and it's available
-        def _compare(
+        def _compare_and_render(
             api_key_val: str,
+            model_a_label: str,
+            model_b_label: str,
+            temp_a_val: float,
+            temp_b_val: float,
+            max_tokens_a_val,
+            max_tokens_b_val,
             preset_val: str,
             custom_val: str,
+            history: list,
             profile: gr.OAuthProfile | None,
             oauth_token: gr.OAuthToken | None,
         ):
@@ -338,19 +446,60 @@ def build_ui() -> gr.Blocks:
 
             if using_server_key:
                 if profile is None:
-                    blocked = ("", "Login with HuggingFace to use the shared key.", "", "", "")
-                    return blocked
+                    msg = "<p style='color:red'>Login with HuggingFace to use the shared key.</p>"
+                    return history, "".join(history) + msg
                 if not _check_rate_limit(profile.username):
-                    blocked = ("", f"Rate limit reached ({RATE_LIMIT} requests/hour). Try again later.", "", "", "")
-                    return blocked
+                    msg = f"<p style='color:red'>Rate limit reached ({RATE_LIMIT} requests/hour). Try again later.</p>"
+                    return history, "".join(history) + msg
 
             effective_key = SERVER_KEY if using_server_key else api_key_val
-            return compare(effective_key, preset_val, custom_val)
+            question = custom_val.strip() if custom_val.strip() else preset_val
+
+            if not effective_key.strip():
+                msg = "<p style='color:red'>No API key provided.</p>"
+                return history, "".join(history) + msg
+            if not question:
+                msg = "<p style='color:red'>No question provided.</p>"
+                return history, "".join(history) + msg
+
+            m_a_id = model_ids[model_a_label]
+            m_b_id = model_ids[model_b_label]
+            params_a = {"temperature": temp_a_val, "max_tokens": int(max_tokens_a_val) if max_tokens_a_val else None}
+            params_b = {"temperature": temp_b_val, "max_tokens": int(max_tokens_b_val) if max_tokens_b_val else None}
+            # Remove None values so they're not forwarded
+            params_a = {k: v for k, v in params_a.items() if v is not None}
+            params_b = {k: v for k, v in params_b.items() if v is not None}
+
+            result_a, result_b = run_comparison(effective_key, question, m_a_id, m_b_id, params_a, params_b)
+
+            if "error" in result_a:
+                a_reasoning, a_answer, a_stats = "", f"Error: {result_a['error']}", ""
+            else:
+                a_reasoning = result_a.get("reasoning", "")
+                a_answer = result_a.get("answer", "")
+                a_stats = _format_usage(result_a.get("usage", {}))
+
+            if "error" in result_b:
+                b_answer, b_stats = f"Error: {result_b['error']}", ""
+            else:
+                b_answer = result_b.get("answer", "")
+                b_stats = _format_usage(result_b.get("usage", {}))
+
+            card = _build_card(
+                question, a_reasoning, a_answer, a_stats, b_answer, b_stats,
+                model_a_label=model_a_label, model_b_label=model_b_label,
+            )
+            new_history = [card] + history
+            return new_history, "".join(new_history)
 
         submit_btn.click(
-            fn=_compare,
-            inputs=[api_key, preset, custom],
-            outputs=[r1_reasoning, r1_answer, r1_stats, llama_answer, llama_stats],
+            fn=_compare_and_render,
+            inputs=[
+                api_key, model_a_drop, model_b_drop,
+                temp_a, temp_b, max_tokens_a, max_tokens_b,
+                preset, custom, history_state,
+            ],
+            outputs=[history_state, history_html],
         )
 
     return demo
