@@ -8,9 +8,11 @@ parses R1's <think> block, and displays a side-by-side comparison.
 import html as _html
 import os
 import re
-import requests
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from openrouter import call_openrouter, extract_usage, OPENROUTER_URL  # noqa: F401
+from tokenizer import build_tokenizer_ui
 
 # ---------------------------------------------------------------------------
 # Config
@@ -33,8 +35,6 @@ FREE_MODELS: list[tuple[str, str]] = [
 
 MODEL_R1 = "stepfun/step-3.5-flash"
 MODEL_LLAMA = "meta-llama/llama-3.1-8b-instruct"
-
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 PRESET_QUESTIONS = [
     'How many r\'s are in "strawberry"?',
@@ -71,66 +71,6 @@ def parse_think_block(text: str) -> tuple[str, str]:
     answer = after.strip()
 
     return (reasoning, answer)
-
-
-def call_openrouter(
-    api_key: str,
-    model: str,
-    prompt: str,
-    temperature: float | None = None,
-    max_tokens: int | None = None,
-) -> dict:
-    """POST a chat completion request to OpenRouter.
-
-    Args:
-        api_key:     OpenRouter API key.
-        model:       Model ID string (e.g. "deepseek/deepseek-r1").
-        prompt:      User question string.
-        temperature: Sampling temperature — omitted from payload when None.
-        max_tokens:  Max completion tokens — omitted from payload when None.
-
-    Returns:
-        Parsed JSON response dict.
-
-    Raises:
-        requests.HTTPError on non-2xx status.
-    """
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    if temperature is not None:
-        payload["temperature"] = temperature
-    if max_tokens is not None:
-        payload["max_tokens"] = max_tokens
-
-    response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()
-
-
-def extract_usage(response: dict) -> dict:
-    """Extract token usage counts from an OpenRouter response.
-
-    Returns a dict with keys:
-      - prompt_tokens
-      - completion_tokens
-      - reasoning_tokens  (0 if not present — e.g. Llama responses)
-    """
-    usage = response.get("usage", {})
-    details = usage.get("completion_tokens_details", {}) or {}
-
-    reasoning_tokens = details.get("reasoning_tokens") or 0
-
-    return {
-        "prompt_tokens": usage.get("prompt_tokens", 0) or 0,
-        "completion_tokens": usage.get("completion_tokens", 0) or 0,
-        "reasoning_tokens": reasoning_tokens,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -317,8 +257,8 @@ def _build_card(
 </div>"""
 
 
-def build_ui() -> gr.Blocks:
-    """Construct and return the Gradio Blocks UI."""
+def _build_comparison_blocks() -> gr.Blocks:
+    """Construct and return the Model Comparison Gradio Blocks."""
     model_choices = [label for label, _ in FREE_MODELS]
     model_ids = {label: m_id for label, m_id in FREE_MODELS}
 
@@ -446,6 +386,24 @@ def build_ui() -> gr.Blocks:
         )
 
     return demo
+
+
+def build_ui() -> gr.TabbedInterface:
+    """Construct and return the full tabbed Gradio UI.
+
+    Tabs:
+      - Model Comparison: side-by-side reasoning model comparison.
+      - Tokenizer Inspector: tokenization visualisation and analysis.
+
+    Returns:
+        gr.TabbedInterface composing both tab blocks.
+    """
+    comparison_blocks = _build_comparison_blocks()
+    tokenizer_blocks = build_tokenizer_ui()
+    return gr.TabbedInterface(
+        [comparison_blocks, tokenizer_blocks],
+        ["Model Comparison", "Tokenizer Inspector"],
+    )
 
 
 # ---------------------------------------------------------------------------
