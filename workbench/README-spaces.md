@@ -4,7 +4,7 @@ emoji: 🧠
 colorFrom: blue
 colorTo: indigo
 sdk: gradio
-sdk_version: "6.9.0"
+sdk_version: "6.8.0"
 app_file: app.py
 pinned: false
 license: mit
@@ -41,6 +41,33 @@ These are chosen to expose the "overthinking" failure mode of reasoning models:
 - **Llama-3.1-8B Instruct** (`meta-llama/llama-3.1-8b-instruct`) — standard instruction-tuned model
 
 Both are free-tier on OpenRouter.
+
+## Run locally
+
+From the `workbench/` directory:
+
+```bash
+make install
+make run
+```
+
+Then open the local Gradio URL shown in your terminal.
+
+## Deploy to Hugging Face Space
+
+1. Authenticate once:
+
+```bash
+hf login
+```
+
+2. Deploy from `workbench/`:
+
+```bash
+HF_SPACE=nad707/workbench make deploy
+```
+
+This uploads app files from `workbench/` to your Space while excluding local cache/venv artifacts.
 
 ## Notes
 

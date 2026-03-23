@@ -7,6 +7,7 @@ Test order matches implementation phases:
 """
 
 import json
+import inspect
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -126,6 +127,18 @@ class TestParseThinkBlock:
 
         assert reasoning == "reasoning"
         assert "answer with </think> inside" in answer
+
+
+class TestComparisonUiLabels:
+    """UI text checks for the comparison tab prompt inputs."""
+
+    def test_input_prompt_label_present_and_preset_label_removed(self):
+        """Prompt area should use 'Input Prompt' wording instead of 'Preset Questions'."""
+        import app
+
+        src = inspect.getsource(app._build_comparison_blocks)
+        assert "Input Prompt" in src
+        assert "Preset Questions" not in src
 
 
 # ---------------------------------------------------------------------------

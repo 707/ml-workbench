@@ -1,2 +1,4 @@
 gradio[oauth]
 requests
+transformers
+langdetect

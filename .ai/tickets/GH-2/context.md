@@ -1,8 +1,8 @@
 # Ticket Context: GH-2 — feat: tokenizer inspector tab
 
 **Issue:** https://github.com/707/ml-workbench/issues/2
-**Status:** planning-complete
-**Last Updated:** 14:40
+**Status:** implementation-complete
+**Last Updated:** 2026-03-23
 **Last Agent:** claude-code
 **Last Phase:** plan
 
@@ -147,10 +147,32 @@ Phase 0 first cleans up the existing app: removes HF OAuth, hides the API key in
 ## Current State
 
 ### Completed
-(none yet)
+- Added readable token display toggle in Tokenizer Inspector (Single + Compare tabs):
+  - Decodes token IDs to human-readable snippets when enabled
+  - Hides special tokens (e.g., `<|begin_of_text|>`) by default in readable mode
+  - Keeps raw token view as default behavior
+- Updated Model Comparison prompt input UX in `workbench/app.py`:
+  - Renamed prompt section to `Input Prompt`
+  - Moved custom prompt textbox into the same prompt section
+- Added/updated tests for:
+  - `Input Prompt` UI label migration away from `Preset Questions`
+  - Readable token mode special-token hiding
+  - Readable token decoded text rendering
+- Verified RED→GREEN locally:
+  - RED: 3 failing tests before implementation
+  - GREEN: `135 passed` on `workbench/test_app.py` + `workbench/test_tokenizer.py`
+- Fixed multilingual readable-token rendering in multiple RED→GREEN passes:
+  - replacement-character (`�`) drift handling in prefix diff
+  - fallback sequencing across `convert_tokens_to_string` / byte-accumulation / cumulative decode
+  - whitespace-preserving token span rendering (`white-space: pre`)
+  - dark-mode readability for highlighted tokens (`color:#000`)
+- Added run/deploy user docs:
+  - local app run instructions (`make install`, `make run`)
+  - HF Space deploy instructions (`hf login`, `HF_SPACE=nad707/workbench make deploy`)
+- Final tokenizer validation: `63 passed` on `workbench/test_tokenizer.py`
 
 ### In Progress
-(none yet)
+(none)
 
 ### Blocked By
 None
@@ -165,6 +187,11 @@ None
 - Translation failure is non-fatal: display "N/A" for efficiency score
 
 ## Handoff Instructions
-Continue from: Phase 0, Step 1 — remove Qwen3-8B from FREE_MODELS. Then Steps 2–4 (OAuth removal). Then start TDD from Step 5.
+`GH-2` is complete and ready to close.
+
+If follow-up work is needed:
+1. Re-run: `uv run pytest workbench/test_tokenizer.py -q`
+2. Deploy: `HF_SPACE=nad707/workbench make deploy`
+3. Verify in Space UI with Tamil input + readable toggle.
 
 IMPORTANT: This project has BUILDING-SETUP.md but no BUILDING.md yet.

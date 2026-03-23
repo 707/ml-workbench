@@ -566,6 +566,16 @@ class TestRenderTokensHtml:
         assert "Hello" in result
         assert "world" in result
 
+    def test_span_style_preserves_whitespace(self):
+        """Token span style should preserve visible spaces between decoded chunks."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": " hello", "id": 1}]
+        result = render_tokens_html(tokens, set())
+
+        assert "white-space:pre" in result
+        assert "color:#000" in result
+
     def test_oov_tokens_have_highlight_colour(self):
         """OOV tokens must be rendered with #ffcccc background."""
         from tokenizer import render_tokens_html
@@ -627,6 +637,147 @@ class TestRenderTokensHtml:
         result = render_tokens_html(tokens, {"Cat"})
 
         assert "#ffcccc" in result
+
+    def test_decoded_view_hides_special_tokens_by_default(self):
+        """Decoded view should skip special tokens like BOS when configured."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "<|begin_of_text|>", "id": 1}, {"token": "hello", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = [1]
+        mock_tok.decode.side_effect = lambda ids, **kwargs: "" if ids == [1] else "hello"
+
+        result = render_tokens_html(
+            tokens,
+            set(),
+            tokenizer=mock_tok,
+            decoded_view=True,
+            hide_special_tokens=True,
+        )
+
+        assert "begin_of_text" not in result
+        assert "hello" in result
+
+    def test_decoded_view_can_show_readable_decoded_text(self):
+        """Decoded view should prefer tokenizer.decode output over raw token text."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "Ġhello", "id": 42}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        mock_tok.decode.return_value = " hello"
+
+        result = render_tokens_html(
+            tokens,
+            set(),
+            tokenizer=mock_tok,
+            decoded_view=True,
+            hide_special_tokens=True,
+        )
+
+        assert "Ġhello" not in result
+        assert "hello" in result
+
+    def test_decoded_view_handles_multibyte_text_via_cumulative_decode(self):
+        """Readable mode should use cumulative decode chunks for multibyte scripts."""
+        from tokenizer import render_tokens_html
+
+        # Simulate a tokenizer where individual token decode is not readable,
+        # but cumulative decode forms proper text.
+        tokens = [
+            {"token": "à®µ", "id": 10},
+            {"token": "à®£", "id": 11},
+            {"token": "à®ķ", "id": 12},
+        ]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+
+        def _decode(ids, **kwargs):
+            if ids == [10]:
+                return ""
+            if ids == [10, 11]:
+                return "வ"
+            if ids == [10, 11, 12]:
+                return "வண"
+            return ""
+
+        mock_tok.decode.side_effect = _decode
+
+        result = render_tokens_html(
+            tokens,
+            set(),
+            tokenizer=mock_tok,
+            decoded_view=True,
+            hide_special_tokens=True,
+        )
+
+        assert "à®µ" not in result
+        assert "வ" in result
+
+    def test_decoded_view_uses_byte_decoder_path_when_available(self):
+        """Readable mode should prefer byte-decoder accumulation for byte-level tokens."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "A", "id": 1}, {"token": "B", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        mock_tok.byte_decoder = {"A": 65, "B": 66}
+        # If decode() were used, we'd see replacement chars; byte path should avoid this.
+        mock_tok.decode.return_value = "��"
+
+        result = render_tokens_html(
+            tokens,
+            set(),
+            tokenizer=mock_tok,
+            decoded_view=True,
+            hide_special_tokens=True,
+        )
+
+        assert "��" not in result
+        assert ">A</span>" in result
+        assert ">B</span>" in result
+
+    def test_decoded_view_prefers_convert_tokens_to_string_for_readable_output(self):
+        """Readable mode should use convert_tokens_to_string when available."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "à®µ", "id": 1}, {"token": "à®£", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        mock_tok.convert_tokens_to_string.side_effect = ["", "வ"]
+        # If this decode path were used directly, we'd likely see noise.
+        mock_tok.decode.return_value = "��"
+
+        result = render_tokens_html(
+            tokens,
+            set(),
+            tokenizer=mock_tok,
+            decoded_view=True,
+            hide_special_tokens=True,
+        )
+
+        assert "��" not in result
+        assert "வ" in result
+
+    def test_decoded_view_handles_replacement_prefix_drift(self):
+        """If previous decoded text contains replacement chars, we should still recover new readable chars."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "x", "id": 1}, {"token": "y", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        # Step 1 has replacement char, step 2 resolves to a real Tamil letter.
+        mock_tok.convert_tokens_to_string.side_effect = ["�", "வ"]
+
+        result = render_tokens_html(
+            tokens,
+            set(),
+            tokenizer=mock_tok,
+            decoded_view=True,
+            hide_special_tokens=True,
+        )
+
+        assert "வ" in result
 
 
 # ---------------------------------------------------------------------------

@@ -218,6 +218,19 @@ Before adopting ECC patterns, every session started with significant overhead:
 - **No skills library**: Domain-specific patterns (e.g., "how we do database migrations here") existed only in the developer's head or in previous chat logs.
 - **Ad-hoc MCP usage**: MCPs were enabled globally, consuming 50-70K tokens of context window for schema loading even when not needed for the current task.
 - **No suggest-compact**: Context windows filled silently until the AI started degrading, with no proactive warnings.
+
+---
+
+## 5. Memory Note — 2026-03-23 (GH-2 Follow-up)
+
+Post-ticket UX and tokenizer clarity improvements were completed with explicit RED→GREEN TDD:
+
+- Added a readable token view toggle in `workbench/tokenizer.py` for Single and Compare tabs.
+- In readable mode, special tokens (like BOS) are hidden by default and token IDs are decoded to human-readable fragments.
+- Updated the comparison prompt area in `workbench/app.py`:
+  - `Preset Questions` wording replaced with `Input Prompt`.
+  - Custom prompt input moved into the same prompt section.
+- Tests added first (RED), then implementation updated to pass (GREEN).
 - **Manual context management**: Knowing when to `/compact` or start a fresh session was a guessing game.
 
 Rough estimate: **20-30% of every session's token budget was overhead** — re-establishing context that should have been pre-loaded.

@@ -305,16 +305,14 @@ def _build_comparison_blocks() -> gr.Blocks:
                         value=None, label="Max tokens (blank = no limit)", precision=0,
                     )
 
-        with gr.Row():
+        with gr.Accordion("Input Prompt", open=True):
             preset = gr.Radio(
                 choices=PRESET_QUESTIONS,
-                label="Preset Questions",
+                label="Input Prompt",
                 value=PRESET_QUESTIONS[0],
             )
-
-        with gr.Row():
             custom = gr.Textbox(
-                label="Custom Question (overrides preset if filled)",
+                label="Custom Prompt (optional, overrides selected input)",
                 placeholder="Type your own question here...",
             )
 

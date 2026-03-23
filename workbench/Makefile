@@ -26,8 +26,14 @@ deploy:
 		exit 1; \
 	fi
 	@echo "Deploying to https://huggingface.co/spaces/$(HF_SPACE)"
-	uv run hf upload $(HF_SPACE) . . \
-		--repo-type space \
-		--include "app.py" \
-		--include "requirements.txt" \
-		--include "README.md"
+	@find . -type f \
+		! -path "./.venv/*" \
+		! -path "./.pytest_cache/*" \
+		! -path "./__pycache__/*" \
+		! -name "*.pyc" \
+		! -name ".coverage" \
+		! -name ".DS_Store" \
+	| while read -r file; do \
+		remote_path=$${file#./}; \
+		uv run hf upload $(HF_SPACE) "$$remote_path" "$$remote_path" --repo-type space; \
+	done
