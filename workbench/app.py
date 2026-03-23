@@ -10,34 +10,15 @@ import os
 import re
 import requests
 import gradio as gr
-from collections import defaultdict
-from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-# Set OPENROUTER_API_KEY as a HF Space secret. When set, logged-in users
-# run for free without entering their own key.
+# Set OPENROUTER_API_KEY as a HF Space secret. When set, users run for free
+# without entering their own key.
 SERVER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-
-RATE_LIMIT = 10           # max requests per user
-RATE_WINDOW = timedelta(hours=1)
-
-# In-memory store: {username: [datetime, ...]}
-_request_log: dict[str, list] = defaultdict(list)
-
-
-def _check_rate_limit(username: str) -> bool:
-    """Return True if the user is within the rate limit, False if exceeded."""
-    now = datetime.utcnow()
-    cutoff = now - RATE_WINDOW
-    _request_log[username] = [t for t in _request_log[username] if t > cutoff]
-    if len(_request_log[username]) >= RATE_LIMIT:
-        return False
-    _request_log[username].append(now)
-    return True
 
 # ---------------------------------------------------------------------------
 # Model IDs
@@ -48,7 +29,6 @@ FREE_MODELS: list[tuple[str, str]] = [
     ("Llama-3.1-8B", "meta-llama/llama-3.1-8b-instruct"),
     ("Gemma-3-27B", "google/gemma-3-27b-it:free"),
     ("Mistral-7B", "mistralai/mistral-7b-instruct:free"),
-    ("Qwen3-8B", "qwen/qwen3-8b:free"),
 ]
 
 MODEL_R1 = "stepfun/step-3.5-flash"
@@ -345,17 +325,8 @@ def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Reasoning Model Comparison") as demo:
         gr.Markdown("# Reasoning Model Comparison\nCompare any two free models via OpenRouter")
 
-        # Auth row — HF login button + status message
-        with gr.Row():
-            gr.LoginButton()
-        auth_msg = gr.Markdown(
-            "**Login with HuggingFace** to run for free using the shared key.  \n"
-            "Or enter your own [OpenRouter](https://openrouter.ai) key below "
-            "— free tier, no credit card required."
-        )
-
-        # API key input — hidden when user is logged in and server key is available
-        with gr.Row() as key_row:
+        # API key accordion — hidden when server key is configured
+        with gr.Accordion("OpenRouter API Key", open=False, visible=not bool(SERVER_KEY)):
             api_key = gr.Textbox(
                 label="OpenRouter API Key",
                 type="password",
@@ -412,22 +383,6 @@ def build_ui() -> gr.Blocks:
         history_state = gr.State([])
         history_html = gr.HTML()
 
-        # Update auth message and key visibility when login state changes
-        def _on_load(profile: gr.OAuthProfile | None):
-            if profile and SERVER_KEY:
-                return (
-                    gr.update(value=f"Logged in as **{profile.name}** — running on shared key, no setup needed."),
-                    gr.update(visible=False),
-                )
-            elif profile:
-                return (
-                    gr.update(value=f"Logged in as **{profile.name}** — enter your OpenRouter key below."),
-                    gr.update(visible=True),
-                )
-            return gr.update(), gr.update()
-
-        demo.load(_on_load, inputs=None, outputs=[auth_msg, key_row])
-
         def _compare_and_render(
             api_key_val: str,
             model_a_label: str,
@@ -439,20 +394,8 @@ def build_ui() -> gr.Blocks:
             preset_val: str,
             custom_val: str,
             history: list,
-            profile: gr.OAuthProfile | None,
-            oauth_token: gr.OAuthToken | None,
         ):
-            using_server_key = oauth_token is not None and bool(SERVER_KEY)
-
-            if using_server_key:
-                if profile is None:
-                    msg = "<p style='color:red'>Login with HuggingFace to use the shared key.</p>"
-                    return history, "".join(history) + msg
-                if not _check_rate_limit(profile.username):
-                    msg = f"<p style='color:red'>Rate limit reached ({RATE_LIMIT} requests/hour). Try again later.</p>"
-                    return history, "".join(history) + msg
-
-            effective_key = SERVER_KEY if using_server_key else api_key_val
+            effective_key = SERVER_KEY if SERVER_KEY else api_key_val
             question = custom_val.strip() if custom_val.strip() else preset_val
 
             if not effective_key.strip():
