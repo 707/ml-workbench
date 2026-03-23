@@ -1,0 +1,42 @@
+name: workbench
+
+on:
+  push:
+    branches: [main]
+    paths: [workbench/**]
+  pull_request:
+    paths: [workbench/**]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+        working-directory: workbench
+      - run: uv run pytest test_app.py -v --cov=app --cov-report=term-missing
+        working-directory: workbench
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev
+        working-directory: workbench
+      - run: |
+          uv run hf upload nad707/workbench . . \
+            --repo-type space \
+            --include "app.py" \
+            --include "requirements.txt" \
+            --include "README.md"
+        working-directory: workbench
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}

@@ -421,7 +421,7 @@ class TestRunComparison:
         llama_resp = self._make_response("Llama is fine.")
 
         def side_effect(api_key, model, prompt):
-            if "deepseek" in model:
+            if "stepfun" in model:
                 raise Exception("R1 network error")
             return llama_resp
 
@@ -461,7 +461,7 @@ class TestRunComparison:
             run_comparison("key", "q?")
 
         called_models = [call.args[1] for call in mock_call.call_args_list]
-        assert any("deepseek" in m for m in called_models)
+        assert any("stepfun" in m for m in called_models)
         assert any("llama" in m for m in called_models)
 
 

@@ -4,15 +4,16 @@ emoji: 🧠
 colorFrom: blue
 colorTo: indigo
 sdk: gradio
-sdk_version: "4.0"
+sdk_version: "6.9.0"
 app_file: app.py
 pinned: false
 license: mit
+hf_oauth: true
 ---
 
 # Reasoning Model Comparison
 
-Compare how **DeepSeek-R1** (reasoning model) and **Llama-3.1-8B** (standard model) respond to the same question side-by-side. R1's full thinking trace is shown alongside its final answer so you can see how much reasoning it actually does — and whether that reasoning helps.
+Compare how **Step 3.5 Flash** (reasoning model) and **Llama-3.1-8B** (standard model) respond to the same question side-by-side. The reasoning model's full thinking trace is shown alongside its final answer so you can see how much reasoning it actually does — and whether that reasoning helps.
 
 ## How to use
 
@@ -36,7 +37,7 @@ These are chosen to expose the "overthinking" failure mode of reasoning models:
 
 ## Models
 
-- **DeepSeek-R1** (`deepseek/deepseek-r1`) — reasoning model with visible thinking trace
+- **Step 3.5 Flash** (`stepfun/step-3.5-flash`) — reasoning model with visible thinking trace
 - **Llama-3.1-8B Instruct** (`meta-llama/llama-3.1-8b-instruct`) — standard instruction-tuned model
 
 Both are free-tier on OpenRouter.

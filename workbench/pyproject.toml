@@ -1,0 +1,15 @@
+[project]
+name = "reasoning-model-comparison"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "gradio[oauth]>=4.0",
+    "requests>=2.31",
+]
+
+[dependency-groups]
+dev = [
+    "huggingface-hub[cli]>=0.23",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]

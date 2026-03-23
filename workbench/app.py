@@ -5,15 +5,43 @@ Sends a question to DeepSeek-R1 and Llama-3.1-8B simultaneously via OpenRouter,
 parses R1's <think> block, and displays a side-by-side comparison.
 """
 
+import os
 import requests
 import gradio as gr
+from collections import defaultdict
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+# Set OPENROUTER_API_KEY as a HF Space secret. When set, logged-in users
+# run for free without entering their own key.
+SERVER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+
+RATE_LIMIT = 10           # max requests per user
+RATE_WINDOW = timedelta(hours=1)
+
+# In-memory store: {username: [datetime, ...]}
+_request_log: dict[str, list] = defaultdict(list)
+
+
+def _check_rate_limit(username: str) -> bool:
+    """Return True if the user is within the rate limit, False if exceeded."""
+    now = datetime.utcnow()
+    cutoff = now - RATE_WINDOW
+    _request_log[username] = [t for t in _request_log[username] if t > cutoff]
+    if len(_request_log[username]) >= RATE_LIMIT:
+        return False
+    _request_log[username].append(now)
+    return True
 
 # ---------------------------------------------------------------------------
 # Model IDs
 # ---------------------------------------------------------------------------
 
-MODEL_R1 = "deepseek/deepseek-r1"
+MODEL_R1 = "stepfun/step-3.5-flash"
 MODEL_LLAMA = "meta-llama/llama-3.1-8b-instruct"
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -221,13 +249,24 @@ def compare(api_key: str, preset: str, custom: str):
 def build_ui() -> gr.Blocks:
     """Construct and return the Gradio Blocks UI."""
     with gr.Blocks(title="Reasoning Model Comparison") as demo:
-        gr.Markdown("# Reasoning Model Comparison\nDeepSeek-R1 vs Llama-3.1-8B via OpenRouter")
+        gr.Markdown("# Reasoning Model Comparison\nStep 3.5 Flash vs Llama-3.1-8B via OpenRouter")
 
+        # Auth row — HF login button + status message
         with gr.Row():
+            gr.LoginButton()
+        auth_msg = gr.Markdown(
+            "**Login with HuggingFace** to run for free using the shared key.  \n"
+            "Or enter your own [OpenRouter](https://openrouter.ai) key below "
+            "— free tier, no credit card required."
+        )
+
+        # API key input — hidden when user is logged in and server key is available
+        with gr.Row() as key_row:
             api_key = gr.Textbox(
                 label="OpenRouter API Key",
                 type="password",
-                placeholder="sk-or-...",
+                placeholder="sk-or-... — get a free key at openrouter.ai",
+                value=SERVER_KEY,
             )
 
         with gr.Row():
@@ -247,7 +286,7 @@ def build_ui() -> gr.Blocks:
 
         with gr.Row():
             with gr.Column():
-                gr.Markdown("## DeepSeek-R1")
+                gr.Markdown("## Step 3.5 Flash (Reasoning)")
                 r1_reasoning = gr.Textbox(
                     label="Reasoning Trace",
                     lines=10,
@@ -271,8 +310,45 @@ def build_ui() -> gr.Blocks:
                 )
                 llama_stats = gr.Markdown()
 
+        # Update auth message and key visibility when login state changes
+        def _on_load(profile: gr.OAuthProfile | None):
+            if profile and SERVER_KEY:
+                return (
+                    gr.update(value=f"Logged in as **{profile.name}** — running on shared key, no setup needed."),
+                    gr.update(visible=False),
+                )
+            elif profile:
+                return (
+                    gr.update(value=f"Logged in as **{profile.name}** — enter your OpenRouter key below."),
+                    gr.update(visible=True),
+                )
+            return gr.update(), gr.update()
+
+        demo.load(_on_load, inputs=None, outputs=[auth_msg, key_row])
+
+        # Use server key when user is logged in and it's available
+        def _compare(
+            api_key_val: str,
+            preset_val: str,
+            custom_val: str,
+            profile: gr.OAuthProfile | None,
+            oauth_token: gr.OAuthToken | None,
+        ):
+            using_server_key = oauth_token is not None and bool(SERVER_KEY)
+
+            if using_server_key:
+                if profile is None:
+                    blocked = ("", "Login with HuggingFace to use the shared key.", "", "", "")
+                    return blocked
+                if not _check_rate_limit(profile.username):
+                    blocked = ("", f"Rate limit reached ({RATE_LIMIT} requests/hour). Try again later.", "", "", "")
+                    return blocked
+
+            effective_key = SERVER_KEY if using_server_key else api_key_val
+            return compare(effective_key, preset_val, custom_val)
+
         submit_btn.click(
-            fn=compare,
+            fn=_compare,
             inputs=[api_key, preset, custom],
             outputs=[r1_reasoning, r1_answer, r1_stats, llama_answer, llama_stats],
         )
@@ -286,4 +362,4 @@ def build_ui() -> gr.Blocks:
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch()
+    app.queue(max_size=5).launch()
