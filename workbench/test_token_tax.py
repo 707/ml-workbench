@@ -1,4 +1,8 @@
-"""Tests for the Token Tax computation module (GH-5)."""
+"""Tests for the Token Tax computation module (GH-5, GH-6)."""
+
+import csv
+import os
+import tempfile
 
 import pytest
 from unittest.mock import patch, MagicMock
@@ -220,3 +224,227 @@ class TestGenerateRecommendations:
 
         rec = generate_recommendations([], "en")
         assert isinstance(rec, str)
+
+
+# ---------------------------------------------------------------------------
+# SAMPLE_PHRASES (GH-6)
+# ---------------------------------------------------------------------------
+
+
+class TestSamplePhrases:
+    """Tests for SAMPLE_PHRASES dict."""
+
+    REQUIRED_LANGUAGES = {
+        "en", "zh", "ar", "hi", "ja", "ko", "fr", "de", "es", "pt",
+        "ru", "th", "vi", "bn", "ta",
+    }
+
+    def test_has_at_least_15_languages(self):
+        from token_tax import SAMPLE_PHRASES
+
+        assert len(SAMPLE_PHRASES) >= 15
+
+    def test_all_values_are_nonempty_strings(self):
+        from token_tax import SAMPLE_PHRASES
+
+        for lang, phrase in SAMPLE_PHRASES.items():
+            assert isinstance(phrase, str), f"{lang}"
+            assert len(phrase.strip()) > 0, f"{lang} is empty"
+
+    def test_includes_required_languages(self):
+        from token_tax import SAMPLE_PHRASES
+
+        for lang in self.REQUIRED_LANGUAGES:
+            assert lang in SAMPLE_PHRASES, f"Missing language: {lang}"
+
+    def test_keys_are_lowercase_bcp47(self):
+        from token_tax import SAMPLE_PHRASES
+
+        for lang in SAMPLE_PHRASES:
+            assert lang == lang.lower(), f"{lang} not lowercase"
+            assert len(lang) >= 2, f"{lang} too short"
+
+
+# ---------------------------------------------------------------------------
+# parse_traffic_csv (GH-6)
+# ---------------------------------------------------------------------------
+
+
+def _write_csv(rows: list[list[str]], headers: list[str] | None = None) -> str:
+    """Write rows to a temp CSV and return the file path."""
+    fd, path = tempfile.mkstemp(suffix=".csv")
+    with os.fdopen(fd, "w", newline="") as f:
+        writer = csv.writer(f)
+        if headers:
+            writer.writerow(headers)
+        writer.writerows(rows)
+    return path
+
+
+class TestParseTrafficCsv:
+    """Tests for parse_traffic_csv(file_path) -> list[dict]."""
+
+    def test_valid_csv_returns_list_of_dicts(self):
+        from token_tax import parse_traffic_csv
+
+        path = _write_csv(
+            [["en", "1000", "500"], ["ar", "2000", "300"]],
+            headers=["language", "request_count", "avg_chars"],
+        )
+        try:
+            result = parse_traffic_csv(path)
+            assert isinstance(result, list)
+            assert len(result) == 2
+            assert result[0]["language"] == "en"
+            assert result[0]["request_count"] == 1000
+            assert result[0]["avg_chars"] == 500
+        finally:
+            os.unlink(path)
+
+    def test_missing_column_raises_value_error(self):
+        from token_tax import parse_traffic_csv
+
+        path = _write_csv(
+            [["en", "1000"]],
+            headers=["language", "request_count"],  # missing avg_chars
+        )
+        try:
+            with pytest.raises(ValueError, match="avg_chars"):
+                parse_traffic_csv(path)
+        finally:
+            os.unlink(path)
+
+    def test_empty_csv_returns_empty_list(self):
+        from token_tax import parse_traffic_csv
+
+        path = _write_csv(
+            [],
+            headers=["language", "request_count", "avg_chars"],
+        )
+        try:
+            result = parse_traffic_csv(path)
+            assert result == []
+        finally:
+            os.unlink(path)
+
+    def test_non_numeric_request_count_raises(self):
+        from token_tax import parse_traffic_csv
+
+        path = _write_csv(
+            [["en", "abc", "500"]],
+            headers=["language", "request_count", "avg_chars"],
+        )
+        try:
+            with pytest.raises(ValueError):
+                parse_traffic_csv(path)
+        finally:
+            os.unlink(path)
+
+    def test_extra_columns_ignored(self):
+        from token_tax import parse_traffic_csv
+
+        path = _write_csv(
+            [["en", "1000", "500", "extra_data"]],
+            headers=["language", "request_count", "avg_chars", "notes"],
+        )
+        try:
+            result = parse_traffic_csv(path)
+            assert len(result) == 1
+            assert "notes" not in result[0]
+        finally:
+            os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# portfolio_analysis (GH-6)
+# ---------------------------------------------------------------------------
+
+
+class TestPortfolioAnalysis:
+    """Tests for portfolio_analysis(traffic_data, model_name)."""
+
+    def _mock_tokenizer(self, token_count: int):
+        tok = MagicMock()
+        tok.encode.return_value = list(range(token_count))
+        tok.convert_ids_to_tokens.return_value = [f"t{i}" for i in range(token_count)]
+        return tok
+
+    def test_returns_dict_with_required_keys(self):
+        from token_tax import portfolio_analysis
+
+        data = [{"language": "en", "request_count": 1000, "avg_chars": 500}]
+        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            result = portfolio_analysis(data, "gpt2")
+
+        assert "total_monthly_cost" in result
+        assert "languages" in result
+        assert "token_tax_exposure" in result
+
+    def test_languages_list_has_entries(self):
+        from token_tax import portfolio_analysis
+
+        data = [
+            {"language": "en", "request_count": 1000, "avg_chars": 500},
+            {"language": "ar", "request_count": 2000, "avg_chars": 300},
+        ]
+        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            result = portfolio_analysis(data, "gpt2")
+
+        assert len(result["languages"]) == 2
+
+    def test_each_language_entry_has_required_keys(self):
+        from token_tax import portfolio_analysis
+
+        data = [{"language": "en", "request_count": 1000, "avg_chars": 500}]
+        required = {"language", "traffic_share", "token_count", "rtc", "cost_share", "tax_ratio"}
+
+        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            result = portfolio_analysis(data, "gpt2")
+
+        for entry in result["languages"]:
+            for key in required:
+                assert key in entry, f"Missing key: {key}"
+
+    def test_traffic_shares_sum_to_one(self):
+        from token_tax import portfolio_analysis
+
+        data = [
+            {"language": "en", "request_count": 500, "avg_chars": 500},
+            {"language": "ar", "request_count": 500, "avg_chars": 300},
+        ]
+        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            result = portfolio_analysis(data, "gpt2")
+
+        total_share = sum(e["traffic_share"] for e in result["languages"])
+        assert total_share == pytest.approx(1.0)
+
+    def test_cost_shares_sum_to_one(self):
+        from token_tax import portfolio_analysis
+
+        data = [
+            {"language": "en", "request_count": 500, "avg_chars": 500},
+            {"language": "ar", "request_count": 500, "avg_chars": 300},
+        ]
+        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            result = portfolio_analysis(data, "gpt2")
+
+        total_share = sum(e["cost_share"] for e in result["languages"])
+        assert total_share == pytest.approx(1.0)
+
+    def test_unknown_language_falls_back_to_english(self):
+        """Language not in SAMPLE_PHRASES should not crash."""
+        from token_tax import portfolio_analysis
+
+        data = [{"language": "xx", "request_count": 1000, "avg_chars": 500}]
+        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            result = portfolio_analysis(data, "gpt2")
+
+        assert len(result["languages"]) == 1
+
+    def test_empty_data_returns_zero_exposure(self):
+        from token_tax import portfolio_analysis
+
+        result = portfolio_analysis([], "gpt2")
+        assert result["total_monthly_cost"] == pytest.approx(0.0)
+        assert result["token_tax_exposure"] == pytest.approx(1.0)
+        assert result["languages"] == []
