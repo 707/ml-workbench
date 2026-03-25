@@ -151,6 +151,88 @@ def efficiency_score(input_tokens: int, english_tokens: int) -> float:
     return float(english_tokens) / float(input_tokens)
 
 
+# ---------------------------------------------------------------------------
+# Token tax metrics (GH-3)
+# ---------------------------------------------------------------------------
+
+
+def relative_tokenization_cost(source_tokens: int, english_tokens: int) -> float:
+    """Relative Tokenization Cost: source_tokens / english_tokens.
+
+    Values > 1.0 indicate the source language pays a "token tax" vs English.
+    Values < 1.0 indicate the source is more compact than English.
+
+    Args:
+        source_tokens:  Token count for the (possibly non-English) text.
+        english_tokens: Token count for the English equivalent.
+
+    Returns:
+        Float ratio. Returns 1.0 when english_tokens is 0 (zero guard).
+    """
+    if english_tokens == 0:
+        return 1.0 if source_tokens == 0 else 1.0
+    return float(source_tokens) / float(english_tokens)
+
+
+def byte_premium(text: str, english_text: str) -> float:
+    """Ratio of UTF-8 byte length of text vs english_text.
+
+    Values > 1.0 indicate the source text uses more bytes than English
+    for equivalent content, reflecting script-level overhead.
+
+    Args:
+        text:         Source text.
+        english_text: English equivalent text.
+
+    Returns:
+        Float ratio. Returns 1.0 when english_text is empty (zero guard).
+    """
+    source_bytes = len(text.encode("utf-8"))
+    english_bytes = len(english_text.encode("utf-8"))
+    if english_bytes == 0:
+        return 1.0 if source_bytes == 0 else 1.0
+    return float(source_bytes) / float(english_bytes)
+
+
+def context_window_usage(token_count: int, window_size: int = 128_000) -> float:
+    """Fraction of a context window consumed by a token count.
+
+    Args:
+        token_count: Number of tokens.
+        window_size: Total context window size. Default 128k.
+
+    Returns:
+        Float between 0.0 and 1.0+. Returns 1.0 when window_size is 0.
+    """
+    if window_size == 0:
+        return 1.0
+    return float(token_count) / float(window_size)
+
+
+def quality_risk_level(rtc: float) -> str:
+    """Map a Relative Tokenization Cost to a quality risk band.
+
+    Based on multilingual tokenization research (2025-2026):
+    - low (<1.5): tokenizer handles this language well
+    - moderate (1.5-2.5): noticeable token inflation
+    - high (2.5-4.0): significant cost and potential quality impact
+    - severe (>= 4.0): extreme fragmentation, likely quality degradation
+
+    Args:
+        rtc: Relative Tokenization Cost value.
+
+    Returns:
+        One of "low", "moderate", "high", "severe".
+    """
+    if rtc < 1.5:
+        return "low"
+    if rtc < 2.5:
+        return "moderate"
+    if rtc < 4.0:
+        return "high"
+    return "severe"
+
+
 def translate_to_english(text: str, api_key: str) -> str:
     """Translate text to English using OpenRouter.
 

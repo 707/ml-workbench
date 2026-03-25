@@ -479,6 +479,188 @@ class TestEfficiencyScore:
 
 
 # ---------------------------------------------------------------------------
+# Token tax metrics (GH-3)
+# ---------------------------------------------------------------------------
+
+
+class TestRelativeTokenizationCost:
+    """Unit tests for relative_tokenization_cost(source_tokens, english_tokens)."""
+
+    def test_returns_float(self):
+        from tokenizer import relative_tokenization_cost
+
+        result = relative_tokenization_cost(10, 5)
+        assert isinstance(result, float)
+
+    def test_equal_tokens_returns_one(self):
+        from tokenizer import relative_tokenization_cost
+
+        assert relative_tokenization_cost(5, 5) == pytest.approx(1.0)
+
+    def test_source_higher_than_english_returns_above_one(self):
+        """10 source tokens vs 5 English → RTC = 2.0 (token tax)."""
+        from tokenizer import relative_tokenization_cost
+
+        assert relative_tokenization_cost(10, 5) == pytest.approx(2.0)
+
+    def test_source_lower_than_english_returns_below_one(self):
+        """3 source tokens vs 6 English → RTC = 0.5 (more efficient)."""
+        from tokenizer import relative_tokenization_cost
+
+        assert relative_tokenization_cost(3, 6) == pytest.approx(0.5)
+
+    def test_zero_english_tokens_returns_one(self):
+        """Zero guard: denominator 0 → 1.0."""
+        from tokenizer import relative_tokenization_cost
+
+        assert relative_tokenization_cost(10, 0) == pytest.approx(1.0)
+
+    def test_zero_source_tokens_returns_zero(self):
+        """Zero source tokens → 0.0 (no tokens = no cost)."""
+        from tokenizer import relative_tokenization_cost
+
+        assert relative_tokenization_cost(0, 5) == pytest.approx(0.0)
+
+    def test_both_zero_returns_one(self):
+        from tokenizer import relative_tokenization_cost
+
+        assert relative_tokenization_cost(0, 0) == pytest.approx(1.0)
+
+
+class TestBytePremium:
+    """Unit tests for byte_premium(text, english_text)."""
+
+    def test_returns_float(self):
+        from tokenizer import byte_premium
+
+        result = byte_premium("hello", "hello")
+        assert isinstance(result, float)
+
+    def test_identical_text_returns_one(self):
+        from tokenizer import byte_premium
+
+        assert byte_premium("hello", "hello") == pytest.approx(1.0)
+
+    def test_arabic_vs_english_above_one(self):
+        """Arabic uses more UTF-8 bytes than English for similar content."""
+        from tokenizer import byte_premium
+
+        arabic = "مرحبا بالعالم"
+        english = "hello world"
+        result = byte_premium(arabic, english)
+        assert result > 1.0
+
+    def test_empty_english_returns_one(self):
+        """Zero guard: empty English text → 1.0."""
+        from tokenizer import byte_premium
+
+        assert byte_premium("hello", "") == pytest.approx(1.0)
+
+    def test_empty_source_returns_zero(self):
+        """Empty source text → 0.0."""
+        from tokenizer import byte_premium
+
+        assert byte_premium("", "hello") == pytest.approx(0.0)
+
+    def test_both_empty_returns_one(self):
+        from tokenizer import byte_premium
+
+        assert byte_premium("", "") == pytest.approx(1.0)
+
+
+class TestContextWindowUsage:
+    """Unit tests for context_window_usage(token_count, window_size)."""
+
+    def test_returns_float(self):
+        from tokenizer import context_window_usage
+
+        result = context_window_usage(1000, 128_000)
+        assert isinstance(result, float)
+
+    def test_known_fraction(self):
+        from tokenizer import context_window_usage
+
+        assert context_window_usage(1000, 128_000) == pytest.approx(1000 / 128_000)
+
+    def test_full_window(self):
+        from tokenizer import context_window_usage
+
+        assert context_window_usage(128_000, 128_000) == pytest.approx(1.0)
+
+    def test_zero_tokens(self):
+        from tokenizer import context_window_usage
+
+        assert context_window_usage(0, 128_000) == pytest.approx(0.0)
+
+    def test_default_window_size(self):
+        """Default window_size is 128_000."""
+        from tokenizer import context_window_usage
+
+        assert context_window_usage(128_000) == pytest.approx(1.0)
+
+    def test_zero_window_returns_one(self):
+        """Zero guard: window_size 0 → 1.0."""
+        from tokenizer import context_window_usage
+
+        assert context_window_usage(100, 0) == pytest.approx(1.0)
+
+
+class TestQualityRiskLevel:
+    """Unit tests for quality_risk_level(rtc)."""
+
+    def test_returns_string(self):
+        from tokenizer import quality_risk_level
+
+        result = quality_risk_level(1.0)
+        assert isinstance(result, str)
+
+    def test_low_risk(self):
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(1.0) == "low"
+        assert quality_risk_level(1.4) == "low"
+
+    def test_moderate_risk(self):
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(1.5) == "moderate"
+        assert quality_risk_level(2.0) == "moderate"
+        assert quality_risk_level(2.4) == "moderate"
+
+    def test_high_risk(self):
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(2.5) == "high"
+        assert quality_risk_level(3.0) == "high"
+        assert quality_risk_level(3.9) == "high"
+
+    def test_severe_risk(self):
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(4.0) == "severe"
+        assert quality_risk_level(5.0) == "severe"
+        assert quality_risk_level(10.0) == "severe"
+
+    def test_boundary_1_5(self):
+        """Exactly 1.5 → moderate (inclusive lower bound)."""
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(1.5) == "moderate"
+
+    def test_boundary_2_5(self):
+        """Exactly 2.5 → high."""
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(2.5) == "high"
+
+    def test_boundary_4_0(self):
+        """Exactly 4.0 → severe."""
+        from tokenizer import quality_risk_level
+
+        assert quality_risk_level(4.0) == "severe"
+
+
+# ---------------------------------------------------------------------------
 # Phase 1 — translate_to_english
 # ---------------------------------------------------------------------------
 
