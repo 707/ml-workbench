@@ -397,6 +397,57 @@ def render_tokens_html(
 # ---------------------------------------------------------------------------
 
 
+def _handle_single(model_name: str, text: str, threshold: int, decoded_view: bool):
+    """Handler logic for the Single tab — extracted for testability."""
+    try:
+        tok = get_tokenizer(model_name)
+        tokens = tokenize_text(text, tok)
+        oov = flag_oov_words(text, tok, threshold=int(threshold))
+        token_html = render_tokens_html(
+            tokens, oov, tokenizer=tok,
+            decoded_view=decoded_view, hide_special_tokens=True,
+        )
+        frag = fragmentation_ratio(text, tok)
+        lang = detect_language(text)
+        stats = (
+            f"**Tokens:** {frag['token_count']}  \n"
+            f"**Fragmentation ratio:** {frag['ratio']:.2f}  \n"
+            f"**OOV words:** {len(oov)}  \n"
+            f"**Detected language:** {lang}"
+        )
+        return token_html, stats
+    except Exception as exc:
+        return "", f"Error: {exc}"
+
+
+def _handle_compare(text: str, name_a: str, name_b: str, decoded_view: bool):
+    """Handler logic for the Compare tab — extracted for testability."""
+    try:
+        tok_a = get_tokenizer(name_a)
+        tok_b = get_tokenizer(name_b)
+        tokens_a = tokenize_text(text, tok_a)
+        tokens_b = tokenize_text(text, tok_b)
+        html_a = render_tokens_html(
+            tokens_a, set(), tokenizer=tok_a,
+            decoded_view=decoded_view, hide_special_tokens=True,
+        )
+        html_b = render_tokens_html(
+            tokens_b, set(), tokenizer=tok_b,
+            decoded_view=decoded_view, hide_special_tokens=True,
+        )
+        frag_a = fragmentation_ratio(text, tok_a)
+        frag_b = fragmentation_ratio(text, tok_b)
+        ratio_md = (
+            f"**{name_a}:** {frag_a['token_count']} tokens "
+            f"(ratio {frag_a['ratio']:.2f})  \n"
+            f"**{name_b}:** {frag_b['token_count']} tokens "
+            f"(ratio {frag_b['ratio']:.2f})"
+        )
+        return html_a, html_b, ratio_md
+    except Exception as exc:
+        return "", "", f"Error: {exc}"
+
+
 def build_tokenizer_ui() -> gr.Blocks:
     """Construct and return the Tokenizer Inspector Gradio Blocks UI.
 
@@ -436,32 +487,8 @@ def build_tokenizer_ui() -> gr.Blocks:
                 single_html = gr.HTML(label="Token Visualisation")
                 single_stats = gr.Markdown(label="Statistics")
 
-                def _run_single(model_name: str, text: str, threshold: int, decoded_view: bool):
-                    try:
-                        tok = get_tokenizer(model_name)
-                        tokens = tokenize_text(text, tok)
-                        oov = flag_oov_words(text, tok, threshold=int(threshold))
-                        token_html = render_tokens_html(
-                            tokens,
-                            oov,
-                            tokenizer=tok,
-                            decoded_view=decoded_view,
-                            hide_special_tokens=True,
-                        )
-                        frag = fragmentation_ratio(text, tok)
-                        lang = detect_language(text)
-                        stats = (
-                            f"**Tokens:** {frag['token_count']}  \n"
-                            f"**Fragmentation ratio:** {frag['ratio']:.2f}  \n"
-                            f"**OOV words:** {len(oov)}  \n"
-                            f"**Detected language:** {lang}"
-                        )
-                        return token_html, stats
-                    except Exception as exc:
-                        return "", f"Error: {exc}"
-
                 single_btn.click(
-                    fn=_run_single,
+                    fn=_handle_single,
                     inputs=[single_model, single_text, oov_threshold, single_decoded_view],
                     outputs=[single_html, single_stats],
                 )
@@ -494,40 +521,8 @@ def build_tokenizer_ui() -> gr.Blocks:
                 )
                 cmp_ratio_md = gr.Markdown(label="Comparison")
 
-                def _run_compare(text: str, name_a: str, name_b: str, decoded_view: bool):
-                    try:
-                        tok_a = get_tokenizer(name_a)
-                        tok_b = get_tokenizer(name_b)
-                        tokens_a = tokenize_text(text, tok_a)
-                        tokens_b = tokenize_text(text, tok_b)
-                        html_a = render_tokens_html(
-                            tokens_a,
-                            set(),
-                            tokenizer=tok_a,
-                            decoded_view=decoded_view,
-                            hide_special_tokens=True,
-                        )
-                        html_b = render_tokens_html(
-                            tokens_b,
-                            set(),
-                            tokenizer=tok_b,
-                            decoded_view=decoded_view,
-                            hide_special_tokens=True,
-                        )
-                        frag_a = fragmentation_ratio(text, tok_a)
-                        frag_b = fragmentation_ratio(text, tok_b)
-                        ratio_md = (
-                            f"**{name_a}:** {frag_a['token_count']} tokens "
-                            f"(ratio {frag_a['ratio']:.2f})  \n"
-                            f"**{name_b}:** {frag_b['token_count']} tokens "
-                            f"(ratio {frag_b['ratio']:.2f})"
-                        )
-                        return html_a, html_b, ratio_md
-                    except Exception as exc:
-                        return "", "", f"Error: {exc}"
-
                 compare_btn.click(
-                    fn=_run_compare,
+                    fn=_handle_compare,
                     inputs=[compare_text, cmp_model_a, cmp_model_b, compare_decoded_view],
                     outputs=[cmp_html_a, cmp_html_b, cmp_ratio_md],
                 )

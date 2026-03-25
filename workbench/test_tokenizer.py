@@ -967,6 +967,218 @@ class TestRenderTokensHtml:
 # ---------------------------------------------------------------------------
 
 
+class TestDecodedViewGenericFallbackEdgeCases:
+    """Cover edge cases in the generic fallback decode path of render_tokens_html."""
+
+    def test_decode_exception_falls_back_to_prev(self):
+        """When tokenizer.decode raises, use previous decoded text."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "a", "id": 1}, {"token": "b", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        # First call ok, second raises
+        mock_tok.decode.side_effect = ["a", Exception("decode error")]
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert isinstance(result, str)
+
+    def test_non_prefix_stable_decode_single_token_fallback(self):
+        """When cumulative decode is not prefix-stable, fall back to single-token decode."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "a", "id": 1}, {"token": "b", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        # Non-prefix-stable: second call returns something that doesn't start with first
+        mock_tok.decode.side_effect = lambda ids, **kw: "a" if len(ids) == 1 and ids[0] == 1 else ("XY" if len(ids) == 2 else "b")
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert "b" in result
+
+    def test_non_prefix_stable_single_decode_exception(self):
+        """When single-token decode also raises, chunk is empty string."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "a", "id": 1}, {"token": "b", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        call_count = [0]
+
+        def _decode(ids, **kw):
+            call_count[0] += 1
+            if len(ids) == 1 and ids[0] == 1:
+                return "a"
+            if len(ids) == 2:
+                return "XY"  # non-prefix-stable
+            # Single-token fallback for id=2
+            raise Exception("single decode failed")
+
+        mock_tok.decode.side_effect = _decode
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert isinstance(result, str)
+
+    def test_replacement_char_stripped_in_generic_fallback(self):
+        """Replacement characters should be stripped in the generic fallback path."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "x", "id": 1}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        mock_tok.decode.return_value = "he\ufffdllo"
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert "\ufffd" not in result
+        assert "hello" in result
+
+    def test_byte_decoder_hides_special_tokens(self):
+        """Byte decoder path should hide special tokens when configured."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "<s>", "id": 1}, {"token": "A", "id": 2}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = [1]
+        mock_tok.byte_decoder = {"A": 65}
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert "<s>" not in result
+        assert ">A</span>" in result
+
+    def test_byte_decoder_non_mapped_char(self):
+        """Chars not in byte_decoder should encode via UTF-8 fallback."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "\u00e9", "id": 1}]  # é
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        mock_tok.byte_decoder = {}  # empty dict but truthy... no, empty dict is falsy
+
+        # Need a non-empty byte_decoder that doesn't contain the char
+        mock_tok.byte_decoder = {"A": 65}
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert isinstance(result, str)
+
+    def test_convert_tokens_to_string_exception_falls_to_next_path(self):
+        """When convert_tokens_to_string raises, should fall through to byte or generic path."""
+        from tokenizer import render_tokens_html
+
+        tokens = [{"token": "hi", "id": 1}]
+        mock_tok = MagicMock()
+        mock_tok.all_special_ids = []
+        mock_tok.convert_tokens_to_string.side_effect = Exception("not supported")
+        mock_tok.decode.return_value = "hi"
+
+        result = render_tokens_html(
+            tokens, set(), tokenizer=mock_tok,
+            decoded_view=True, hide_special_tokens=True,
+        )
+        assert "hi" in result
+
+
+class TestHandleSingle:
+    """Tests for _handle_single extracted handler."""
+
+    def test_returns_html_and_stats(self):
+        from tokenizer import _handle_single
+        from unittest.mock import patch, MagicMock
+
+        mock_tok = MagicMock()
+        mock_tok.encode.return_value = [1, 2, 3]
+        mock_tok.convert_ids_to_tokens.return_value = ["hello", "world", "!"]
+        mock_tok.all_special_ids = []
+
+        with patch("tokenizer.get_tokenizer", return_value=mock_tok):
+            html, stats = _handle_single("gpt2", "hello world!", 3, False)
+
+        assert isinstance(html, str)
+        assert "**Tokens:** 3" in stats
+        assert "**Fragmentation ratio:**" in stats
+        assert "**Detected language:**" in stats
+
+    def test_error_returns_empty_html_and_error_message(self):
+        from tokenizer import _handle_single
+        from unittest.mock import patch
+
+        with patch("tokenizer.get_tokenizer", side_effect=ValueError("unknown")):
+            html, stats = _handle_single("bad_model", "text", 3, False)
+
+        assert html == ""
+        assert "Error:" in stats
+
+    def test_decoded_view_passed_through(self):
+        from tokenizer import _handle_single
+        from unittest.mock import patch, MagicMock
+
+        mock_tok = MagicMock()
+        mock_tok.encode.return_value = [1]
+        mock_tok.convert_ids_to_tokens.return_value = ["hi"]
+        mock_tok.all_special_ids = []
+        mock_tok.decode.return_value = "hi"
+
+        with patch("tokenizer.get_tokenizer", return_value=mock_tok):
+            html, stats = _handle_single("gpt2", "hi", 3, True)
+
+        assert isinstance(html, str)
+        assert "**Tokens:** 1" in stats
+
+
+class TestHandleCompare:
+    """Tests for _handle_compare extracted handler."""
+
+    def test_returns_two_html_and_ratio_markdown(self):
+        from tokenizer import _handle_compare
+        from unittest.mock import patch, MagicMock
+
+        mock_tok_a = MagicMock()
+        mock_tok_a.encode.return_value = [1, 2]
+        mock_tok_a.convert_ids_to_tokens.return_value = ["he", "llo"]
+        mock_tok_a.all_special_ids = []
+
+        mock_tok_b = MagicMock()
+        mock_tok_b.encode.return_value = [1, 2, 3, 4]
+        mock_tok_b.convert_ids_to_tokens.return_value = ["h", "e", "l", "lo"]
+        mock_tok_b.all_special_ids = []
+
+        with patch("tokenizer.get_tokenizer", side_effect=[mock_tok_a, mock_tok_b]):
+            html_a, html_b, ratio_md = _handle_compare("hello", "gpt2", "mistral", False)
+
+        assert isinstance(html_a, str)
+        assert isinstance(html_b, str)
+        assert "**gpt2:** 2 tokens" in ratio_md
+        assert "**mistral:** 4 tokens" in ratio_md
+
+    def test_error_returns_empty_and_error_message(self):
+        from tokenizer import _handle_compare
+        from unittest.mock import patch
+
+        with patch("tokenizer.get_tokenizer", side_effect=ValueError("bad")):
+            html_a, html_b, ratio_md = _handle_compare("text", "bad", "bad2", False)
+
+        assert html_a == ""
+        assert html_b == ""
+        assert "Error:" in ratio_md
+
+
 class TestBuildTokenizerUi:
     """Smoke test for build_tokenizer_ui() -> gr.Blocks."""
 
