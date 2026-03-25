@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from openrouter import call_openrouter, extract_usage, OPENROUTER_URL  # noqa: F401
 from tokenizer import build_tokenizer_ui
+from token_tax_ui import build_token_tax_ui
 
 # ---------------------------------------------------------------------------
 # Config
@@ -398,9 +399,10 @@ def build_ui() -> gr.TabbedInterface:
     """
     comparison_blocks = _build_comparison_blocks()
     tokenizer_blocks = build_tokenizer_ui()
+    token_tax_blocks = build_token_tax_ui()
     return gr.TabbedInterface(
-        [comparison_blocks, tokenizer_blocks],
-        ["Model Comparison", "Tokenizer Inspector"],
+        [comparison_blocks, tokenizer_blocks, token_tax_blocks],
+        ["Model Comparison", "Tokenizer Inspector", "Token Tax Dashboard"],
     )
 
 
