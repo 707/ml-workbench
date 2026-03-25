@@ -239,9 +239,11 @@ def build_token_tax_ui() -> gr.Blocks:
 
     with gr.Blocks(title="Token Tax Dashboard") as demo:
         gr.Markdown(
-            "## Token Tax Dashboard\n"
-            "Quantify how non-English text inflates token counts, costs, "
-            "and context usage across models. "
+            "## Token Tax Dashboard\n\n"
+            "Non-English text often requires **2–10x more tokens** than English "
+            "for the same content, inflating API costs and consuming context window "
+            "capacity. This tool quantifies that hidden cost — the **token tax** — "
+            "across models so you can make informed decisions.\n\n"
             f"*(Pricing data last updated: {LAST_UPDATED})*"
         )
 
@@ -260,6 +262,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="English Equivalent (optional)",
                             placeholder="Paste English translation for RTC comparison, or leave empty...",
                             lines=4,
+                            info="Provide an English translation to compute Relative Tokenization Cost (RTC).",
                         )
 
                 model_checkboxes = gr.CheckboxGroup(
@@ -304,8 +307,10 @@ def build_token_tax_ui() -> gr.Blocks:
             # --- Traffic Analysis (CSV upload) ---
             with gr.TabItem("Traffic Analysis"):
                 gr.Markdown(
+                    "### Portfolio Token Tax Analysis\n\n"
                     "Upload a CSV with your traffic data to see portfolio-level "
-                    "token tax exposure.\n\n"
+                    "token tax exposure. The **Tax Ratio** shows how much more each "
+                    "language costs relative to its traffic share.\n\n"
                     "**Required columns:** `language`, `request_count`, `avg_chars`\n\n"
                     "```\nlanguage,request_count,avg_chars\n"
                     "en,50000,500\nar,20000,300\nhi,10000,400\n```"
