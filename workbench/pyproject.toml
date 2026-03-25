@@ -7,6 +7,7 @@ dependencies = [
     "requests>=2.31",
     "transformers>=4.40",
     "langdetect>=1.0.9",
+    "plotly>=5.18",
 ]
 
 [dependency-groups]
