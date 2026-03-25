@@ -90,11 +90,11 @@ def _handle_dashboard(
     selected_models: list[str],
     monthly_requests: int,
     avg_chars: int,
-) -> tuple[dict, str, str]:
+) -> tuple[dict, str, str, go.Figure]:
     """Handler logic for the Token Tax Dashboard — extracted for testability.
 
     Returns:
-        (table_data, context_md, recommendations_md)
+        (table_data, context_md, recommendations_md, bubble_chart)
         table_data is a dict with 'headers' and 'data' keys for gr.DataFrame.
     """
     headers = [
@@ -102,16 +102,17 @@ def _handle_dashboard(
         "Context %", "Risk", "$/1M Input", "Monthly Est.",
     ]
     empty_table = {"headers": headers, "data": []}
+    empty_chart = build_bubble_chart([])
 
     if not selected_models:
-        return empty_table, "", "No models selected."
+        return empty_table, "", "No models selected.", empty_chart
 
     eng = english_text.strip() if english_text else None
 
     try:
         results = analyze_text_across_models(text, eng, selected_models)
     except Exception as exc:
-        return empty_table, "", f"Error: {exc}"
+        return empty_table, "", f"Error: {exc}", empty_chart
 
     lang = detect_language(text) if text.strip() else "en"
 
@@ -158,7 +159,10 @@ def _handle_dashboard(
     # Recommendations
     recs_md = generate_recommendations(results, lang)
 
-    return table_data, context_md, recs_md
+    # Bubble chart
+    chart = build_bubble_chart(results)
+
+    return table_data, context_md, recs_md, chart
 
 
 def _handle_traffic(csv_file, model_name: str) -> tuple[dict, str]:
@@ -282,18 +286,19 @@ def build_token_tax_ui() -> gr.Blocks:
                     interactive=False,
                 )
                 context_md = gr.Markdown(label="Context Window Summary")
+                bubble_plot = gr.Plot(label="Cost vs Quality Risk")
                 recs_md = gr.Markdown(label="Recommendations")
 
                 def _on_analyze(text, eng_text, models, requests, chars):
-                    table_data, ctx, recs = _handle_dashboard(
+                    table_data, ctx, recs, chart = _handle_dashboard(
                         text, eng_text, models, int(requests), int(chars),
                     )
-                    return table_data, ctx, recs
+                    return table_data, ctx, chart, recs
 
                 analyze_btn.click(
                     fn=_on_analyze,
                     inputs=[input_text, english_text, model_checkboxes, monthly_req, avg_chars],
-                    outputs=[cost_table, context_md, recs_md],
+                    outputs=[cost_table, context_md, bubble_plot, recs_md],
                 )
 
             # --- Traffic Analysis (CSV upload) ---

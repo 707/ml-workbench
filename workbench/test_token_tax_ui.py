@@ -51,18 +51,19 @@ class TestHandleDashboard:
                 avg_chars=100,
             )
 
-        # Should return: (table_data, context_md, recommendations_md)
-        assert len(result) == 3
-        table_data, context_md, recs_md = result
+        # Should return: (table_data, context_md, recommendations_md, bubble_chart)
+        assert len(result) == 4
+        table_data, context_md, recs_md, chart = result
         assert isinstance(table_data, dict)
         assert isinstance(context_md, str)
         assert isinstance(recs_md, str)
+        assert isinstance(chart, go.Figure)
 
     def test_table_has_expected_columns(self):
         from token_tax_ui import _handle_dashboard
 
         with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
-            table_data, _, _ = _handle_dashboard(
+            table_data, _, _, _ = _handle_dashboard(
                 text="test",
                 english_text="test",
                 selected_models=["gpt2"],
@@ -78,7 +79,7 @@ class TestHandleDashboard:
         from token_tax_ui import _handle_dashboard
 
         with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
-            table_data, _, _ = _handle_dashboard(
+            table_data, _, _, _ = _handle_dashboard(
                 text="test",
                 english_text="test",
                 selected_models=["gpt2", "mistral"],
@@ -100,7 +101,7 @@ class TestHandleDashboard:
                 avg_chars=50,
             )
 
-        assert len(result) == 3
+        assert len(result) == 4
 
     def test_empty_text_returns_gracefully(self):
         from token_tax_ui import _handle_dashboard
@@ -114,7 +115,7 @@ class TestHandleDashboard:
                 avg_chars=0,
             )
 
-        assert len(result) == 3
+        assert len(result) == 4
 
     def test_no_models_selected_returns_empty(self):
         from token_tax_ui import _handle_dashboard
@@ -127,7 +128,7 @@ class TestHandleDashboard:
             avg_chars=50,
         )
 
-        table_data, _, recs = result
+        table_data, _, recs, _ = result
         assert len(table_data["data"]) == 0
 
     def test_error_returns_error_message(self):
@@ -142,7 +143,7 @@ class TestHandleDashboard:
                 avg_chars=50,
             )
 
-        _, _, recs = result
+        _, _, recs, _ = result
         assert "error" in recs.lower() or "Error" in recs
 
 
