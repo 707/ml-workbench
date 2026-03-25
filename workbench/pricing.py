@@ -41,6 +41,11 @@ def get_pricing(model_name: str) -> dict:
     Raises:
         KeyError: If model_name is not in MODEL_PRICING.
     """
+    if model_name not in MODEL_PRICING:
+        raise KeyError(
+            f"unknown model: '{model_name}'. "
+            f"Choose from {sorted(MODEL_PRICING)}"
+        )
     return MODEL_PRICING[model_name]
 
 

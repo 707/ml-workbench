@@ -170,7 +170,7 @@ def relative_tokenization_cost(source_tokens: int, english_tokens: int) -> float
         Float ratio. Returns 1.0 when english_tokens is 0 (zero guard).
     """
     if english_tokens == 0:
-        return 1.0 if source_tokens == 0 else 1.0
+        return 1.0
     return float(source_tokens) / float(english_tokens)
 
 
@@ -190,7 +190,7 @@ def byte_premium(text: str, english_text: str) -> float:
     source_bytes = len(text.encode("utf-8"))
     english_bytes = len(english_text.encode("utf-8"))
     if english_bytes == 0:
-        return 1.0 if source_bytes == 0 else 1.0
+        return 1.0
     return float(source_bytes) / float(english_bytes)
 
 

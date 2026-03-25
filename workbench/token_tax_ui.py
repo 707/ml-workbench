@@ -46,7 +46,9 @@ def _handle_dashboard(
 
     lang = detect_language(text) if text.strip() else "en"
 
-    # Compute cost projections per model
+    # Build table rows (compute cost projections inline, no mutation)
+    rows = []
+    monthly_costs = {}
     for r in results:
         proj = cost_projection(
             r["token_count"],
@@ -54,11 +56,7 @@ def _handle_dashboard(
             monthly_requests,
             avg_chars,
         )
-        r["monthly_cost"] = proj["monthly_cost"]
-
-    # Build table rows
-    rows = []
-    for r in results:
+        monthly_costs[r["model"]] = proj["monthly_cost"]
         rows.append([
             r["model"],
             r["token_count"],
@@ -67,7 +65,7 @@ def _handle_dashboard(
             f"{r['context_usage']:.4%}",
             r["risk_level"],
             f"${r['cost_per_million']:.4f}",
-            f"${r['monthly_cost']:.4f}",
+            f"${proj['monthly_cost']:.4f}",
         ])
 
     table_data = {"headers": headers, "data": rows}

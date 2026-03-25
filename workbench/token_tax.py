@@ -58,7 +58,6 @@ def analyze_text_across_models(
             "context_usage": context_window_usage(token_count, window),
             "risk_level": quality_risk_level(rtc),
             "cost_per_million": pricing["input_per_million"],
-            "monthly_cost": 0.0,
         })
 
     return results
@@ -114,7 +113,7 @@ def generate_recommendations(
 
     if language == "en":
         lines.append(
-            f"Text is in English — tokenization is near-optimal for all models."
+            "Text is in English — tokenization is near-optimal for all models."
         )
     else:
         lines.append(

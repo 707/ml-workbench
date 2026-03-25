@@ -14,7 +14,7 @@ class TestAnalyzeTextAcrossModels:
 
     REQUIRED_KEYS = {
         "model", "token_count", "rtc", "byte_premium",
-        "context_usage", "risk_level", "cost_per_million", "monthly_cost",
+        "context_usage", "risk_level", "cost_per_million",
     }
 
     def _mock_tokenizer(self, token_count: int):
@@ -177,7 +177,7 @@ class TestGenerateRecommendations:
         return {
             "model": model, "token_count": 100, "rtc": rtc,
             "byte_premium": 1.0, "context_usage": 0.01,
-            "risk_level": risk, "cost_per_million": cost, "monthly_cost": 0.0,
+            "risk_level": risk, "cost_per_million": cost,
         }
 
     def test_returns_nonempty_string(self):
