@@ -90,12 +90,13 @@ def _handle_dashboard(
     selected_models: list[str],
     monthly_requests: int,
     avg_chars: int,
-) -> tuple[dict, str, str, go.Figure]:
+) -> tuple[dict, str, go.Figure, str]:
     """Handler logic for the Token Tax Dashboard — extracted for testability.
 
     Returns:
-        (table_data, context_md, recommendations_md, bubble_chart)
+        (table_data, context_md, bubble_chart, recommendations_md)
         table_data is a dict with 'headers' and 'data' keys for gr.DataFrame.
+        Return order matches Gradio output wiring.
     """
     headers = [
         "Model", "Tokens", "RTC", "Byte Premium",
@@ -105,20 +106,19 @@ def _handle_dashboard(
     empty_chart = build_bubble_chart([])
 
     if not selected_models:
-        return empty_table, "", "No models selected.", empty_chart
+        return empty_table, "", empty_chart, "No models selected."
 
     eng = english_text.strip() if english_text else None
 
     try:
         results = analyze_text_across_models(text, eng, selected_models)
     except Exception as exc:
-        return empty_table, "", f"Error: {exc}", empty_chart
+        return empty_table, "", empty_chart, f"Error: {exc}"
 
     lang = detect_language(text) if text.strip() else "en"
 
     # Build table rows (compute cost projections inline, no mutation)
     rows = []
-    monthly_costs = {}
     for r in results:
         proj = cost_projection(
             r["token_count"],
@@ -126,7 +126,6 @@ def _handle_dashboard(
             monthly_requests,
             avg_chars,
         )
-        monthly_costs[r["model"]] = proj["monthly_cost"]
         rows.append([
             r["model"],
             r["token_count"],
@@ -162,7 +161,7 @@ def _handle_dashboard(
     # Bubble chart
     chart = build_bubble_chart(results)
 
-    return table_data, context_md, recs_md, chart
+    return table_data, context_md, chart, recs_md
 
 
 def _handle_traffic(csv_file, model_name: str) -> tuple[dict, str]:
@@ -293,10 +292,9 @@ def build_token_tax_ui() -> gr.Blocks:
                 recs_md = gr.Markdown(label="Recommendations")
 
                 def _on_analyze(text, eng_text, models, requests, chars):
-                    table_data, ctx, recs, chart = _handle_dashboard(
+                    return _handle_dashboard(
                         text, eng_text, models, int(requests), int(chars),
                     )
-                    return table_data, ctx, chart, recs
 
                 analyze_btn.click(
                     fn=_on_analyze,

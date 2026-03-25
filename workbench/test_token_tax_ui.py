@@ -51,13 +51,13 @@ class TestHandleDashboard:
                 avg_chars=100,
             )
 
-        # Should return: (table_data, context_md, recommendations_md, bubble_chart)
+        # Should return: (table_data, context_md, bubble_chart, recommendations_md)
         assert len(result) == 4
-        table_data, context_md, recs_md, chart = result
+        table_data, context_md, chart, recs_md = result
         assert isinstance(table_data, dict)
         assert isinstance(context_md, str)
-        assert isinstance(recs_md, str)
         assert isinstance(chart, go.Figure)
+        assert isinstance(recs_md, str)
 
     def test_table_has_expected_columns(self):
         from token_tax_ui import _handle_dashboard
@@ -128,7 +128,7 @@ class TestHandleDashboard:
             avg_chars=50,
         )
 
-        table_data, _, recs, _ = result
+        table_data, _, _, recs = result
         assert len(table_data["data"]) == 0
 
     def test_error_returns_error_message(self):
@@ -143,7 +143,7 @@ class TestHandleDashboard:
                 avg_chars=50,
             )
 
-        _, _, recs, _ = result
+        _, _, _, recs = result
         assert "error" in recs.lower() or "Error" in recs
 
 
