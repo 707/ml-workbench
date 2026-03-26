@@ -412,4 +412,8 @@ def build_ui() -> gr.TabbedInterface:
 
 if __name__ == "__main__":
     app = build_ui()
-    app.queue(max_size=5).launch(ssr_mode=False)
+    app.queue(max_size=5).launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        ssr_mode=False,
+    )
