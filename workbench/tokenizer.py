@@ -7,8 +7,27 @@ different tokenizers handle input text.
 
 import html
 import gradio as gr
-from transformers import AutoTokenizer
 from langdetect import detect, LangDetectException
+
+_AutoTokenizer = None
+
+
+def _get_auto_tokenizer():
+    global _AutoTokenizer
+    if _AutoTokenizer is None:
+        from transformers import AutoTokenizer
+        _AutoTokenizer = AutoTokenizer
+    return _AutoTokenizer
+
+
+class _LazyAutoTokenizer:
+    """Proxy that defers transformers import until first attribute access."""
+
+    def __getattr__(self, name):
+        return getattr(_get_auto_tokenizer(), name)
+
+
+AutoTokenizer = _LazyAutoTokenizer()
 
 from openrouter import call_openrouter
 
@@ -397,11 +416,18 @@ def render_tokens_html(
 # ---------------------------------------------------------------------------
 
 
-def _handle_single(model_name: str, text: str, threshold: int, decoded_view: bool):
+def _handle_single(
+    model_name: str,
+    text: str,
+    threshold: int,
+    decoded_view: bool,
+    english_text: str = "",
+):
     """Handler logic for the Single tab — extracted for testability."""
     try:
         tok = get_tokenizer(model_name)
         tokens = tokenize_text(text, tok)
+        token_count = len(tokens)
         oov = flag_oov_words(text, tok, threshold=int(threshold))
         token_html = render_tokens_html(
             tokens, oov, tokenizer=tok,
@@ -409,24 +435,55 @@ def _handle_single(model_name: str, text: str, threshold: int, decoded_view: boo
         )
         frag = fragmentation_ratio(text, tok)
         lang = detect_language(text)
+
+        ctx_usage = context_window_usage(token_count, 128_000)
+
         stats = (
             f"**Tokens:** {frag['token_count']}  \n"
             f"**Fragmentation ratio:** {frag['ratio']:.2f}  \n"
             f"**OOV words:** {len(oov)}  \n"
-            f"**Detected language:** {lang}"
+            f"**Detected language:** {lang}  \n"
+            f"**Context usage (128k):** {ctx_usage:.4%}"
         )
+
+        if lang == "en":
+            stats += (
+                f"  \n**RTC vs English:** 1.0x  \n"
+                f"**Quality risk:** low"
+            )
+        elif english_text and english_text.strip():
+            eng_tokens = tokenize_text(english_text.strip(), tok)
+            rtc = relative_tokenization_cost(token_count, len(eng_tokens))
+            risk = quality_risk_level(rtc)
+            stats += (
+                f"  \n**RTC vs English:** {rtc:.2f}x  \n"
+                f"**Quality risk:** {risk}"
+            )
+        else:
+            stats += (
+                "  \n**RTC:** *(provide English equivalent for comparison)*"
+            )
+
         return token_html, stats
     except Exception as exc:
         return "", f"Error: {exc}"
 
 
-def _handle_compare(text: str, name_a: str, name_b: str, decoded_view: bool):
+def _handle_compare(
+    text: str,
+    name_a: str,
+    name_b: str,
+    decoded_view: bool,
+    english_text: str = "",
+):
     """Handler logic for the Compare tab — extracted for testability."""
     try:
         tok_a = get_tokenizer(name_a)
         tok_b = get_tokenizer(name_b)
         tokens_a = tokenize_text(text, tok_a)
         tokens_b = tokenize_text(text, tok_b)
+        count_a = len(tokens_a)
+        count_b = len(tokens_b)
         html_a = render_tokens_html(
             tokens_a, set(), tokenizer=tok_a,
             decoded_view=decoded_view, hide_special_tokens=True,
@@ -443,6 +500,22 @@ def _handle_compare(text: str, name_a: str, name_b: str, decoded_view: bool):
             f"**{name_b}:** {frag_b['token_count']} tokens "
             f"(ratio {frag_b['ratio']:.2f})"
         )
+
+        if english_text and english_text.strip():
+            eng_tokens_a = tokenize_text(english_text.strip(), tok_a)
+            eng_tokens_b = tokenize_text(english_text.strip(), tok_b)
+            rtc_a = relative_tokenization_cost(count_a, len(eng_tokens_a))
+            rtc_b = relative_tokenization_cost(count_b, len(eng_tokens_b))
+            ratio_md += (
+                f"  \n**{name_a} RTC:** {rtc_a:.2f}x  \n"
+                f"**{name_b} RTC:** {rtc_b:.2f}x"
+            )
+            if rtc_a != rtc_b:
+                better = name_a if rtc_a < rtc_b else name_b
+                ratio_md += (
+                    f"  \n*{better} is more efficient for this language.*"
+                )
+
         return html_a, html_b, ratio_md
     except Exception as exc:
         return "", "", f"Error: {exc}"
@@ -479,6 +552,11 @@ def build_tokenizer_ui() -> gr.Blocks:
                     minimum=1, maximum=10, value=3, step=1,
                     label="OOV threshold (tokens per word)",
                 )
+                single_english_text = gr.Textbox(
+                    label="English Equivalent (optional)",
+                    placeholder="Paste English translation for RTC comparison...",
+                    lines=2,
+                )
                 single_decoded_view = gr.Checkbox(
                     label="Readable token view (decode tokens, hide special tokens)",
                     value=False,
@@ -489,7 +567,7 @@ def build_tokenizer_ui() -> gr.Blocks:
 
                 single_btn.click(
                     fn=_handle_single,
-                    inputs=[single_model, single_text, oov_threshold, single_decoded_view],
+                    inputs=[single_model, single_text, oov_threshold, single_decoded_view, single_english_text],
                     outputs=[single_html, single_stats],
                 )
 
@@ -511,6 +589,11 @@ def build_tokenizer_ui() -> gr.Blocks:
                         value=tokenizer_names[1] if len(tokenizer_names) > 1 else tokenizer_names[0],
                         label="Tokenizer B",
                     )
+                compare_english_text = gr.Textbox(
+                    label="English Equivalent (optional)",
+                    placeholder="Paste English translation for RTC comparison...",
+                    lines=2,
+                )
                 compare_btn = gr.Button("Compare", variant="primary")
                 with gr.Row():
                     cmp_html_a = gr.HTML(label="Tokenizer A")
@@ -523,7 +606,7 @@ def build_tokenizer_ui() -> gr.Blocks:
 
                 compare_btn.click(
                     fn=_handle_compare,
-                    inputs=[compare_text, cmp_model_a, cmp_model_b, compare_decoded_view],
+                    inputs=[compare_text, cmp_model_a, cmp_model_b, compare_decoded_view, compare_english_text],
                     outputs=[cmp_html_a, cmp_html_b, cmp_ratio_md],
                 )
 
