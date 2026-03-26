@@ -1,13 +1,11 @@
-# Reasoning Model Comparison — dev + deploy targets
-# Requires: uv, huggingface-cli (installed via `make install`)
+# ML Workbench — dev + deploy targets
+# Requires: uv, git remote "hf" pointing at HF Space repo
 #
 # Usage:
 #   make install        Install deps (creates .venv)
 #   make run            Launch app locally
-#   make test           Run unit tests with coverage
-#   make deploy         Upload to HF Spaces (set HF_SPACE=username/space-name)
-
-HF_SPACE ?= ""
+#   make test           Run full test suite with coverage
+#   make deploy         Push to HF Spaces via git
 
 .PHONY: install run test deploy
 
@@ -18,22 +16,13 @@ run:
 	uv run python app.py
 
 test:
-	uv run pytest test_app.py test_tokenizer.py -v --cov=app --cov=openrouter --cov=tokenizer --cov-report=term-missing
+	uv run pytest -v --cov --cov-report=term-missing
 
 deploy:
-	@if [ -z "$(HF_SPACE)" ]; then \
-		echo "Error: set HF_SPACE=username/space-name"; \
-		exit 1; \
-	fi
-	@echo "Deploying to https://huggingface.co/spaces/$(HF_SPACE)"
-	@find . -type f \
-		! -path "./.venv/*" \
-		! -path "./.pytest_cache/*" \
-		! -path "./__pycache__/*" \
-		! -name "*.pyc" \
-		! -name ".coverage" \
-		! -name ".DS_Store" \
-	| while read -r file; do \
-		remote_path=$${file#./}; \
-		uv run hf upload $(HF_SPACE) "$$remote_path" "$$remote_path" --repo-type space; \
-	done
+	@echo "Deploying workbench/ to HuggingFace Space..."
+	@cd .. && git subtree push --prefix workbench hf main \
+		|| (echo "\nSubtree push rejected — force-pushing..." \
+		    && git subtree split --prefix workbench -b _hf_deploy \
+		    && git push hf _hf_deploy:main --force \
+		    && git branch -D _hf_deploy)
+	@echo "Done. https://huggingface.co/spaces/nad707/workbench"

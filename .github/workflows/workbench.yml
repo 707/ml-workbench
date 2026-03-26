@@ -2,7 +2,6 @@ name: workbench
 
 on:
   push:
-    branches: [main, feature/LOCAL-1-reasoning-model-comparison]
     paths: [workbench/**]
   pull_request:
     paths: [workbench/**]
@@ -22,23 +21,17 @@ jobs:
 
   deploy:
     needs: test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/LOCAL-1-reasoning-model-comparison'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
-      - run: uv sync --group dev
-        working-directory: workbench
-      - run: |
-          uv run hf upload nad707/workbench . . \
-            --repo-type space \
-            --include "*.py" \
-            --include "requirements.txt" \
-            --include "README.md" \
-            --exclude "test_*.py" \
-            --exclude "__pycache__/**"
-        working-directory: workbench
+          fetch-depth: 0
+      - name: Push to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git remote add hf https://user:${HF_TOKEN}@huggingface.co/spaces/nad707/workbench
+          git subtree push --prefix workbench hf main \
+            || (git subtree split --prefix workbench -b _hf_deploy \
+                && git push hf _hf_deploy:main --force)
