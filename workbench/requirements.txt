@@ -1,5 +1,5 @@
 gradio[oauth]
 requests
-transformers
+transformers<5
 langdetect
 plotly
