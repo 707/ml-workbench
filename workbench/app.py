@@ -1,5 +1,5 @@
 """
-Reasoning Model Comparison — Gradio app for HuggingFace Spaces.
+ML Workbench — Gradio app for HuggingFace Spaces.
 
 Sends a question to DeepSeek-R1 and Llama-3.1-8B simultaneously via OpenRouter,
 parses R1's <think> block, and displays a side-by-side comparison.
