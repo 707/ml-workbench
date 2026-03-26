@@ -2,7 +2,7 @@ name: workbench
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/LOCAL-1-reasoning-model-comparison]
     paths: [workbench/**]
   pull_request:
     paths: [workbench/**]
@@ -17,12 +17,12 @@ jobs:
           enable-cache: true
       - run: uv sync --all-groups
         working-directory: workbench
-      - run: uv run pytest test_app.py -v --cov=app --cov-report=term-missing
+      - run: uv run pytest -v --cov --cov-report=term-missing
         working-directory: workbench
 
   deploy:
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/LOCAL-1-reasoning-model-comparison'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,9 +34,11 @@ jobs:
       - run: |
           uv run hf upload nad707/workbench . . \
             --repo-type space \
-            --include "app.py" \
+            --include "*.py" \
             --include "requirements.txt" \
-            --include "README.md"
+            --include "README.md" \
+            --exclude "test_*.py" \
+            --exclude "__pycache__/**"
         working-directory: workbench
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
