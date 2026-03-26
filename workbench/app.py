@@ -8,36 +8,20 @@ parses R1's <think> block, and displays a side-by-side comparison.
 import html as _html
 import os
 import re
-import requests
 import gradio as gr
-from collections import defaultdict
-from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from openrouter import call_openrouter, extract_usage, OPENROUTER_URL  # noqa: F401
+from tokenizer import build_tokenizer_ui
+from token_tax_ui import build_token_tax_ui
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-# Set OPENROUTER_API_KEY as a HF Space secret. When set, logged-in users
-# run for free without entering their own key.
+# Set OPENROUTER_API_KEY as a HF Space secret. When set, users run for free
+# without entering their own key.
 SERVER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-
-RATE_LIMIT = 10           # max requests per user
-RATE_WINDOW = timedelta(hours=1)
-
-# In-memory store: {username: [datetime, ...]}
-_request_log: dict[str, list] = defaultdict(list)
-
-
-def _check_rate_limit(username: str) -> bool:
-    """Return True if the user is within the rate limit, False if exceeded."""
-    now = datetime.utcnow()
-    cutoff = now - RATE_WINDOW
-    _request_log[username] = [t for t in _request_log[username] if t > cutoff]
-    if len(_request_log[username]) >= RATE_LIMIT:
-        return False
-    _request_log[username].append(now)
-    return True
 
 # ---------------------------------------------------------------------------
 # Model IDs
@@ -48,13 +32,10 @@ FREE_MODELS: list[tuple[str, str]] = [
     ("Llama-3.1-8B", "meta-llama/llama-3.1-8b-instruct"),
     ("Gemma-3-27B", "google/gemma-3-27b-it:free"),
     ("Mistral-7B", "mistralai/mistral-7b-instruct:free"),
-    ("Qwen3-8B", "qwen/qwen3-8b:free"),
 ]
 
 MODEL_R1 = "stepfun/step-3.5-flash"
 MODEL_LLAMA = "meta-llama/llama-3.1-8b-instruct"
-
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 PRESET_QUESTIONS = [
     'How many r\'s are in "strawberry"?',
@@ -91,66 +72,6 @@ def parse_think_block(text: str) -> tuple[str, str]:
     answer = after.strip()
 
     return (reasoning, answer)
-
-
-def call_openrouter(
-    api_key: str,
-    model: str,
-    prompt: str,
-    temperature: float | None = None,
-    max_tokens: int | None = None,
-) -> dict:
-    """POST a chat completion request to OpenRouter.
-
-    Args:
-        api_key:     OpenRouter API key.
-        model:       Model ID string (e.g. "deepseek/deepseek-r1").
-        prompt:      User question string.
-        temperature: Sampling temperature — omitted from payload when None.
-        max_tokens:  Max completion tokens — omitted from payload when None.
-
-    Returns:
-        Parsed JSON response dict.
-
-    Raises:
-        requests.HTTPError on non-2xx status.
-    """
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    if temperature is not None:
-        payload["temperature"] = temperature
-    if max_tokens is not None:
-        payload["max_tokens"] = max_tokens
-
-    response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()
-
-
-def extract_usage(response: dict) -> dict:
-    """Extract token usage counts from an OpenRouter response.
-
-    Returns a dict with keys:
-      - prompt_tokens
-      - completion_tokens
-      - reasoning_tokens  (0 if not present — e.g. Llama responses)
-    """
-    usage = response.get("usage", {})
-    details = usage.get("completion_tokens_details", {}) or {}
-
-    reasoning_tokens = details.get("reasoning_tokens") or 0
-
-    return {
-        "prompt_tokens": usage.get("prompt_tokens", 0) or 0,
-        "completion_tokens": usage.get("completion_tokens", 0) or 0,
-        "reasoning_tokens": reasoning_tokens,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -337,25 +258,16 @@ def _build_card(
 </div>"""
 
 
-def build_ui() -> gr.Blocks:
-    """Construct and return the Gradio Blocks UI."""
+def _build_comparison_blocks() -> gr.Blocks:
+    """Construct and return the Model Comparison Gradio Blocks."""
     model_choices = [label for label, _ in FREE_MODELS]
     model_ids = {label: m_id for label, m_id in FREE_MODELS}
 
     with gr.Blocks(title="Reasoning Model Comparison") as demo:
         gr.Markdown("# Reasoning Model Comparison\nCompare any two free models via OpenRouter")
 
-        # Auth row — HF login button + status message
-        with gr.Row():
-            gr.LoginButton()
-        auth_msg = gr.Markdown(
-            "**Login with HuggingFace** to run for free using the shared key.  \n"
-            "Or enter your own [OpenRouter](https://openrouter.ai) key below "
-            "— free tier, no credit card required."
-        )
-
-        # API key input — hidden when user is logged in and server key is available
-        with gr.Row() as key_row:
+        # API key accordion — hidden when server key is configured
+        with gr.Accordion("OpenRouter API Key", open=False, visible=not bool(SERVER_KEY)):
             api_key = gr.Textbox(
                 label="OpenRouter API Key",
                 type="password",
@@ -394,16 +306,14 @@ def build_ui() -> gr.Blocks:
                         value=None, label="Max tokens (blank = no limit)", precision=0,
                     )
 
-        with gr.Row():
+        with gr.Accordion("Input Prompt", open=True):
             preset = gr.Radio(
                 choices=PRESET_QUESTIONS,
-                label="Preset Questions",
+                label="Input Prompt",
                 value=PRESET_QUESTIONS[0],
             )
-
-        with gr.Row():
             custom = gr.Textbox(
-                label="Custom Question (overrides preset if filled)",
+                label="Custom Prompt (optional, overrides selected input)",
                 placeholder="Type your own question here...",
             )
 
@@ -411,22 +321,6 @@ def build_ui() -> gr.Blocks:
 
         history_state = gr.State([])
         history_html = gr.HTML()
-
-        # Update auth message and key visibility when login state changes
-        def _on_load(profile: gr.OAuthProfile | None):
-            if profile and SERVER_KEY:
-                return (
-                    gr.update(value=f"Logged in as **{profile.name}** — running on shared key, no setup needed."),
-                    gr.update(visible=False),
-                )
-            elif profile:
-                return (
-                    gr.update(value=f"Logged in as **{profile.name}** — enter your OpenRouter key below."),
-                    gr.update(visible=True),
-                )
-            return gr.update(), gr.update()
-
-        demo.load(_on_load, inputs=None, outputs=[auth_msg, key_row])
 
         def _compare_and_render(
             api_key_val: str,
@@ -439,20 +333,8 @@ def build_ui() -> gr.Blocks:
             preset_val: str,
             custom_val: str,
             history: list,
-            profile: gr.OAuthProfile | None,
-            oauth_token: gr.OAuthToken | None,
         ):
-            using_server_key = oauth_token is not None and bool(SERVER_KEY)
-
-            if using_server_key:
-                if profile is None:
-                    msg = "<p style='color:red'>Login with HuggingFace to use the shared key.</p>"
-                    return history, "".join(history) + msg
-                if not _check_rate_limit(profile.username):
-                    msg = f"<p style='color:red'>Rate limit reached ({RATE_LIMIT} requests/hour). Try again later.</p>"
-                    return history, "".join(history) + msg
-
-            effective_key = SERVER_KEY if using_server_key else api_key_val
+            effective_key = SERVER_KEY if SERVER_KEY else api_key_val
             question = custom_val.strip() if custom_val.strip() else preset_val
 
             if not effective_key.strip():
@@ -503,6 +385,25 @@ def build_ui() -> gr.Blocks:
         )
 
     return demo
+
+
+def build_ui() -> gr.TabbedInterface:
+    """Construct and return the full tabbed Gradio UI.
+
+    Tabs:
+      - Model Comparison: side-by-side reasoning model comparison.
+      - Tokenizer Inspector: tokenization visualisation and analysis.
+
+    Returns:
+        gr.TabbedInterface composing both tab blocks.
+    """
+    comparison_blocks = _build_comparison_blocks()
+    tokenizer_blocks = build_tokenizer_ui()
+    token_tax_blocks = build_token_tax_ui()
+    return gr.TabbedInterface(
+        [comparison_blocks, tokenizer_blocks, token_tax_blocks],
+        ["Model Comparison", "Tokenizer Inspector", "Token Tax Dashboard"],
+    )
 
 
 # ---------------------------------------------------------------------------

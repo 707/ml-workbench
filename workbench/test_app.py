@@ -7,6 +7,7 @@ Test order matches implementation phases:
 """
 
 import json
+import inspect
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -128,6 +129,18 @@ class TestParseThinkBlock:
         assert "answer with </think> inside" in answer
 
 
+class TestComparisonUiLabels:
+    """UI text checks for the comparison tab prompt inputs."""
+
+    def test_input_prompt_label_present_and_preset_label_removed(self):
+        """Prompt area should use 'Input Prompt' wording instead of 'Preset Questions'."""
+        import app
+
+        src = inspect.getsource(app._build_comparison_blocks)
+        assert "Input Prompt" in src
+        assert "Preset Questions" not in src
+
+
 # ---------------------------------------------------------------------------
 # Phase 1 — extract_usage
 # ---------------------------------------------------------------------------
@@ -239,7 +252,7 @@ class TestCallOpenrouter:
         """Must POST to the OpenRouter chat completions endpoint."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {"choices": []}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -252,7 +265,7 @@ class TestCallOpenrouter:
         """Authorization header must include the API key."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -266,7 +279,7 @@ class TestCallOpenrouter:
         """The model ID must appear in the POST body."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -279,7 +292,7 @@ class TestCallOpenrouter:
         """The prompt must appear as a user message in the messages list."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -295,7 +308,7 @@ class TestCallOpenrouter:
 
         expected = {"choices": [{"message": {"content": "4"}}]}
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = expected
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -308,7 +321,7 @@ class TestCallOpenrouter:
         import requests as req_lib
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.raise_for_status.side_effect = req_lib.HTTPError("401")
 
             with pytest.raises(req_lib.HTTPError):
@@ -650,13 +663,88 @@ class TestBuildUi:
     """Smoke tests for build_ui() — verifies Gradio Blocks is constructed."""
 
     def test_build_ui_returns_gradio_blocks(self):
-        """build_ui() must return a Gradio Blocks instance without raising."""
+        """build_ui() must return a Gradio Blocks or TabbedInterface without raising."""
         import gradio as gr
         from app import build_ui
 
         demo = build_ui()
 
-        assert isinstance(demo, gr.Blocks)
+        assert isinstance(demo, (gr.Blocks, gr.TabbedInterface))
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — _stats_to_html
+# ---------------------------------------------------------------------------
+
+
+class TestStatsToHtml:
+    """Unit tests for _stats_to_html(stats_md)."""
+
+    def test_bold_markdown_becomes_strong_tag(self):
+        """**Key:** should become <strong>Key:</strong>."""
+        from app import _stats_to_html
+
+        result = _stats_to_html("**Prompt tokens:** 10")
+
+        assert "<strong>Prompt tokens:</strong>" in result
+
+    def test_double_newline_becomes_br(self):
+        """Two-space + newline (markdown line break) becomes <br>."""
+        from app import _stats_to_html
+
+        result = _stats_to_html("line1  \nline2")
+
+        assert "<br>" in result
+
+    def test_returns_string(self):
+        """Return type is always str."""
+        from app import _stats_to_html
+
+        assert isinstance(_stats_to_html(""), str)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — _build_card
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCard:
+    """Unit tests for _build_card(...)."""
+
+    def test_returns_string(self):
+        """_build_card must return a string."""
+        from app import _build_card
+
+        result = _build_card("Q?", "reasoning", "answer A", "stats A", "answer B", "stats B")
+
+        assert isinstance(result, str)
+
+    def test_question_appears_in_output(self):
+        """The question text must appear in the card HTML."""
+        from app import _build_card
+
+        result = _build_card("What is 2+2?", "", "4", "", "4", "")
+
+        assert "What is 2+2?" in result
+
+    def test_model_labels_appear_in_output(self):
+        """model_a_label and model_b_label must appear in the card HTML."""
+        from app import _build_card
+
+        result = _build_card("Q?", "", "a", "", "b", "",
+                             model_a_label="MyModelA", model_b_label="MyModelB")
+
+        assert "MyModelA" in result
+        assert "MyModelB" in result
+
+    def test_html_escapes_question(self):
+        """HTML special characters in the question must be escaped."""
+        from app import _build_card
+
+        result = _build_card("<script>", "", "a", "", "b", "")
+
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result
 
 
 # ---------------------------------------------------------------------------
@@ -724,7 +812,7 @@ class TestCallOpenrouterInferenceParams:
         """temperature kwarg must appear in the POST body when provided."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -737,7 +825,7 @@ class TestCallOpenrouterInferenceParams:
         """max_tokens kwarg must appear in the POST body when provided."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -750,7 +838,7 @@ class TestCallOpenrouterInferenceParams:
         """temperature must NOT appear in payload when not provided (None)."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -763,7 +851,7 @@ class TestCallOpenrouterInferenceParams:
         """max_tokens must NOT appear in payload when not provided (None)."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -776,7 +864,7 @@ class TestCallOpenrouterInferenceParams:
         """Both temperature and max_tokens appear together when both provided."""
         from app import call_openrouter
 
-        with patch("app.requests.post") as mock_post:
+        with patch("openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 

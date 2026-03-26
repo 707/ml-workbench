@@ -1,2 +1,5 @@
 gradio[oauth]
 requests
+transformers
+langdetect
+plotly
