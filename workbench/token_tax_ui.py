@@ -7,7 +7,6 @@ the Token Tax Dashboard tab with cost analysis, charts, and recommendations.
 import math
 
 import gradio as gr
-import plotly.graph_objects as go
 
 from pricing import available_models, LAST_UPDATED
 from tokenizer import detect_language
@@ -28,7 +27,7 @@ _RISK_COLORS = {
 }
 
 
-def build_bubble_chart(analysis_results: list[dict]) -> go.Figure:
+def build_bubble_chart(analysis_results: list[dict]):
     """Bubble chart: x=RTC, y=cost_per_million, size=token_count, color=risk_level.
 
     Args:
@@ -38,6 +37,8 @@ def build_bubble_chart(analysis_results: list[dict]) -> go.Figure:
     Returns:
         A Plotly Figure. Empty results yield an empty figure with annotation.
     """
+    import plotly.graph_objects as go
+
     fig = go.Figure()
 
     if not analysis_results:
@@ -90,7 +91,7 @@ def _handle_dashboard(
     selected_models: list[str],
     monthly_requests: int,
     avg_chars: int,
-) -> tuple[dict, str, go.Figure, str]:
+) -> tuple[dict, str, object, str]:
     """Handler logic for the Token Tax Dashboard — extracted for testability.
 
     Returns:

@@ -411,8 +411,10 @@ def build_ui() -> gr.TabbedInterface:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    print("APP STARTING — building UI...", flush=True)
     app = build_ui()
-    app.queue(max_size=5).launch(
+    print("UI built — launching server...", flush=True)
+    app.launch(
         server_name="0.0.0.0",
         server_port=7860,
         ssr_mode=False,

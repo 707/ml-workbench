@@ -1,4 +1,4 @@
-gradio[oauth]>=5.0,<6
+gradio>=5.0,<6
 requests
 transformers<5
 langdetect
