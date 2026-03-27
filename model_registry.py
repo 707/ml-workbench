@@ -27,6 +27,27 @@ class ModelMapping:
     source: str
 
 
+FREE_OPENROUTER_MODELS: dict[str, tuple[str, ...]] = {
+    "o200k_base": (),
+    "cl100k_base": (),
+    "llama-3": (
+        "meta-llama/llama-3.1-8b-instruct",
+        "meta-llama/llama-3.2-3b-instruct:free",
+    ),
+    "mistral": (
+        "mistralai/mistral-7b-instruct:free",
+    ),
+    "qwen-2.5": (
+        "qwen/qwen-2.5-7b-instruct:free",
+    ),
+    "gemma-2": (
+        "google/gemma-3-27b-it:free",
+    ),
+    "command-r": (),
+    "gpt2": (),
+}
+
+
 TOKENIZER_FAMILIES: dict[str, TokenizerFamily] = {
     "o200k_base": TokenizerFamily("o200k_base", "OpenAI o200k", "tiktoken:o200k_base", "exact", "strict_verified"),
     "cl100k_base": TokenizerFamily("cl100k_base", "OpenAI cl100k", "tiktoken:cl100k_base", "exact", "strict_verified"),
@@ -46,8 +67,12 @@ MODEL_MAPPINGS: dict[str, ModelMapping] = {
     "openai/gpt-3.5-turbo": ModelMapping("openai/gpt-3.5-turbo", "cl100k_base", "GPT-3.5 Turbo", "exact", "strict_verified", "Static exact mapping"),
     "meta-llama/llama-3.1-8b-instruct": ModelMapping("meta-llama/llama-3.1-8b-instruct", "llama-3", "Llama 3.1 8B Instruct", "exact", "strict_verified", "Static exact mapping"),
     "meta-llama/llama-3.1-70b-instruct": ModelMapping("meta-llama/llama-3.1-70b-instruct", "llama-3", "Llama 3.1 70B Instruct", "exact", "strict_verified", "Static exact mapping"),
+    "meta-llama/llama-3.2-3b-instruct:free": ModelMapping("meta-llama/llama-3.2-3b-instruct:free", "llama-3", "Llama 3.2 3B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "mistralai/mistral-7b-instruct": ModelMapping("mistralai/mistral-7b-instruct", "mistral", "Mistral 7B Instruct", "exact", "strict_verified", "Static exact mapping"),
+    "mistralai/mistral-7b-instruct:free": ModelMapping("mistralai/mistral-7b-instruct:free", "mistral", "Mistral 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "google/gemma-2-9b-it": ModelMapping("google/gemma-2-9b-it", "gemma-2", "Gemma 2 9B IT", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer is wired"),
+    "google/gemma-3-27b-it:free": ModelMapping("google/gemma-3-27b-it:free", "gemma-2", "Gemma 3 27B IT (Free)", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer is wired"),
+    "qwen/qwen-2.5-7b-instruct:free": ModelMapping("qwen/qwen-2.5-7b-instruct:free", "qwen-2.5", "Qwen 2.5 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "qwen/qwen-2.5-72b-instruct": ModelMapping("qwen/qwen-2.5-72b-instruct", "qwen-2.5", "Qwen 2.5 72B Instruct", "exact", "strict_verified", "Static exact mapping"),
     "cohere/command-r": ModelMapping("cohere/command-r", "command-r", "Command R", "proxy", "proxy", "Tokenizer proxy until exact Command R tokenizer is wired"),
 }
@@ -172,3 +197,43 @@ def build_catalog_entries(
             "source": resolved["source"],
         })
     return sorted(entries, key=lambda entry: entry["label"].lower())
+
+
+def build_tokenizer_catalog(
+    *,
+    include_proxy: bool = False,
+) -> list[dict]:
+    """Return tokenizer-first catalog rows with attached free model examples."""
+    rows: list[dict] = []
+
+    for family in TOKENIZER_FAMILIES.values():
+        if family.mapping_quality == "proxy" and not include_proxy:
+            continue
+
+        free_models: list[dict] = []
+        for model_id in FREE_OPENROUTER_MODELS.get(family.key, ()):
+            mapping = MODEL_MAPPINGS.get(model_id)
+            if mapping is None:
+                continue
+            if mapping.mapping_quality == "proxy" and not include_proxy:
+                continue
+            free_models.append({
+                "model_id": mapping.model_id,
+                "label": mapping.label,
+                "mapping_quality": mapping.mapping_quality,
+                "provenance": mapping.provenance,
+                "runtime_badge": "Runnable here for free",
+                "mapping_badge": "Exact tokenizer mapping" if mapping.mapping_quality == "exact" else "Proxy mapping",
+            })
+
+        rows.append({
+            "tokenizer_key": family.key,
+            "label": family.label,
+            "tokenizer_source": family.tokenizer_source,
+            "mapping_quality": family.mapping_quality,
+            "provenance": family.provenance,
+            "free_models": sorted(free_models, key=lambda model: model["label"].lower()),
+            "aa_matches": [],
+        })
+
+    return sorted(rows, key=lambda row: row["label"].lower())

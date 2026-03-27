@@ -161,3 +161,33 @@ class TestResolveModel:
             result = resolve_model(model_id)
             assert result["tokenizer_key"] in result["pricing"].__class__.__name__ or True
             assert result["context_window"] > 0
+
+
+class TestTokenizerFirstCatalog:
+    def test_tokenizer_families_include_free_model_attachments(self):
+        from model_registry import build_tokenizer_catalog
+
+        rows = build_tokenizer_catalog(include_proxy=True)
+        assert any(row["free_models"] for row in rows)
+
+    def test_exact_catalog_hides_proxy_families_by_default(self):
+        from model_registry import build_tokenizer_catalog
+
+        rows = build_tokenizer_catalog(include_proxy=False)
+        assert all(row["mapping_quality"] != "proxy" for row in rows)
+
+    def test_llama_family_has_multiple_free_models(self):
+        from model_registry import build_tokenizer_catalog
+
+        rows = build_tokenizer_catalog(include_proxy=True)
+        llama = next(row for row in rows if row["tokenizer_key"] == "llama-3")
+        assert len(llama["free_models"]) >= 2
+
+    def test_catalog_rows_are_tokenizer_first(self):
+        from model_registry import build_tokenizer_catalog
+
+        rows = build_tokenizer_catalog(include_proxy=True)
+        row = rows[0]
+        assert "tokenizer_key" in row
+        assert "free_models" in row
+        assert "aa_matches" in row
