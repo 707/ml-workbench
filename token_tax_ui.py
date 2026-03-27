@@ -25,6 +25,7 @@ from token_tax import (
     audit_markdown,
     benchmark_appendix,
     benchmark_corpus,
+    iter_benchmark_rows,
     benchmark_all,
     catalog_appendix,
     cost_projection,
@@ -101,6 +102,121 @@ def _catalog_display_rows(rows: list[dict]) -> list[dict]:
             "provenance": row["provenance"],
         })
     return display_rows
+
+
+def _build_benchmark_outputs(
+    rows: list[dict],
+    selected_languages: list[str],
+    metric_key: str,
+    appendix: str,
+) -> tuple[dict, object, object, str, str]:
+    matrix = {
+        (row["language"], row["tokenizer_key"]): row
+        for row in rows
+    }
+    tokenizers = list(dict.fromkeys(row["tokenizer_key"] for row in rows))
+    return (
+        serialize_table(rows, BENCHMARK_COLUMNS),
+        build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key),
+        build_distribution_chart(rows, metric_key),
+        appendix,
+        render_markdown(),
+    )
+
+
+def _aggregate_scenario_rows(rows: list[dict]) -> list[dict]:
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        key = row["model_id"]
+        weight = float(row.get("monthly_input_tokens") or 0)
+        current = grouped.setdefault(key, {
+            "label": row["label"],
+            "model_id": row["model_id"],
+            "tokenizer_key": row["tokenizer_key"],
+            "rtc_weighted_sum": 0.0,
+            "context_loss_weighted_sum": 0.0,
+            "weight": 0.0,
+            "monthly_input_tokens": 0,
+            "monthly_output_tokens": 0,
+            "monthly_cost": 0.0,
+            "ttft_seconds": row.get("ttft_seconds"),
+            "output_tokens_per_second": row.get("output_tokens_per_second"),
+            "telemetry_provider": row.get("telemetry_provider"),
+            "provenance": row.get("provenance"),
+        })
+        current["rtc_weighted_sum"] += float(row.get("rtc") or 0.0) * weight
+        current["context_loss_weighted_sum"] += float(row.get("context_loss_pct") or 0.0) * weight
+        current["weight"] += weight
+        current["monthly_input_tokens"] += int(row.get("monthly_input_tokens") or 0)
+        current["monthly_output_tokens"] += int(row.get("monthly_output_tokens") or 0)
+        current["monthly_cost"] += float(row.get("monthly_cost") or 0.0)
+
+    aggregated: list[dict] = []
+    for item in grouped.values():
+        weight = item.pop("weight")
+        rtc_weighted_sum = item.pop("rtc_weighted_sum")
+        context_loss_weighted_sum = item.pop("context_loss_weighted_sum")
+        item["rtc"] = round(rtc_weighted_sum / weight, 4) if weight else 0.0
+        item["context_loss_pct"] = round(context_loss_weighted_sum / weight, 2) if weight else 0.0
+        item["monthly_cost"] = round(item["monthly_cost"], 6)
+        aggregated.append(item)
+    return sorted(aggregated, key=lambda row: row["label"].lower())
+
+
+def _build_scenario_outputs(
+    rows: list[dict],
+    x_key: str,
+    y_key: str,
+    size_key: str,
+    appendix: str,
+) -> tuple[dict, object, object, object, object, object, str, str]:
+    table = serialize_table(rows, SCENARIO_COLUMNS)
+    chart_rows = _aggregate_scenario_rows(rows)
+    cost_plot = build_metric_scatter(
+        chart_rows,
+        x_key="rtc",
+        y_key="monthly_cost",
+        size_key="monthly_input_tokens",
+        title="Cost",
+        x_title="RTC",
+        y_title="Monthly cost ($)",
+    )
+    context_plot = build_metric_scatter(
+        chart_rows,
+        x_key="rtc",
+        y_key="context_loss_pct",
+        size_key="monthly_input_tokens",
+        title="Context Loss",
+        x_title="RTC",
+        y_title="Context loss (%)",
+    )
+    speed_plot = build_metric_scatter(
+        chart_rows,
+        x_key="ttft_seconds",
+        y_key="output_tokens_per_second",
+        title="Speed Metadata",
+        x_title="Time to first token (s)",
+        y_title="Output tokens / sec",
+    )
+    scale_plot = build_metric_scatter(
+        chart_rows,
+        x_key="monthly_input_tokens",
+        y_key="monthly_cost",
+        size_key="monthly_cost",
+        title="Scale",
+        x_title="Monthly input tokens",
+        y_title="Monthly cost ($)",
+    )
+    custom_plot = build_metric_scatter(
+        chart_rows,
+        x_key=x_key,
+        y_key=y_key,
+        size_key=size_key if size_key != "none" else None,
+        title="Custom Slice",
+        x_title=x_key,
+        y_title=y_key,
+    )
+    return table, cost_plot, context_plot, speed_plot, scale_plot, custom_plot, appendix, render_markdown()
 
 
 # ---------------------------------------------------------------------------
@@ -263,48 +379,65 @@ def _handle_benchmark_tab(
     row_limit: int,
     include_estimates: bool,
     include_proxy: bool,
-) -> tuple[dict, object, object, str, str]:
+    live_updates: bool,
+):
     if not tokenizer_keys:
-        return (
+        yield (
             {"headers": BENCHMARK_COLUMNS, "data": []},
             build_heatmap({}, [], []),
             build_distribution_chart([], metric_key),
             "Select at least one tokenizer family.",
             render_markdown(),
         )
+        return
 
     try:
         clear_events()
-        result = benchmark_corpus(
+        selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
+        appendix = benchmark_appendix(corpus_key)
+        yield (
+            {"headers": BENCHMARK_COLUMNS, "data": []},
+            build_heatmap({}, [], [], metric_key=metric_key),
+            build_distribution_chart([], metric_key),
+            appendix,
+            render_markdown(),
+        )
+        rows: list[dict] = []
+        for row in iter_benchmark_rows(
             corpus_key,
-            languages,
+            selected_languages,
             tokenizer_keys,
             row_limit=int(row_limit),
             include_estimates=include_estimates,
             include_proxy=include_proxy,
-        )
+        ):
+            rows.append(row)
+            if live_updates:
+                yield _build_benchmark_outputs(rows, selected_languages, metric_key, appendix)
+        if not rows:
+            raise RuntimeError(
+                "No benchmark rows were produced. The strict corpus fetch may have failed or returned zero samples."
+            )
     except Exception as exc:
-        return (
+        yield (
             {"headers": BENCHMARK_COLUMNS, "data": []},
             build_heatmap({}, [], [], metric_key=metric_key),
             build_distribution_chart([], metric_key),
             f"{benchmark_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
+        return
 
-    table = serialize_table(result["rows"], BENCHMARK_COLUMNS)
-    heatmap = build_heatmap(result["matrix"], result["languages"], result["tokenizers"], metric_key=metric_key)
-    distribution = build_distribution_chart(result["rows"], metric_key)
-    appendix = benchmark_appendix(corpus_key)
-    return table, heatmap, distribution, appendix, render_markdown()
+    yield _build_benchmark_outputs(rows, selected_languages, metric_key, appendix)
 
 
-def _handle_catalog_tab(include_proxy: bool, refresh_live: bool) -> tuple[dict, str, str]:
+def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: bool):
     clear_events()
+    yield serialize_table([], CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
     if refresh_live:
         refresh_catalog()
     rows = build_tokenizer_catalog(include_proxy=include_proxy)
-    return serialize_table(_catalog_display_rows(rows), CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
+    yield serialize_table(_catalog_display_rows(rows), CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
 
 
 def _handle_scenario_tab(
@@ -321,10 +454,11 @@ def _handle_scenario_tab(
     size_key: str,
     include_estimates: bool,
     include_proxy: bool,
-) -> tuple[dict, object, object, object, object, object, str, str]:
+    live_updates: bool,
+):
     if not model_ids:
         empty = serialize_table([], SCENARIO_COLUMNS)
-        return (
+        yield (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
@@ -334,9 +468,20 @@ def _handle_scenario_tab(
             "Select at least one attached free model.",
             render_markdown(),
         )
+        return
 
     try:
         clear_events()
+        yield (
+            serialize_table([], SCENARIO_COLUMNS),
+            build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
+            build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
+            build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
+            build_metric_scatter([], x_key=x_key, y_key=y_key),
+            scenario_appendix(),
+            render_markdown(),
+        )
         rows = scenario_analysis(
             corpus_key=corpus_key,
             languages=languages,
@@ -350,9 +495,11 @@ def _handle_scenario_tab(
             include_estimates=include_estimates,
             include_proxy=include_proxy,
         )
+        if live_updates:
+            yield _build_scenario_outputs(rows, x_key, y_key, size_key, scenario_appendix())
     except Exception as exc:
         empty = serialize_table([], SCENARIO_COLUMNS)
-        return (
+        yield (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
@@ -362,53 +509,9 @@ def _handle_scenario_tab(
             f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
+        return
 
-    table = serialize_table(rows, SCENARIO_COLUMNS)
-    cost_plot = build_metric_scatter(
-        rows,
-        x_key="rtc",
-        y_key="monthly_cost",
-        size_key="monthly_input_tokens",
-        title="Cost",
-        x_title="RTC",
-        y_title="Monthly cost ($)",
-    )
-    context_plot = build_metric_scatter(
-        rows,
-        x_key="rtc",
-        y_key="context_loss_pct",
-        size_key="monthly_input_tokens",
-        title="Context Loss",
-        x_title="RTC",
-        y_title="Context loss (%)",
-    )
-    speed_plot = build_metric_scatter(
-        rows,
-        x_key="ttft_seconds",
-        y_key="output_tokens_per_second",
-        title="Speed Metadata",
-        x_title="Time to first token (s)",
-        y_title="Output tokens / sec",
-    )
-    scale_plot = build_metric_scatter(
-        rows,
-        x_key="monthly_input_tokens",
-        y_key="monthly_cost",
-        size_key="monthly_cost",
-        title="Scale",
-        x_title="Monthly input tokens",
-        y_title="Monthly cost ($)",
-    )
-    custom_plot = build_metric_scatter(
-        rows,
-        x_key=x_key,
-        y_key=y_key,
-        size_key=size_key if size_key != "none" else None,
-        title="Custom Slice",
-        x_title=x_key,
-        y_title=y_key,
-    )
-    return table, cost_plot, context_plot, speed_plot, scale_plot, custom_plot, scenario_appendix(), render_markdown()
+    yield _build_scenario_outputs(rows, x_key, y_key, size_key, scenario_appendix())
 
 
 def build_token_tax_ui() -> gr.Blocks:
@@ -457,7 +560,12 @@ def build_token_tax_ui() -> gr.Blocks:
                 with gr.Row():
                     benchmark_include_estimates = gr.Checkbox(label="Include estimated values", value=False)
                     benchmark_include_proxy = gr.Checkbox(label="Include proxy mappings", value=False)
+                    benchmark_live_updates = gr.Checkbox(label="Live diagnostics", value=True)
                     benchmark_run = gr.Button("Run Benchmark", variant="primary")
+                gr.Markdown(
+                    "Why these controls matter: the corpus and tokenizer family choices define the evidence base. "
+                    "The diagnostics pane can stream progress while each tokenizer-language pair is processed."
+                )
 
                 with gr.Tabs():
                     with gr.TabItem("Heatmap"):
@@ -480,6 +588,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_limit,
                         benchmark_include_estimates,
                         benchmark_include_proxy,
+                        benchmark_live_updates,
                     ],
                     outputs=[
                         benchmark_table,
@@ -494,14 +603,19 @@ def build_token_tax_ui() -> gr.Blocks:
                 with gr.Row():
                     catalog_include_proxy = gr.Checkbox(label="Include proxy mappings", value=False)
                     catalog_refresh_live = gr.Checkbox(label="Refresh live pricing cache", value=False)
+                    catalog_live_updates = gr.Checkbox(label="Live diagnostics", value=True)
                     catalog_run = gr.Button("Load Catalog", variant="primary")
+                gr.Markdown(
+                    "Why these controls matter: this catalog is tokenizer-first, with free runnable models attached as examples. "
+                    "Refreshing live pricing only updates the in-memory OpenRouter cache for this running app instance."
+                )
                 catalog_table = gr.DataFrame(label="Catalog", interactive=False)
                 catalog_appendix_md = gr.Markdown(label="Catalog Appendix")
                 with gr.Accordion("Diagnostics", open=False):
                     catalog_diagnostics_md = gr.Markdown()
                 catalog_run.click(
                     fn=_handle_catalog_tab,
-                    inputs=[catalog_include_proxy, catalog_refresh_live],
+                    inputs=[catalog_include_proxy, catalog_refresh_live, catalog_live_updates],
                     outputs=[catalog_table, catalog_appendix_md, catalog_diagnostics_md],
                 )
 
@@ -555,7 +669,12 @@ def build_token_tax_ui() -> gr.Blocks:
                 with gr.Row():
                     scenario_include_estimates = gr.Checkbox(label="Include estimated values", value=False)
                     scenario_include_proxy = gr.Checkbox(label="Include proxy mappings", value=False)
+                    scenario_live_updates = gr.Checkbox(label="Live diagnostics", value=True)
                     scenario_run = gr.Button("Run Scenario Lab", variant="primary")
+                gr.Markdown(
+                    "Why these controls matter: Scenario Lab reuses the tokenizer benchmark as the multilingual baseline, "
+                    "then attaches model pricing, context windows, and optional benchmark-only speed metadata."
+                )
 
                 with gr.Tabs():
                     with gr.TabItem("Cost"):
@@ -589,6 +708,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         slice_size,
                         scenario_include_estimates,
                         scenario_include_proxy,
+                        scenario_live_updates,
                     ],
                     outputs=[
                         scenario_table,

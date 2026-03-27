@@ -89,6 +89,7 @@ def build_metric_scatter(
         )
 
     fig = go.Figure()
+    show_text = len(filtered) <= 12
     for row in filtered:
         color_name = row.get(color_key, "")
         color = TOKENIZER_COLORS.get(color_name, "#4C78A8")
@@ -99,10 +100,11 @@ def build_metric_scatter(
         fig.add_trace(go.Scatter(
             x=[row[x_key]],
             y=[row[y_key]],
-            mode="markers+text",
+            mode="markers+text" if show_text else "markers",
             name=row.get(label_key, row.get("model", "item")),
-            text=[row.get(label_key, row.get("model", "item"))],
+            text=[row.get(label_key, row.get("model", "item"))] if show_text else None,
             textposition="top center",
+            textfont={"size": 10},
             marker={
                 "size": bubble_size,
                 "color": color,

@@ -422,7 +422,7 @@ def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> 
     return result
 
 
-def benchmark_corpus(
+def iter_benchmark_rows(
     corpus_key: str,
     languages: list[str] | None,
     tokenizer_keys: list[str],
@@ -430,20 +430,10 @@ def benchmark_corpus(
     row_limit: int = 25,
     include_estimates: bool = False,
     include_proxy: bool = False,
-) -> dict:
-    """Compute aggregate tokenizer benchmark rows from a registered corpus."""
-    log_event(
-        "benchmark.run.start",
-        "Running benchmark",
-        corpus_key=corpus_key,
-        languages=languages or list(DEFAULT_BENCHMARK_LANGUAGES),
-        tokenizer_keys=tokenizer_keys,
-        row_limit=row_limit,
-    )
+):
+    """Yield aggregate benchmark rows one tokenizer/language at a time."""
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
     samples = fetch_corpus_samples(corpus_key, selected_languages, row_limit=row_limit)
-    rows: list[dict] = []
-    matrix: dict[tuple[str, str], dict] = {}
 
     for tokenizer in tokenizer_keys:
         selection = resolve_selection(tokenizer)
@@ -454,9 +444,21 @@ def benchmark_corpus(
         ):
             continue
 
+        log_event(
+            "benchmark.tokenizer.start",
+            "Benchmarking tokenizer family",
+            tokenizer_key=selection["tokenizer_key"],
+            language_count=len(selected_languages),
+        )
         for language in selected_languages:
             language_samples = samples.get(language, [])
             if not language_samples:
+                log_event(
+                    "benchmark.language.skip",
+                    "Skipping language with no samples",
+                    tokenizer_key=selection["tokenizer_key"],
+                    language=language,
+                )
                 continue
 
             computed = [
@@ -480,8 +482,47 @@ def benchmark_corpus(
                 "mapping_quality": selection["mapping_quality"],
                 "corpus_key": corpus_key,
             }
-            rows.append(aggregated)
-            matrix[(language, selection["tokenizer_key"])] = aggregated
+            log_event(
+                "benchmark.row.ready",
+                "Benchmark row ready",
+                tokenizer_key=selection["tokenizer_key"],
+                language=language,
+                sample_count=len(computed),
+            )
+            yield aggregated
+
+
+def benchmark_corpus(
+    corpus_key: str,
+    languages: list[str] | None,
+    tokenizer_keys: list[str],
+    *,
+    row_limit: int = 25,
+    include_estimates: bool = False,
+    include_proxy: bool = False,
+) -> dict:
+    """Compute aggregate tokenizer benchmark rows from a registered corpus."""
+    log_event(
+        "benchmark.run.start",
+        "Running benchmark",
+        corpus_key=corpus_key,
+        languages=languages or list(DEFAULT_BENCHMARK_LANGUAGES),
+        tokenizer_keys=tokenizer_keys,
+        row_limit=row_limit,
+    )
+    selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
+    rows = list(iter_benchmark_rows(
+        corpus_key,
+        selected_languages,
+        tokenizer_keys,
+        row_limit=row_limit,
+        include_estimates=include_estimates,
+        include_proxy=include_proxy,
+    ))
+    matrix: dict[tuple[str, str], dict] = {
+        (row["language"], row["tokenizer_key"]): row
+        for row in rows
+    }
 
     if not rows:
         log_event(
@@ -500,13 +541,13 @@ def benchmark_corpus(
         "Benchmark completed",
         row_count=len(rows),
         language_count=len(selected_languages),
-        tokenizer_count=len(tokenizer_keys),
+        tokenizer_count=len({row["tokenizer_key"] for row in rows}),
     )
     return {
         "rows": rows,
         "matrix": matrix,
         "languages": selected_languages,
-        "tokenizers": [resolve_selection(tokenizer)["tokenizer_key"] for tokenizer in tokenizer_keys],
+        "tokenizers": list(dict.fromkeys(row["tokenizer_key"] for row in rows)),
     }
 
 

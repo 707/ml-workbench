@@ -42,12 +42,88 @@ class TestWorkbenchHandlers:
         ]
 
         with patch("token_tax_ui.build_tokenizer_catalog", return_value=tokenizer_rows):
-            table, appendix, diagnostics = _handle_catalog_tab(include_proxy=False, refresh_live=False)
+            outputs = list(_handle_catalog_tab(include_proxy=False, refresh_live=False, live_updates=True))
+            table, appendix, diagnostics = outputs[-1]
 
         assert table["headers"][0] == "label"
         assert table["data"][0][1] == "llama-3"
         assert "Catalog Appendix" in appendix
         assert "Diagnostics" in diagnostics
+
+    def test_aggregate_scenario_rows_groups_by_model(self):
+        from token_tax_ui import _aggregate_scenario_rows
+
+        rows = [
+            {
+                "label": "Llama 3.1 8B",
+                "model_id": "meta-llama/llama-3.1-8b-instruct",
+                "language": "ar",
+                "tokenizer_key": "llama-3",
+                "rtc": 2.0,
+                "context_loss_pct": 50.0,
+                "monthly_input_tokens": 200_000,
+                "monthly_output_tokens": 55_000,
+                "monthly_cost": 10.0,
+                "ttft_seconds": 0.44,
+                "output_tokens_per_second": 84.2,
+                "provenance": "strict_verified",
+            },
+            {
+                "label": "Llama 3.1 8B",
+                "model_id": "meta-llama/llama-3.1-8b-instruct",
+                "language": "ja",
+                "tokenizer_key": "llama-3",
+                "rtc": 1.5,
+                "context_loss_pct": 33.3,
+                "monthly_input_tokens": 150_000,
+                "monthly_output_tokens": 55_000,
+                "monthly_cost": 7.5,
+                "ttft_seconds": 0.44,
+                "output_tokens_per_second": 84.2,
+                "provenance": "strict_verified",
+            },
+        ]
+
+        aggregated = _aggregate_scenario_rows(rows)
+
+        assert len(aggregated) == 1
+        assert aggregated[0]["monthly_cost"] == 17.5
+        assert aggregated[0]["monthly_input_tokens"] == 350_000
+
+    def test_handle_benchmark_tab_can_stream_live_diagnostics(self):
+        from token_tax_ui import _handle_benchmark_tab
+
+        benchmark_rows = [
+            {
+                "language": "en",
+                "label": "GPT-2 legacy",
+                "tokenizer_key": "gpt2",
+                "token_count": 4,
+                "token_fertility": 1.0,
+                "bytes_per_token": 1.2,
+                "rtc": 1.0,
+                "byte_premium": 1.0,
+                "risk_level": "low",
+                "sample_count": 2,
+                "provenance": "strict_verified",
+                "mapping_quality": "exact",
+                "corpus_key": "strict_parallel",
+            },
+        ]
+        with patch("token_tax_ui.iter_benchmark_rows", return_value=iter(benchmark_rows)):
+            outputs = list(_handle_benchmark_tab(
+                "strict_parallel",
+                ["en"],
+                ["gpt2"],
+                "rtc",
+                5,
+                False,
+                False,
+                True,
+            ))
+
+        assert len(outputs) >= 2
+        assert "Diagnostics" in outputs[-1][-1]
 
 
 # ---------------------------------------------------------------------------
