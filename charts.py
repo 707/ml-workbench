@@ -79,6 +79,11 @@ def build_metric_scatter(
                 f"No {label} metadata is wired for the selected models. "
                 "Current catalog refresh surfaces pricing and context, not performance telemetry."
             )
+        if {x_key, y_key} == {"ttft_seconds", "output_tokens_per_second"}:
+            return _empty_figure(
+                "No benchmark-only speed metadata matched the selected models. "
+                "Attach an Artificial Analysis snapshot or choose models with a benchmark match."
+            )
         return _empty_figure(
             f"No numeric data is available for {x_key} vs {y_key} in the current scenario rows."
         )

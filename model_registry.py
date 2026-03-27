@@ -184,11 +184,13 @@ def build_catalog_entries(
         refresh_from_openrouter()
 
     entries: list[dict] = []
+    aa_by_model = _load_artificial_analysis_by_model()
     for mapping in MODEL_MAPPINGS.values():
         if mapping.mapping_quality == "proxy" and not include_proxy:
             continue
         resolved = resolve_model(mapping.model_id)
         pricing = resolved["pricing"]
+        aa_match = aa_by_model.get(mapping.model_id, {})
         entries.append({
             "model_id": mapping.model_id,
             "label": resolved["label"],
@@ -198,8 +200,13 @@ def build_catalog_entries(
             "input_per_million": pricing["input_per_million"],
             "output_per_million": pricing["output_per_million"],
             "context_window": pricing["context_window"],
-            "latency_ms": None,
-            "throughput_tps": None,
+            "latency_ms": aa_match.get("ttft_seconds"),
+            "throughput_tps": aa_match.get("output_tokens_per_second"),
+            "ttft_seconds": aa_match.get("ttft_seconds"),
+            "output_tokens_per_second": aa_match.get("output_tokens_per_second"),
+            "telemetry_provider": aa_match.get("telemetry_provider"),
+            "telemetry_benchmark_url": aa_match.get("benchmark_url"),
+            "telemetry_captured_at": aa_match.get("captured_at"),
             "source": resolved["source"],
         })
     return sorted(entries, key=lambda entry: entry["label"].lower())
@@ -234,6 +241,33 @@ def _load_artificial_analysis_matches() -> dict[str, list[dict]]:
     return rows_by_tokenizer
 
 
+def _load_artificial_analysis_by_model() -> dict[str, dict]:
+    """Load benchmark-only speed metadata keyed by model ID."""
+    rows: dict[str, dict] = {}
+    for matches in _load_artificial_analysis_matches().values():
+        for match in matches:
+            model_id = match.get("model_id")
+            if model_id:
+                rows[model_id] = match
+    return rows
+
+
+def artificial_analysis_status() -> dict:
+    """Return freshness metadata for the local AA benchmark snapshot."""
+    if not ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH.exists():
+        return {
+            "captured_at": None,
+            "model_count": 0,
+            "source": "Artificial Analysis snapshot",
+        }
+    payload = json.loads(ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    return {
+        "captured_at": payload.get("captured_at"),
+        "model_count": len(payload.get("models", [])),
+        "source": payload.get("source", "Artificial Analysis snapshot"),
+    }
+
+
 def build_tokenizer_catalog(
     *,
     include_proxy: bool = False,
@@ -253,15 +287,23 @@ def build_tokenizer_catalog(
                 continue
             if mapping.mapping_quality == "proxy" and not include_proxy:
                 continue
+            resolved = resolve_model(mapping.model_id)
+            pricing = resolved["pricing"]
             free_models.append({
                 "model_id": mapping.model_id,
                 "label": mapping.label,
                 "mapping_quality": mapping.mapping_quality,
                 "provenance": mapping.provenance,
+                "input_per_million": pricing["input_per_million"],
+                "output_per_million": pricing["output_per_million"],
+                "context_window": pricing["context_window"],
                 "runtime_badge": "Runnable here for free",
                 "mapping_badge": "Exact tokenizer mapping" if mapping.mapping_quality == "exact" else "Proxy mapping",
             })
 
+        free_input_prices = [model["input_per_million"] for model in free_models]
+        free_output_prices = [model["output_per_million"] for model in free_models]
+        free_context_windows = [model["context_window"] for model in free_models]
         rows.append({
             "tokenizer_key": family.key,
             "label": family.label,
@@ -270,6 +312,27 @@ def build_tokenizer_catalog(
             "provenance": family.provenance,
             "free_models": sorted(free_models, key=lambda model: model["label"].lower()),
             "aa_matches": aa_matches_by_tokenizer.get(family.key, []),
+            "free_model_count": len(free_models),
+            "aa_match_count": len(aa_matches_by_tokenizer.get(family.key, [])),
+            "min_input_per_million": min(free_input_prices) if free_input_prices else None,
+            "min_output_per_million": min(free_output_prices) if free_output_prices else None,
+            "max_context_window": max(free_context_windows) if free_context_windows else None,
         })
 
+    return sorted(rows, key=lambda row: row["label"].lower())
+
+
+def list_free_runtime_choices(*, include_proxy: bool = False) -> list[dict]:
+    """Flatten attached free OpenRouter models for interactive selections."""
+    seen: set[str] = set()
+    rows: list[dict] = []
+    for family in build_tokenizer_catalog(include_proxy=include_proxy):
+        for model in family["free_models"]:
+            if model["model_id"] in seen:
+                continue
+            seen.add(model["model_id"])
+            rows.append({
+                **model,
+                "tokenizer_key": family["tokenizer_key"],
+            })
     return sorted(rows, key=lambda row: row["label"].lower())

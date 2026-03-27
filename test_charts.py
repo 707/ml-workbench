@@ -181,6 +181,19 @@ class TestBuildHeatmap:
         assert len(z[0]) == 2  # 2 models
 
 
+class TestBuildMetricScatter:
+    def test_speed_metadata_empty_state_mentions_benchmark_match(self):
+        from charts import build_metric_scatter
+
+        fig = build_metric_scatter(
+            [{"label": "Llama 3.1 8B", "ttft_seconds": None, "output_tokens_per_second": None}],
+            x_key="ttft_seconds",
+            y_key="output_tokens_per_second",
+        )
+
+        assert "benchmark-only speed metadata" in fig.layout.annotations[0].text.lower()
+
+
 # ---------------------------------------------------------------------------
 # build_cost_waterfall (Issue 8)
 # ---------------------------------------------------------------------------

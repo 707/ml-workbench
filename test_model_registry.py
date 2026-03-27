@@ -228,3 +228,38 @@ class TestArtificialAnalysisSnapshot:
         rows = build_tokenizer_catalog(include_proxy=True)
 
         assert all(isinstance(row["aa_matches"], list) for row in rows)
+
+    def test_catalog_entries_attach_aa_metadata_for_matching_models(self, tmp_path, monkeypatch):
+        from model_registry import build_catalog_entries
+
+        snapshot = tmp_path / "aa.json"
+        snapshot.write_text(json.dumps({
+            "captured_at": "2026-03-27T12:00:00Z",
+            "models": [
+                {
+                    "model_id": "mistralai/mistral-7b-instruct:free",
+                    "tokenizer_key": "mistral",
+                    "label": "Mistral 7B Instruct",
+                    "ttft_seconds": 0.39,
+                    "output_tokens_per_second": 96.4,
+                    "provider": "Artificial Analysis",
+                    "benchmark_url": "https://example.com/mistral",
+                },
+            ],
+        }), encoding="utf-8")
+
+        monkeypatch.setattr("model_registry.ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH", snapshot)
+        rows = build_catalog_entries(include_proxy=True, refresh_live=False)
+
+        mistral = next(row for row in rows if row["model_id"] == "mistralai/mistral-7b-instruct:free")
+        assert mistral["ttft_seconds"] == 0.39
+        assert mistral["output_tokens_per_second"] == 96.4
+
+
+class TestFreeRuntimeChoices:
+    def test_free_runtime_choices_return_only_attached_free_models(self):
+        from model_registry import list_free_runtime_choices
+
+        rows = list_free_runtime_choices(include_proxy=False)
+        assert rows
+        assert all(row["runtime_badge"] == "Runnable here for free" for row in rows)

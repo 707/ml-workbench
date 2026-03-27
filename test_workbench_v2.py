@@ -103,6 +103,114 @@ class TestScenarioAnalysis:
                         reasoning_share=0.1,
                     )
 
+    def test_scenario_analysis_preserves_speed_metadata(self):
+        from token_tax import scenario_analysis
+
+        benchmark_rows = [
+            {
+                "language": "ar",
+                "tokenizer_key": "llama-3",
+                "rtc": 2.0,
+                "provenance": "strict_verified",
+                "mapping_quality": "exact",
+            },
+        ]
+        catalog_rows = [
+            {
+                "model_id": "meta-llama/llama-3.1-8b-instruct",
+                "label": "Llama 3.1 8B Instruct",
+                "tokenizer_key": "llama-3",
+                "mapping_quality": "exact",
+                "provenance": "strict_verified",
+                "input_per_million": 0.05,
+                "output_per_million": 0.08,
+                "context_window": 128000,
+                "latency_ms": 0.44,
+                "throughput_tps": 84.2,
+                "ttft_seconds": 0.44,
+                "output_tokens_per_second": 84.2,
+                "telemetry_provider": "Artificial Analysis",
+                "source": "test",
+            },
+        ]
+
+        with patch("token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ar"]}):
+            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+                rows = scenario_analysis(
+                    corpus_key="strict_parallel",
+                    languages=["ar"],
+                    tokenizer_keys=["llama-3"],
+                    model_ids=["meta-llama/llama-3.1-8b-instruct"],
+                    row_limit=25,
+                    monthly_requests=1000,
+                    avg_input_tokens=100,
+                    avg_output_tokens=50,
+                    reasoning_share=0.1,
+                )
+
+        assert rows[0]["ttft_seconds"] == 0.44
+        assert rows[0]["output_tokens_per_second"] == 84.2
+
+    def test_scenario_analysis_compares_multiple_models_on_one_tokenizer(self):
+        from token_tax import scenario_analysis
+
+        benchmark_rows = [
+            {
+                "language": "ja",
+                "tokenizer_key": "llama-3",
+                "rtc": 1.7,
+                "provenance": "strict_verified",
+                "mapping_quality": "exact",
+            },
+        ]
+        catalog_rows = [
+            {
+                "model_id": "meta-llama/llama-3.1-8b-instruct",
+                "label": "Llama 3.1 8B Instruct",
+                "tokenizer_key": "llama-3",
+                "mapping_quality": "exact",
+                "provenance": "strict_verified",
+                "input_per_million": 0.05,
+                "output_per_million": 0.08,
+                "context_window": 128000,
+                "latency_ms": None,
+                "throughput_tps": None,
+                "source": "test",
+            },
+            {
+                "model_id": "meta-llama/llama-3.2-3b-instruct:free",
+                "label": "Llama 3.2 3B Instruct (Free)",
+                "tokenizer_key": "llama-3",
+                "mapping_quality": "exact",
+                "provenance": "strict_verified",
+                "input_per_million": 0.03,
+                "output_per_million": 0.05,
+                "context_window": 128000,
+                "latency_ms": None,
+                "throughput_tps": None,
+                "source": "test",
+            },
+        ]
+
+        with patch("token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ja"]}):
+            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+                rows = scenario_analysis(
+                    corpus_key="strict_parallel",
+                    languages=["ja"],
+                    tokenizer_keys=["llama-3"],
+                    model_ids=[
+                        "meta-llama/llama-3.1-8b-instruct",
+                        "meta-llama/llama-3.2-3b-instruct:free",
+                    ],
+                    row_limit=25,
+                    monthly_requests=1000,
+                    avg_input_tokens=100,
+                    avg_output_tokens=50,
+                    reasoning_share=0.1,
+                )
+
+        assert len(rows) == 2
+
 
 class TestScenarioCharts:
     def test_latency_chart_explains_missing_metadata(self):

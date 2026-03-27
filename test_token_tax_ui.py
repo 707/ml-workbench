@@ -25,6 +25,31 @@ class TestBuildTokenTaxUi:
         assert isinstance(demo, gr.Blocks)
 
 
+class TestWorkbenchHandlers:
+    def test_handle_catalog_tab_serializes_tokenizer_rows(self):
+        from token_tax_ui import _handle_catalog_tab
+
+        tokenizer_rows = [
+            {
+                "tokenizer_key": "llama-3",
+                "label": "Llama 3 family",
+                "tokenizer_source": "NousResearch/Meta-Llama-3-8B",
+                "mapping_quality": "exact",
+                "provenance": "strict_verified",
+                "free_models": [{"label": "Llama 3.1 8B", "model_id": "meta-llama/llama-3.1-8b-instruct"}],
+                "aa_matches": [{"label": "Llama 3.1 8B", "ttft_seconds": 0.44}],
+            },
+        ]
+
+        with patch("token_tax_ui.build_tokenizer_catalog", return_value=tokenizer_rows):
+            table, appendix, diagnostics = _handle_catalog_tab(include_proxy=False, refresh_live=False)
+
+        assert table["headers"][0] == "label"
+        assert table["data"][0][1] == "llama-3"
+        assert "Catalog Appendix" in appendix
+        assert "Diagnostics" in diagnostics
+
+
 # ---------------------------------------------------------------------------
 # handle_dashboard
 # ---------------------------------------------------------------------------

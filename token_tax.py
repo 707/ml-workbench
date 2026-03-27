@@ -9,7 +9,12 @@ from statistics import median
 
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, fetch_corpus_samples, list_corpora
 from diagnostics import log_event
-from model_registry import build_catalog_entries, list_tokenizer_families, resolve_selection
+from model_registry import (
+    artificial_analysis_status,
+    build_catalog_entries,
+    list_tokenizer_families,
+    resolve_selection,
+)
 from pricing import get_pricing, pricing_status, refresh_from_openrouter
 from provenance import (
     provenance_badge,
@@ -572,6 +577,9 @@ def scenario_analysis(
                 "output_cost": round(output_cost, 6),
                 "latency_ms": model["latency_ms"],
                 "throughput_tps": model["throughput_tps"],
+                "ttft_seconds": model.get("ttft_seconds"),
+                "output_tokens_per_second": model.get("output_tokens_per_second"),
+                "telemetry_provider": model.get("telemetry_provider"),
                 "provenance": model["provenance"],
                 "mapping_quality": model["mapping_quality"],
             })
@@ -667,12 +675,15 @@ def benchmark_appendix(corpus_key: str) -> str:
 def catalog_appendix(include_proxy: bool) -> str:
     """Build markdown appendix for the Catalog tab."""
     status = pricing_status()
+    aa_status = artificial_analysis_status()
     lines = [
         "### Catalog Appendix",
         "- Source API: https://openrouter.ai/api/v1/models",
         f"- Pricing file last updated: **{status['last_updated']}**",
         f"- Last live refresh: **{status['last_refreshed'] or 'not yet refreshed'}**",
         f"- Last refresh error: **{status['last_refresh_error'] or 'none'}**",
+        f"- AA snapshot captured at: **{aa_status['captured_at'] or 'not available'}**",
+        f"- AA benchmark matches loaded: **{aa_status['model_count']}**",
         "- Mapping policy: exact mappings are visible by default; proxy mappings are hidden unless enabled",
         f"- Proxy mappings visible: **{'yes' if include_proxy else 'no'}**",
     ]
@@ -686,7 +697,7 @@ def scenario_appendix() -> str:
         "- Input cost formula: `monthly_requests * (avg_input_tokens * RTC) * input_price / 1e6`",
         "- Output cost formula: `monthly_requests * (avg_output_tokens * (1 + reasoning_share)) * output_price / 1e6`",
         "- Context loss formula: `1 - (1 / RTC)`",
-        "- Latency and throughput charts require performance telemetry. Current v1 catalog wiring only guarantees pricing and context metadata.",
+        "- Speed metadata is benchmark-only in v1 and comes from the local Artificial Analysis snapshot when a model match exists.",
         "- Derived scenario rows are labeled as estimates even when the benchmark and catalog inputs are verified",
     ])
 

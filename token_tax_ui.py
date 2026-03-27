@@ -14,7 +14,12 @@ from charts import (
 )
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, list_corpora
 from diagnostics import clear_events, render_markdown
-from model_registry import build_catalog_entries, list_tokenizer_families
+from model_registry import (
+    artificial_analysis_status,
+    build_tokenizer_catalog,
+    list_free_runtime_choices,
+    list_tokenizer_families,
+)
 from token_tax import (
     analyze_text_across_models,
     audit_markdown,
@@ -49,17 +54,21 @@ BENCHMARK_COLUMNS = [
 
 CATALOG_COLUMNS = [
     "label",
-    "model_id",
     "tokenizer_key",
+    "tokenizer_source",
     "mapping_quality",
-    "input_per_million",
-    "output_per_million",
-    "context_window",
+    "free_model_count",
+    "free_models_summary",
+    "aa_match_count",
+    "aa_summary",
+    "min_input_per_million",
+    "max_context_window",
     "provenance",
 ]
 
 SCENARIO_COLUMNS = [
     "label",
+    "model_id",
     "language",
     "tokenizer_key",
     "rtc",
@@ -67,8 +76,31 @@ SCENARIO_COLUMNS = [
     "monthly_input_tokens",
     "monthly_output_tokens",
     "monthly_cost",
+    "ttft_seconds",
+    "output_tokens_per_second",
     "provenance",
 ]
+
+
+def _catalog_display_rows(rows: list[dict]) -> list[dict]:
+    display_rows: list[dict] = []
+    for row in rows:
+        free_models = row.get("free_models", [])
+        aa_matches = row.get("aa_matches", [])
+        display_rows.append({
+            "label": row["label"],
+            "tokenizer_key": row["tokenizer_key"],
+            "tokenizer_source": row["tokenizer_source"],
+            "mapping_quality": row["mapping_quality"],
+            "free_model_count": row.get("free_model_count", len(free_models)),
+            "free_models_summary": ", ".join(model["label"] for model in free_models) or "None attached",
+            "aa_match_count": row.get("aa_match_count", len(aa_matches)),
+            "aa_summary": ", ".join(match["label"] for match in aa_matches) or "No benchmark match",
+            "min_input_per_million": row.get("min_input_per_million"),
+            "max_context_window": row.get("max_context_window"),
+            "provenance": row["provenance"],
+        })
+    return display_rows
 
 
 # ---------------------------------------------------------------------------
@@ -270,11 +302,9 @@ def _handle_benchmark_tab(
 def _handle_catalog_tab(include_proxy: bool, refresh_live: bool) -> tuple[dict, str, str]:
     clear_events()
     if refresh_live:
-        rows, _ = refresh_catalog()
-    else:
-        rows = build_catalog_entries(include_proxy=include_proxy, refresh_live=False)
-    visible_rows = rows if include_proxy else [row for row in rows if row["mapping_quality"] != "proxy"]
-    return serialize_table(visible_rows, CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
+        refresh_catalog()
+    rows = build_tokenizer_catalog(include_proxy=include_proxy)
+    return serialize_table(_catalog_display_rows(rows), CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
 
 
 def _handle_scenario_tab(
@@ -297,11 +327,11 @@ def _handle_scenario_tab(
         return (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
-            build_metric_scatter([], x_key="latency_ms", y_key="monthly_cost"),
-            build_metric_scatter([], x_key="throughput_tps", y_key="monthly_cost"),
+            build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
-            "Select at least one model.",
+            "Select at least one attached free model.",
             render_markdown(),
         )
 
@@ -325,8 +355,8 @@ def _handle_scenario_tab(
         return (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
-            build_metric_scatter([], x_key="latency_ms", y_key="monthly_cost"),
-            build_metric_scatter([], x_key="throughput_tps", y_key="monthly_cost"),
+            build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
             f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
@@ -343,23 +373,22 @@ def _handle_scenario_tab(
         x_title="RTC",
         y_title="Monthly cost ($)",
     )
-    latency_plot = build_metric_scatter(
+    context_plot = build_metric_scatter(
         rows,
-        x_key="latency_ms",
-        y_key="monthly_cost",
+        x_key="rtc",
+        y_key="context_loss_pct",
         size_key="monthly_input_tokens",
-        title="Latency",
-        x_title="Latency (ms)",
-        y_title="Monthly cost ($)",
+        title="Context Loss",
+        x_title="RTC",
+        y_title="Context loss (%)",
     )
-    throughput_plot = build_metric_scatter(
+    speed_plot = build_metric_scatter(
         rows,
-        x_key="throughput_tps",
-        y_key="monthly_cost",
-        size_key="monthly_input_tokens",
-        title="Throughput",
-        x_title="Throughput (tokens/sec)",
-        y_title="Monthly cost ($)",
+        x_key="ttft_seconds",
+        y_key="output_tokens_per_second",
+        title="Speed Metadata",
+        x_title="Time to first token (s)",
+        y_title="Output tokens / sec",
     )
     scale_plot = build_metric_scatter(
         rows,
@@ -379,7 +408,7 @@ def _handle_scenario_tab(
         x_title=x_key,
         y_title=y_key,
     )
-    return table, cost_plot, latency_plot, throughput_plot, scale_plot, custom_plot, scenario_appendix(), render_markdown()
+    return table, cost_plot, context_plot, speed_plot, scale_plot, custom_plot, scenario_appendix(), render_markdown()
 
 
 def build_token_tax_ui() -> gr.Blocks:
@@ -388,8 +417,8 @@ def build_token_tax_ui() -> gr.Blocks:
     tokenizer_families = list_tokenizer_families(include_proxy=True)
     exact_tokenizers = [family["key"] for family in tokenizer_families if family["mapping_quality"] != "proxy"]
     proxy_tokenizers = [family["key"] for family in tokenizer_families if family["mapping_quality"] == "proxy"]
-    catalog_rows = build_catalog_entries(include_proxy=False, refresh_live=False)
-    model_choices = [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in catalog_rows]
+    free_runtime_choices = list_free_runtime_choices(include_proxy=False)
+    model_choices = [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in free_runtime_choices]
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
         gr.Markdown(
@@ -498,9 +527,9 @@ def build_token_tax_ui() -> gr.Blocks:
                     )
                     scenario_models = gr.Dropdown(
                         choices=model_choices,
-                        value=[row["model_id"] for row in catalog_rows[:4]],
+                        value=[row["model_id"] for row in free_runtime_choices[:4]],
                         multiselect=True,
-                        label="Deployable Models",
+                        label="Attached Free Models",
                     )
                 with gr.Row():
                     monthly_requests = gr.Slider(1_000, 1_000_000, value=100_000, step=1_000, label="Monthly Requests")
@@ -509,12 +538,12 @@ def build_token_tax_ui() -> gr.Blocks:
                     reasoning_share = gr.Slider(0.0, 2.0, value=0.1, step=0.05, label="Reasoning Share")
                 with gr.Row():
                     slice_x = gr.Dropdown(
-                        choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "latency_ms", "throughput_tps"],
+                        choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
                         value="rtc",
                         label="Custom X",
                     )
                     slice_y = gr.Dropdown(
-                        choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "latency_ms", "throughput_tps"],
+                        choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
                         value="monthly_cost",
                         label="Custom Y",
                     )
@@ -531,10 +560,10 @@ def build_token_tax_ui() -> gr.Blocks:
                 with gr.Tabs():
                     with gr.TabItem("Cost"):
                         scenario_cost_plot = gr.Plot(label="Cost")
-                    with gr.TabItem("Latency"):
-                        scenario_latency_plot = gr.Plot(label="Latency")
-                    with gr.TabItem("Throughput"):
-                        scenario_throughput_plot = gr.Plot(label="Throughput")
+                    with gr.TabItem("Context Loss"):
+                        scenario_context_plot = gr.Plot(label="Context Loss")
+                    with gr.TabItem("Speed Metadata"):
+                        scenario_speed_plot = gr.Plot(label="Speed Metadata")
                     with gr.TabItem("Scale"):
                         scenario_scale_plot = gr.Plot(label="Scale")
                     with gr.TabItem("Custom Slice"):
@@ -564,8 +593,8 @@ def build_token_tax_ui() -> gr.Blocks:
                     outputs=[
                         scenario_table,
                         scenario_cost_plot,
-                        scenario_latency_plot,
-                        scenario_throughput_plot,
+                        scenario_context_plot,
+                        scenario_speed_plot,
                         scenario_scale_plot,
                         scenario_custom_plot,
                         scenario_appendix_md,
