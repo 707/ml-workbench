@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 import requests
 
 from diagnostics import log_event
 
 HF_DATASET_VIEWER_URL = "https://datasets-server.huggingface.co/first-rows"
+STRICT_PARALLEL_SNAPSHOT_PATH = Path(__file__).resolve().parent / "data" / "strict_parallel" / "flores_v1.jsonl"
 
 
 @dataclass(frozen=True)
@@ -133,6 +136,32 @@ def _extract_text_pair(row: dict, language: str) -> tuple[str, str] | None:
     return None
 
 
+@lru_cache(maxsize=4)
+def load_strict_parallel_snapshot(snapshot_path: str | None = None) -> dict[str, list[CorpusSample]]:
+    """Load bundled strict benchmark samples from a local JSONL snapshot."""
+    path = Path(snapshot_path) if snapshot_path else STRICT_PARALLEL_SNAPSHOT_PATH
+    if not path.exists():
+        return {}
+
+    result: dict[str, list[CorpusSample]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            raw = line.strip()
+            if not raw:
+                continue
+            row = json.loads(raw)
+            sample = CorpusSample(
+                language=row["language"],
+                text=row["text"],
+                english_text=row.get("english_text"),
+                corpus_key=row["corpus_key"],
+                source_url=CORPUS_REGISTRY["strict_parallel"].source_url,
+                provenance=row.get("provenance", "strict_verified"),
+            )
+            result.setdefault(sample.language, []).append(sample)
+    return result
+
+
 @lru_cache(maxsize=64)
 def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
     log_event("benchmark.fetch.start", "Fetching corpus rows", dataset_id=dataset_id, config=config, split=split)
@@ -166,6 +195,25 @@ def fetch_strict_parallel_samples(
 ) -> dict[str, list[CorpusSample]]:
     """Fetch aligned FLORES rows for the requested languages."""
     corpus = get_corpus("strict_parallel")
+    snapshot = load_strict_parallel_snapshot(str(STRICT_PARALLEL_SNAPSHOT_PATH))
+    if snapshot:
+        result = {
+            language: snapshot.get(language, [])[:row_limit]
+            for language in languages
+            if snapshot.get(language)
+        }
+        for language, rows in result.items():
+            log_event(
+                "benchmark.language.ready",
+                "Prepared benchmark samples from local snapshot",
+                language=language,
+                sample_count=len(rows),
+                corpus_key=corpus.key,
+                source="local_snapshot",
+            )
+        if result:
+            return result
+
     result: dict[str, list[CorpusSample]] = {}
 
     for language in languages:

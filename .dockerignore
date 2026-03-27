@@ -6,6 +6,9 @@
 !bootstrap.py
 !charts.py
 !corpora.py
+!data/
+!data/strict_parallel/
+!data/strict_parallel/flores_v1.jsonl
 !diagnostics.py
 !model_registry.py
 !openrouter.py
