@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 from pricing import get_pricing, refresh_from_openrouter
 from tokenizer import SUPPORTED_TOKENIZERS
@@ -46,6 +48,10 @@ FREE_OPENROUTER_MODELS: dict[str, tuple[str, ...]] = {
     "command-r": (),
     "gpt2": (),
 }
+
+ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH = (
+    Path(__file__).resolve().parent / "data" / "telemetry" / "artificial_analysis_snapshot.json"
+)
 
 
 TOKENIZER_FAMILIES: dict[str, TokenizerFamily] = {
@@ -199,12 +205,42 @@ def build_catalog_entries(
     return sorted(entries, key=lambda entry: entry["label"].lower())
 
 
+def _load_artificial_analysis_matches() -> dict[str, list[dict]]:
+    """Load benchmark-only speed metadata keyed by tokenizer family."""
+    if not ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH.exists():
+        return {}
+
+    payload = json.loads(ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    captured_at = payload.get("captured_at")
+    rows_by_tokenizer: dict[str, list[dict]] = {}
+
+    for row in payload.get("models", []):
+        tokenizer_key = row.get("tokenizer_key")
+        if not tokenizer_key:
+            continue
+        rows_by_tokenizer.setdefault(tokenizer_key, []).append({
+            "model_id": row.get("model_id", ""),
+            "label": row.get("label") or row.get("model_id", ""),
+            "ttft_seconds": row.get("ttft_seconds"),
+            "output_tokens_per_second": row.get("output_tokens_per_second"),
+            "telemetry_provider": row.get("provider", "Artificial Analysis"),
+            "benchmark_url": row.get("benchmark_url"),
+            "captured_at": captured_at,
+            "runtime_badge": "Benchmark-only external",
+        })
+
+    for matches in rows_by_tokenizer.values():
+        matches.sort(key=lambda match: match["label"].lower())
+    return rows_by_tokenizer
+
+
 def build_tokenizer_catalog(
     *,
     include_proxy: bool = False,
 ) -> list[dict]:
     """Return tokenizer-first catalog rows with attached free model examples."""
     rows: list[dict] = []
+    aa_matches_by_tokenizer = _load_artificial_analysis_matches()
 
     for family in TOKENIZER_FAMILIES.values():
         if family.mapping_quality == "proxy" and not include_proxy:
@@ -233,7 +269,7 @@ def build_tokenizer_catalog(
             "mapping_quality": family.mapping_quality,
             "provenance": family.provenance,
             "free_models": sorted(free_models, key=lambda model: model["label"].lower()),
-            "aa_matches": [],
+            "aa_matches": aa_matches_by_tokenizer.get(family.key, []),
         })
 
     return sorted(rows, key=lambda row: row["label"].lower())

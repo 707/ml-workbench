@@ -145,6 +145,16 @@ class TestDockerfile:
         assert 'CMD ["python", "-u", "bootstrap.py"]' in dockerfile
 
 
+class TestDockerIgnore:
+    def test_dockerignore_includes_benchmark_and_telemetry_snapshots(self):
+        from pathlib import Path
+
+        dockerignore = Path(__file__).with_name(".dockerignore").read_text(encoding="utf-8")
+        assert "!data/strict_parallel/flores_v1.jsonl" in dockerignore
+        assert "!data/telemetry/" in dockerignore
+        assert "!data/telemetry/artificial_analysis_snapshot.json" in dockerignore
+
+
 class TestBootstrap:
     def test_bootstrap_declares_required_runtime_modules(self):
         from bootstrap import REQUIRED_MODULES

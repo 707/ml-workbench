@@ -1,0 +1,33 @@
+{
+  "captured_at": "2026-03-27T12:00:00Z",
+  "source": "Artificial Analysis snapshot",
+  "models": [
+    {
+      "model_id": "meta-llama/llama-3.1-8b-instruct",
+      "tokenizer_key": "llama-3",
+      "label": "Llama 3.1 8B",
+      "ttft_seconds": 0.44,
+      "output_tokens_per_second": 84.2,
+      "provider": "Artificial Analysis",
+      "benchmark_url": "https://artificialanalysis.ai/"
+    },
+    {
+      "model_id": "mistralai/mistral-7b-instruct:free",
+      "tokenizer_key": "mistral",
+      "label": "Mistral 7B Instruct",
+      "ttft_seconds": 0.39,
+      "output_tokens_per_second": 96.4,
+      "provider": "Artificial Analysis",
+      "benchmark_url": "https://artificialanalysis.ai/"
+    },
+    {
+      "model_id": "qwen/qwen-2.5-7b-instruct:free",
+      "tokenizer_key": "qwen-2.5",
+      "label": "Qwen 2.5 7B Instruct",
+      "ttft_seconds": 0.41,
+      "output_tokens_per_second": 88.7,
+      "provider": "Artificial Analysis",
+      "benchmark_url": "https://artificialanalysis.ai/"
+    }
+  ]
+}

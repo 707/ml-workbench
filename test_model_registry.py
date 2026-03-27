@@ -1,5 +1,6 @@
 """Tests for model registry (Issue 3)."""
 
+import json
 import pytest
 
 
@@ -191,3 +192,39 @@ class TestTokenizerFirstCatalog:
         assert "tokenizer_key" in row
         assert "free_models" in row
         assert "aa_matches" in row
+
+
+class TestArtificialAnalysisSnapshot:
+    def test_catalog_attaches_aa_matches_from_snapshot(self, tmp_path, monkeypatch):
+        from model_registry import build_tokenizer_catalog
+
+        snapshot = tmp_path / "aa.json"
+        snapshot.write_text(json.dumps({
+            "captured_at": "2026-03-27T12:00:00Z",
+            "models": [
+                {
+                    "model_id": "meta-llama/llama-3.1-8b-instruct",
+                    "tokenizer_key": "llama-3",
+                    "label": "Llama 3.1 8B",
+                    "ttft_seconds": 0.42,
+                    "output_tokens_per_second": 84.2,
+                    "provider": "Artificial Analysis",
+                    "benchmark_url": "https://example.com/llama",
+                },
+            ],
+        }), encoding="utf-8")
+
+        monkeypatch.setattr("model_registry.ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH", snapshot)
+        rows = build_tokenizer_catalog(include_proxy=True)
+
+        llama = next(row for row in rows if row["tokenizer_key"] == "llama-3")
+        assert len(llama["aa_matches"]) == 1
+        assert llama["aa_matches"][0]["telemetry_provider"] == "Artificial Analysis"
+
+    def test_catalog_leaves_aa_matches_empty_when_snapshot_missing(self, monkeypatch):
+        from model_registry import build_tokenizer_catalog
+
+        monkeypatch.setattr("model_registry.ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH", __import__("pathlib").Path("/tmp/does-not-exist-aa.json"))
+        rows = build_tokenizer_catalog(include_proxy=True)
+
+        assert all(isinstance(row["aa_matches"], list) for row in rows)

@@ -9,6 +9,8 @@
 !data/
 !data/strict_parallel/
 !data/strict_parallel/flores_v1.jsonl
+!data/telemetry/
+!data/telemetry/artificial_analysis_snapshot.json
 !diagnostics.py
 !model_registry.py
 !openrouter.py
