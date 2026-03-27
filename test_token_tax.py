@@ -492,6 +492,33 @@ class TestExportJson:
         assert parsed == []
 
 
+class TestBenchmarkDetails:
+    def test_build_benchmark_detail_rows_returns_previewable_raw_rows(self):
+        from corpora import CorpusSample
+        from token_tax import build_benchmark_detail_rows
+
+        samples = {
+            "fr": [
+                CorpusSample("fr", "Bonjour le monde", "Hello world", "strict_parallel", "https://example.com", "strict_verified"),
+            ],
+        }
+
+        class _Tok:
+            def encode(self, text, add_special_tokens=True):
+                return [1, 2, 3]
+
+            def convert_ids_to_tokens(self, token_ids):
+                return ["Bon", "jour", "monde"]
+
+        with patch("token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("token_tax.get_tokenizer", return_value=_Tok()):
+                rows = build_benchmark_detail_rows("strict_parallel", ["fr"], ["gpt2"], row_limit=5)
+
+        assert rows[0]["lane"] == "Strict Evidence"
+        assert rows[0]["token_preview"]
+        assert rows[0]["sample_index"] == 0
+
+
 # ---------------------------------------------------------------------------
 # SAMPLE_PHRASES (GH-6)
 # ---------------------------------------------------------------------------

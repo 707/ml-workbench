@@ -199,6 +199,58 @@ def build_heatmap(
     return fig
 
 
+def build_category_bar(
+    rows: list[dict],
+    *,
+    category_key: str,
+    value_key: str,
+    series_key: str = "tokenizer_key",
+    title: str = "",
+    x_title: str | None = None,
+    y_title: str | None = None,
+):
+    """Build a grouped bar chart for categorical benchmark breakdowns."""
+    import plotly.graph_objects as go
+
+    filtered = [
+        row for row in rows
+        if row.get(category_key) is not None and isinstance(row.get(value_key), (int, float))
+    ]
+    if not filtered:
+        return _empty_figure("No categorical benchmark data available")
+
+    categories = list(dict.fromkeys(str(row[category_key]) for row in filtered))
+    series_names = list(dict.fromkeys(str(row.get(series_key, "series")) for row in filtered))
+
+    fig = go.Figure()
+    for series_name in series_names:
+        values = []
+        for category in categories:
+            match = next(
+                (
+                    row for row in filtered
+                    if str(row.get(series_key, "series")) == series_name and str(row[category_key]) == category
+                ),
+                None,
+            )
+            values.append(match[value_key] if match else 0)
+        fig.add_trace(go.Bar(
+            x=categories,
+            y=values,
+            name=series_name,
+            marker_color=TOKENIZER_COLORS.get(series_name, "#4C78A8"),
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_title or category_key,
+        yaxis_title=y_title or value_key,
+        template="plotly_white",
+        barmode="group",
+    )
+    return fig
+
+
 def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_word: float = 1.33):
     """Horizontal bar chart showing effective context window in words."""
     import plotly.graph_objects as go

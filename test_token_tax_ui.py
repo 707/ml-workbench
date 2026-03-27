@@ -95,6 +95,7 @@ class TestWorkbenchHandlers:
 
         benchmark_rows = [
             {
+                "lane": "Strict Evidence",
                 "language": "en",
                 "label": "GPT-2 legacy",
                 "tokenizer_key": "gpt2",
@@ -110,20 +111,90 @@ class TestWorkbenchHandlers:
                 "corpus_key": "strict_parallel",
             },
         ]
-        with patch("token_tax_ui.iter_benchmark_rows", return_value=iter(benchmark_rows)):
-            outputs = list(_handle_benchmark_tab(
-                "strict_parallel",
-                ["en"],
-                ["gpt2"],
-                "rtc",
-                5,
-                False,
-                False,
-                True,
-            ))
+        raw_rows = [
+            {
+                "lane": "Strict Evidence",
+                "language": "en",
+                "tokenizer_key": "gpt2",
+                "sample_index": 0,
+                "token_count": 4,
+                "unique_tokens": 4,
+                "continued_word_rate": 0.25,
+                "bytes_per_token": 1.2,
+                "rtc": 1.0,
+                "text": "hello world",
+                "english_text": "hello world",
+                "token_preview": "hello | world",
+            },
+        ]
+        with patch("token_tax_ui.build_benchmark_detail_rows", return_value=raw_rows):
+            with patch("token_tax_ui.iter_benchmark_rows", return_value=iter(benchmark_rows)):
+                outputs = list(_handle_benchmark_tab(
+                    "strict_parallel",
+                    ["en"],
+                    ["gpt2"],
+                    "rtc",
+                    5,
+                    False,
+                    False,
+                    "en",
+                    "gpt2",
+                    0,
+                    True,
+                ))
 
         assert len(outputs) >= 2
+        assert len(outputs[-1]) == 9
         assert "Diagnostics" in outputs[-1][-1]
+
+    def test_language_script_presets_filter_supported_languages(self):
+        from token_tax_ui import apply_language_preset
+
+        assert apply_language_preset("Arabic") == ["ar"]
+        assert set(apply_language_preset("Latin")) >= {"en", "fr", "de", "es", "pt"}
+
+    def test_build_benchmark_preview_markdown_uses_selected_row(self):
+        from token_tax_ui import build_benchmark_preview_markdown
+
+        markdown = build_benchmark_preview_markdown(
+            [
+                {
+                    "lane": "Strict Evidence",
+                    "language": "fr",
+                    "tokenizer_key": "gpt2",
+                    "sample_index": 0,
+                    "text": "Bonjour le monde",
+                    "token_preview": "Bon | jour | monde",
+                    "token_count": 3,
+                },
+            ],
+            "fr",
+            "gpt2",
+            0,
+        )
+
+        assert "Strict Evidence" in markdown
+        assert "Bon | jour | monde" in markdown
+
+    def test_build_coverage_rows_extracts_unique_token_metrics(self):
+        from token_tax_ui import build_coverage_rows
+
+        rows = build_coverage_rows(
+            [
+                {
+                    "language": "fr",
+                    "tokenizer_key": "gpt2",
+                    "label": "GPT-2 legacy",
+                    "unique_tokens": 12,
+                    "continued_word_rate": 0.4,
+                    "bytes_per_token": 2.0,
+                    "lane": "Streaming Exploration",
+                },
+            ]
+        )
+
+        assert rows[0]["unique_tokens"] == 12
+        assert rows[0]["continued_word_rate"] == 0.4
 
 
 # ---------------------------------------------------------------------------

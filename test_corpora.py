@@ -89,6 +89,11 @@ class TestListCorpora:
             assert "label" in entry
             assert "status" in entry
 
+    def test_streaming_exploration_corpus_is_registered(self):
+        result = list_corpora()
+        keys = {entry["key"] for entry in result}
+        assert "streaming_exploration" in keys
+
 
 class TestGetCorpus:
     """Tests for get_corpus lookup."""
@@ -100,3 +105,25 @@ class TestGetCorpus:
     def test_unknown_corpus_raises(self):
         with pytest.raises(KeyError, match="unknown corpus"):
             get_corpus("nonexistent")
+
+
+class TestStreamingExplorationSamples:
+    def test_streaming_fetch_uses_remote_rows(self):
+        from corpora import fetch_corpus_samples
+
+        with patch("corpora._fetch_streaming_rows", return_value={
+            "fr": [
+                {"text": "Bonjour le monde", "english_text": "Hello world"},
+            ],
+        }):
+            result = fetch_corpus_samples("streaming_exploration", ["fr"], row_limit=5)
+
+        assert "fr" in result
+        assert result["fr"][0].text == "Bonjour le monde"
+
+    def test_streaming_fetch_raises_clear_error_when_remote_fails(self):
+        from corpora import fetch_corpus_samples
+
+        with patch("corpora._fetch_streaming_rows", side_effect=RuntimeError("stream unavailable")):
+            with pytest.raises(RuntimeError, match="Streaming exploration fetch failed"):
+                fetch_corpus_samples("streaming_exploration", ["fr"], row_limit=5)
