@@ -1,0 +1,292 @@
+"""Chart builders for the Token Tax Workbench."""
+
+from __future__ import annotations
+
+import math
+
+
+RISK_COLORS = {
+    "low": "#4CAF50",
+    "moderate": "#FF9800",
+    "high": "#F44336",
+    "severe": "#9C27B0",
+}
+
+
+TOKENIZER_COLORS = {
+    "o200k_base": "#1f77b4",
+    "cl100k_base": "#2ca02c",
+    "llama-3": "#d62728",
+    "mistral": "#9467bd",
+    "qwen-2.5": "#8c564b",
+    "gemma-2": "#e377c2",
+    "command-r": "#7f7f7f",
+    "gpt2": "#bcbd22",
+}
+
+
+def _empty_figure(message: str = "No data available for this view"):
+    """Return an empty plotly Figure with a centered annotation."""
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+    fig.update_layout(
+        annotations=[{
+            "text": message,
+            "xref": "paper",
+            "yref": "paper",
+            "x": 0.5,
+            "y": 0.5,
+            "showarrow": False,
+            "font": {"size": 16},
+        }],
+        template="plotly_white",
+    )
+    return fig
+
+
+def _value(row: dict, key: str):
+    return row.get(key)
+
+
+def build_metric_scatter(
+    rows: list[dict],
+    *,
+    x_key: str,
+    y_key: str,
+    size_key: str | None = None,
+    label_key: str = "label",
+    color_key: str = "tokenizer_key",
+    title: str = "",
+    x_title: str | None = None,
+    y_title: str | None = None,
+):
+    """Build a flexible scatter/bubble chart."""
+    import plotly.graph_objects as go
+
+    filtered = [
+        row for row in rows
+        if isinstance(_value(row, x_key), (int, float))
+        and isinstance(_value(row, y_key), (int, float))
+    ]
+    if not filtered:
+        return _empty_figure("No verified data available for this chart")
+
+    fig = go.Figure()
+    for row in filtered:
+        color_name = row.get(color_key, "")
+        color = TOKENIZER_COLORS.get(color_name, "#4C78A8")
+        bubble_size = 16
+        if size_key and isinstance(row.get(size_key), (int, float)):
+            bubble_size = max(math.sqrt(float(row[size_key])) * 2.5, 12)
+
+        fig.add_trace(go.Scatter(
+            x=[row[x_key]],
+            y=[row[y_key]],
+            mode="markers+text",
+            name=row.get(label_key, row.get("model", "item")),
+            text=[row.get(label_key, row.get("model", "item"))],
+            textposition="top center",
+            marker={
+                "size": bubble_size,
+                "color": color,
+                "opacity": 0.82,
+                "line": {"width": 1, "color": "#243447"},
+            },
+            hovertemplate="<b>%{text}</b><br>"
+            + f"{x_key}: %{{x}}<br>"
+            + f"{y_key}: %{{y}}<br>"
+            + f"provenance: {row.get('provenance', 'n/a')}"
+            + "<extra></extra>",
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_title or x_key,
+        yaxis_title=y_title or y_key,
+        template="plotly_white",
+        showlegend=False,
+    )
+    return fig
+
+
+def build_distribution_chart(rows: list[dict], metric_key: str, group_key: str = "tokenizer_key"):
+    """Build a box plot for benchmark distributions."""
+    import plotly.graph_objects as go
+
+    filtered = [
+        row for row in rows
+        if isinstance(row.get(metric_key), (int, float))
+    ]
+    if not filtered:
+        return _empty_figure("No distribution data available")
+
+    groups: dict[str, list[float]] = {}
+    for row in filtered:
+        groups.setdefault(str(row.get(group_key, "unknown")), []).append(float(row[metric_key]))
+
+    fig = go.Figure()
+    for group, values in groups.items():
+        fig.add_trace(go.Box(
+            y=values,
+            name=group,
+            marker_color=TOKENIZER_COLORS.get(group, "#4C78A8"),
+            boxmean=True,
+        ))
+
+    fig.update_layout(
+        title=f"{metric_key} distribution",
+        yaxis_title=metric_key,
+        xaxis_title=group_key,
+        template="plotly_white",
+    )
+    return fig
+
+
+def build_heatmap(
+    benchmark_results: dict[tuple[str, str], dict],
+    languages: list[str],
+    models: list[str],
+    metric_key: str = "rtc",
+):
+    """Build a language x tokenizer heatmap."""
+    import plotly.graph_objects as go
+
+    if not benchmark_results or not languages or not models:
+        return _empty_figure("No benchmark data")
+
+    z = []
+    for lang in languages:
+        row = []
+        for model in models:
+            entry = benchmark_results.get((lang, model), {})
+            row.append(entry.get(metric_key, 0.0))
+        z.append(row)
+
+    fig = go.Figure()
+    fig.add_trace(go.Heatmap(
+        z=z,
+        x=models,
+        y=languages,
+        colorscale="Viridis",
+        colorbar_title=metric_key,
+        hovertemplate=f"Language: %{{y}}<br>Tokenizer: %{{x}}<br>{metric_key}: %{{z}}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=f"{metric_key} by language and tokenizer",
+        xaxis_title="Tokenizer family",
+        yaxis_title="Language",
+        template="plotly_white",
+    )
+    return fig
+
+
+def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_word: float = 1.33):
+    """Horizontal bar chart showing effective context window in words."""
+    import plotly.graph_objects as go
+    from pricing import get_pricing
+
+    if not analysis_results:
+        return _empty_figure("No data — run an analysis first")
+
+    models = []
+    effective = []
+    colors = []
+
+    for r in analysis_results:
+        try:
+            pricing = get_pricing(r["model"])
+            window = pricing["context_window"]
+        except KeyError:
+            continue
+
+        rtc = r.get("rtc", 1.0)
+        eff_words = int(window / max(rtc * avg_english_tokens_per_word, 1e-9))
+        models.append(r["model"])
+        effective.append(eff_words)
+        colors.append(RISK_COLORS.get(r.get("risk_level", "low"), "#999999"))
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=models,
+        x=effective,
+        orientation="h",
+        marker_color=colors,
+        text=[f"{e:,} words" for e in effective],
+        textposition="auto",
+    ))
+    fig.update_layout(
+        title="Effective Context Window (words)",
+        xaxis_title="Approximate words",
+        yaxis_title="Model",
+        template="plotly_white",
+    )
+    return fig
+
+
+def build_cost_waterfall(portfolio_result: dict):
+    """Stacked horizontal bars: base cost + token tax surcharge."""
+    import plotly.graph_objects as go
+
+    entries = portfolio_result.get("languages", [])
+    if not entries:
+        return _empty_figure("No portfolio data")
+
+    languages = [e["language"] for e in entries]
+    english_equiv = []
+    surcharge = []
+
+    for e in entries:
+        rtc = e.get("rtc", 1.0)
+        cost = e.get("monthly_cost", 0.0)
+        base = cost / rtc if rtc else cost
+        english_equiv.append(base)
+        surcharge.append(cost - base)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=languages,
+        x=english_equiv,
+        name="English-equivalent cost",
+        orientation="h",
+        marker_color="#4CAF50",
+    ))
+    fig.add_trace(go.Bar(
+        y=languages,
+        x=surcharge,
+        name="Token tax surcharge",
+        orientation="h",
+        marker_color="#F44336",
+    ))
+    fig.update_layout(
+        barmode="stack",
+        title="Monthly Cost Breakdown: Base vs Token Tax",
+        xaxis_title="Estimated monthly cost ($)",
+        yaxis_title="Language",
+        template="plotly_white",
+    )
+    return fig
+
+
+def build_bubble_chart(analysis_results: list[dict]):
+    """Backward-compatible cost vs RTC bubble chart."""
+    rows = [
+        {
+            "label": row.get("model", "item"),
+            "tokenizer_key": row.get("model", ""),
+            "rtc": row.get("rtc"),
+            "cost_per_million": row.get("cost_per_million"),
+            "token_count": row.get("token_count", 0),
+            "provenance": row.get("provenance", "strict_verified"),
+        }
+        for row in analysis_results
+    ]
+    return build_metric_scatter(
+        rows,
+        x_key="rtc",
+        y_key="cost_per_million",
+        size_key="token_count",
+        title="Cost vs relative tokenization cost",
+        x_title="Relative Tokenization Cost (RTC)",
+        y_title="Cost per 1M input tokens ($)",
+    )

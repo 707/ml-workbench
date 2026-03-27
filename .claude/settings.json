@@ -1,0 +1,130 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const cmd=i.tool_input?.command||'';if(/git push/.test(cmd)){console.error('[Hook] Review your changes before push...')}}catch{}console.log(d)})\""
+          }
+        ],
+        "description": "Remind to review before git push"
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const p=i.tool_input?.file_path||'';if(/\\.(md|txt)$/.test(p)&&!/(README|CLAUDE|AGENTS|CONTRIBUTING|CHANGELOG|LICENSE|SKILL)\\.md$/i.test(p)&&!/\\.claude[\\/\\\\]plans[\\/\\\\]/.test(p)&&!/(^|[\\/\\\\])(docs|skills)[\\/\\\\]/.test(p)){console.error('[Hook] WARNING: Non-standard documentation file: '+p);console.error('[Hook] Consolidate into README.md or docs/ instead')}}catch{}console.log(d)})\""
+          }
+        ],
+        "description": "Warn about non-standard documentation files"
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/suggest-compact.js"
+          }
+        ],
+        "description": "Suggest /compact every 25 tool calls past threshold of 50"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const cmd=i.tool_input?.command||'';if(/gh pr create/.test(cmd)){const out=i.tool_output?.output||'';const m=out.match(/https:\\/\\/github.com\\/[^/]+\\/[^/]+\\/pull\\/\\d+/);if(m){console.error('[Hook] PR created: '+m[0]);const pr=m[0].replace(/.+\\/pull\\/(\\d+)/,'$1');console.error('[Hook] Review: gh pr review '+pr)}}}catch{}console.log(d)})\""
+          }
+        ],
+        "description": "Log PR URL and review command after PR creation"
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/post-edit-format.js"
+          }
+        ],
+        "description": "Auto-format JS/TS after edits (auto-detects Biome or Prettier; silent if neither installed)"
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/post-edit-typecheck.js"
+          }
+        ],
+        "description": "TypeScript check after editing .ts/.tsx files (silent if no tsconfig found)"
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/post-edit-console-warn.js"
+          }
+        ],
+        "description": "Warn about console.log with line numbers after edits"
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const p=i.tool_input?.file_path||'';if(/skills[\\/\\\\][^\\/\\\\]+[\\/\\\\]SKILL\\.md$/.test(p)){const {execSync}=require('child_process');try{execSync('node ./scripts/update-skills-index.js',{stdio:'inherit'})}catch(e){console.error('[Hook] skills/INDEX.md update failed: '+e.message)}}}catch{}console.log(d)})\""
+          }
+        ],
+        "description": "Regenerate skills/INDEX.md when any SKILL.md is written"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/session-end.js"
+          }
+        ],
+        "description": "Persist session summary when session ends"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/check-console-log.js"
+          }
+        ],
+        "description": "Scan all git-modified JS/TS files for console.log after each response"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/session-start.js"
+          }
+        ],
+        "description": "Load previous session summary into context on startup"
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/pre-compact.js"
+          }
+        ],
+        "description": "Log compaction event and mark active session file"
+      }
+    ]
+  }
+}

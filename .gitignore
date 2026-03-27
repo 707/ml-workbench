@@ -1,0 +1,26 @@
+# Active ticket pointer — each developer sets their own locally
+.ai/tickets/active.md
+
+# Per-developer tracker config — each developer sets their own locally
+.claude/project.json
+
+# Node
+node_modules/
+
+# Python / local runtime artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+.venv/
+.uv-cache/
+.env.local
+
+# Local history / archived git state
+.git-history-backup-*/
+
+# Keep research notes local-only
+learning.md
+
+# OS
+.DS_Store

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.coverage
+test_*.py
+uv.lock
+pyproject.toml
+Makefile
+README-spaces.md

@@ -1,0 +1,37 @@
+name: workbench
+
+on:
+  push:
+    paths: [workbench/**]
+  pull_request:
+    paths: [workbench/**]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+        working-directory: workbench
+      - run: uv run pytest -v --cov --cov-report=term-missing
+        working-directory: workbench
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git remote add hf https://user:${HF_TOKEN}@huggingface.co/spaces/nad707/workbench
+          git subtree push --prefix workbench hf main \
+            || (git subtree split --prefix workbench -b _hf_deploy \
+                && git push hf _hf_deploy:main --force)

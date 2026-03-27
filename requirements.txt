@@ -1,0 +1,6 @@
+gradio[oauth,mcp]==6.8.0
+requests
+transformers>=4.40,<5
+langdetect
+plotly>=5.18
+tiktoken>=0.5

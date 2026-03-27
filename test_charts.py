@@ -1,0 +1,227 @@
+"""Tests for the charts module (Issue 5–8)."""
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# RISK_COLORS
+# ---------------------------------------------------------------------------
+
+
+class TestRiskColors:
+    """Validate RISK_COLORS dict exported from charts."""
+
+    def test_is_dict(self):
+        from charts import RISK_COLORS
+
+        assert isinstance(RISK_COLORS, dict)
+
+    def test_has_all_risk_levels(self):
+        from charts import RISK_COLORS
+
+        for level in ("low", "moderate", "high", "severe"):
+            assert level in RISK_COLORS
+
+    def test_values_are_hex_colors(self):
+        from charts import RISK_COLORS
+
+        for color in RISK_COLORS.values():
+            assert color.startswith("#")
+            assert len(color) == 7
+
+
+# ---------------------------------------------------------------------------
+# build_bubble_chart
+# ---------------------------------------------------------------------------
+
+
+SAMPLE_RESULTS = [
+    {
+        "model": "gpt2",
+        "token_count": 20,
+        "rtc": 1.0,
+        "cost_per_million": 0.0,
+        "risk_level": "low",
+        "byte_premium": 1.0,
+        "context_usage": 0.02,
+        "token_fertility": 1.5,
+    },
+    {
+        "model": "llama-3",
+        "token_count": 35,
+        "rtc": 1.75,
+        "cost_per_million": 0.05,
+        "risk_level": "moderate",
+        "byte_premium": 1.2,
+        "context_usage": 0.0003,
+        "token_fertility": 2.1,
+    },
+]
+
+
+class TestBuildBubbleChart:
+    """Tests for build_bubble_chart() -> plotly Figure."""
+
+    def test_returns_figure(self):
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart(SAMPLE_RESULTS)
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_empty_results_returns_figure(self):
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart([])
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_empty_results_has_annotation(self):
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart([])
+        annotations = fig.layout.annotations
+        assert len(annotations) > 0
+
+    def test_one_trace_per_model(self):
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart(SAMPLE_RESULTS)
+        assert len(fig.data) == 2
+
+    def test_trace_names_match_models(self):
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart(SAMPLE_RESULTS)
+        names = {t.name for t in fig.data}
+        assert names == {"gpt2", "llama-3"}
+
+    def test_has_model_labels_on_bubbles(self):
+        """Bubbles should show model name as text label (not just hover)."""
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart(SAMPLE_RESULTS)
+        for trace in fig.data:
+            assert "text" in trace.mode
+
+
+# ---------------------------------------------------------------------------
+# build_context_chart (Issue 6)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildContextChart:
+    """Tests for build_context_chart() -> plotly Figure."""
+
+    def test_returns_figure(self):
+        from charts import build_context_chart
+
+        fig = build_context_chart(SAMPLE_RESULTS)
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_empty_returns_figure(self):
+        from charts import build_context_chart
+
+        fig = build_context_chart([])
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_has_bar_traces(self):
+        from charts import build_context_chart
+
+        fig = build_context_chart(SAMPLE_RESULTS)
+        assert len(fig.data) >= 1
+        assert fig.data[0].type == "bar"
+
+    def test_bar_count_matches_models(self):
+        from charts import build_context_chart
+
+        fig = build_context_chart(SAMPLE_RESULTS)
+        assert len(fig.data[0].y) == 2
+
+
+# ---------------------------------------------------------------------------
+# build_heatmap (Issue 7)
+# ---------------------------------------------------------------------------
+
+
+SAMPLE_BENCHMARK = {
+    ("en", "gpt2"): {"rtc": 1.0, "token_count": 15},
+    ("ar", "gpt2"): {"rtc": 2.5, "token_count": 38},
+    ("en", "llama-3"): {"rtc": 1.0, "token_count": 12},
+    ("ar", "llama-3"): {"rtc": 2.1, "token_count": 25},
+}
+
+
+class TestBuildHeatmap:
+    """Tests for build_heatmap() -> plotly Figure."""
+
+    def test_returns_figure(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_empty_returns_figure(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap({}, [], [])
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_has_heatmap_trace(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
+        assert len(fig.data) >= 1
+        assert fig.data[0].type == "heatmap"
+
+    def test_z_values_shape(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
+        z = fig.data[0].z
+        assert len(z) == 2  # 2 languages
+        assert len(z[0]) == 2  # 2 models
+
+
+# ---------------------------------------------------------------------------
+# build_cost_waterfall (Issue 8)
+# ---------------------------------------------------------------------------
+
+
+SAMPLE_PORTFOLIO = {
+    "total_monthly_cost": 5.0,
+    "token_tax_exposure": 1.8,
+    "languages": [
+        {"language": "en", "rtc": 1.0, "monthly_cost": 2.0, "traffic_share": 0.6, "cost_share": 0.4, "token_count": 15, "tax_ratio": 1.0},
+        {"language": "ar", "rtc": 2.5, "monthly_cost": 3.0, "traffic_share": 0.4, "cost_share": 0.6, "token_count": 38, "tax_ratio": 2.5},
+    ],
+}
+
+
+class TestBuildCostWaterfall:
+    """Tests for build_cost_waterfall() -> plotly Figure."""
+
+    def test_returns_figure(self):
+        from charts import build_cost_waterfall
+
+        fig = build_cost_waterfall(SAMPLE_PORTFOLIO)
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_empty_returns_figure(self):
+        from charts import build_cost_waterfall
+
+        fig = build_cost_waterfall({"total_monthly_cost": 0, "token_tax_exposure": 1.0, "languages": []})
+        assert fig.__class__.__name__ == "Figure"
+
+    def test_has_two_bar_traces(self):
+        """Should have English-equivalent cost + token tax surcharge stacked bars."""
+        from charts import build_cost_waterfall
+
+        fig = build_cost_waterfall(SAMPLE_PORTFOLIO)
+        bar_traces = [t for t in fig.data if t.type == "bar"]
+        assert len(bar_traces) == 2
+
+    def test_bar_labels_are_languages(self):
+        from charts import build_cost_waterfall
+
+        fig = build_cost_waterfall(SAMPLE_PORTFOLIO)
+        bar_trace = fig.data[0]
+        assert list(bar_trace.y) == ["en", "ar"]

@@ -1,0 +1,172 @@
+{
+  "planner": {
+    "claude": {
+      "name": "planner",
+      "description": "Expert planning specialist for complex features and refactoring. Use PROACTIVELY when users request feature implementation, architectural changes, or complex refactoring. Automatically activated for planning tasks.",
+      "tools": ["Read", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "planner",
+      "description": "Expert planning specialist for complex features and refactoring. Use PROACTIVELY when users request feature implementation, architectural changes, or complex refactoring.",
+      "kind": "TASK",
+      "tools": ["read_file", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.7,
+      "max_turns": 20
+    }
+  },
+  "tdd-guide": {
+    "claude": {
+      "name": "tdd-guide",
+      "description": "Test-Driven Development specialist enforcing write-tests-first methodology. Use PROACTIVELY when writing new features, fixing bugs, or refactoring code. Ensures 80%+ test coverage.",
+      "tools": ["Read", "Write", "Edit", "Bash", "Grep"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "tdd-guide",
+      "description": "Test-Driven Development specialist enforcing write-tests-first methodology. Use PROACTIVELY when writing new features, fixing bugs, or refactoring code. Ensures 80%+ test coverage.",
+      "kind": "TASK",
+      "tools": ["read_file", "write_file", "replace_in_file", "run_shell_command", "search_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.7,
+      "max_turns": 30
+    }
+  },
+  "code-reviewer": {
+    "claude": {
+      "name": "code-reviewer",
+      "description": "Expert code review specialist. Proactively reviews code for quality, security, and maintainability. Use immediately after writing or modifying code. MUST BE USED for all code changes.",
+      "tools": ["Read", "Grep", "Glob", "Bash"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "code-reviewer",
+      "description": "Expert code review specialist. Reviews code for quality, security, and maintainability. Use after writing or modifying code.",
+      "kind": "TASK",
+      "tools": ["read_file", "search_files", "list_files", "run_shell_command"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.3,
+      "max_turns": 20
+    }
+  },
+  "architect": {
+    "claude": {
+      "name": "architect",
+      "description": "Software architecture specialist for system design, scalability, and technical decision-making. Use PROACTIVELY when planning new features, refactoring large systems, or making architectural decisions.",
+      "tools": ["Read", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "architect",
+      "description": "Software architecture specialist for system design, scalability, and technical decision-making. Use when planning new features or making architectural decisions.",
+      "kind": "TASK",
+      "tools": ["read_file", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.7,
+      "max_turns": 20
+    }
+  },
+  "security-reviewer": {
+    "claude": {
+      "name": "security-reviewer",
+      "description": "Security vulnerability detection and remediation specialist. Use PROACTIVELY after writing code that handles user input, authentication, API endpoints, or sensitive data. Flags secrets, SSRF, injection, unsafe crypto, and OWASP Top 10 vulnerabilities.",
+      "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "security-reviewer",
+      "description": "Security vulnerability detection and remediation specialist. Use after writing code that handles user input, authentication, API endpoints, or sensitive data.",
+      "kind": "TASK",
+      "tools": ["read_file", "write_file", "replace_in_file", "run_shell_command", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.3,
+      "max_turns": 25
+    }
+  },
+  "build-error-resolver": {
+    "claude": {
+      "name": "build-error-resolver",
+      "description": "Build and TypeScript error resolution specialist. Use PROACTIVELY when build fails or type errors occur. Fixes build/type errors only with minimal diffs, no architectural edits. Focuses on getting the build green quickly.",
+      "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "build-error-resolver",
+      "description": "Build and TypeScript error resolution specialist. Use when build fails or type errors occur. Fixes errors only with minimal diffs.",
+      "kind": "TASK",
+      "tools": ["read_file", "write_file", "replace_in_file", "run_shell_command", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.3,
+      "max_turns": 25
+    }
+  },
+  "database-reviewer": {
+    "claude": {
+      "name": "database-reviewer",
+      "description": "PostgreSQL database specialist for query optimization, schema design, security, and performance. Use PROACTIVELY when writing SQL, creating migrations, designing schemas, or troubleshooting database performance. Incorporates Supabase best practices.",
+      "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "database-reviewer",
+      "description": "PostgreSQL database specialist for query optimization, schema design, security, and performance. Use when writing SQL, creating migrations, or troubleshooting database performance.",
+      "kind": "TASK",
+      "tools": ["read_file", "write_file", "replace_in_file", "run_shell_command", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.3,
+      "max_turns": 20
+    }
+  },
+  "e2e-runner": {
+    "claude": {
+      "name": "e2e-runner",
+      "description": "End-to-end testing specialist using Vercel Agent Browser (preferred) with Playwright fallback. Use PROACTIVELY for generating, maintaining, and running E2E tests. Manages test journeys, quarantines flaky tests, uploads artifacts (screenshots, videos, traces), and ensures critical user flows work.",
+      "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "e2e-runner",
+      "description": "End-to-end testing specialist using Playwright. Use for generating, maintaining, and running E2E tests on critical user flows.",
+      "kind": "TASK",
+      "tools": ["read_file", "write_file", "replace_in_file", "run_shell_command", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.5,
+      "max_turns": 30
+    }
+  },
+  "refactor-cleaner": {
+    "claude": {
+      "name": "refactor-cleaner",
+      "description": "Dead code cleanup and consolidation specialist. Use PROACTIVELY for removing unused code, duplicates, and refactoring. Runs analysis tools (knip, depcheck, ts-prune) to identify dead code and safely removes it.",
+      "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "model": "sonnet"
+    },
+    "gemini": {
+      "name": "refactor-cleaner",
+      "description": "Dead code cleanup and consolidation specialist. Use for removing unused code, duplicates, and refactoring.",
+      "kind": "TASK",
+      "tools": ["read_file", "write_file", "replace_in_file", "run_shell_command", "search_files", "list_files"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.5,
+      "max_turns": 25
+    }
+  },
+  "harness-optimizer": {
+    "claude": {
+      "name": "harness-optimizer",
+      "description": "Analyzes and improves agent harness for reliability and cost. Runs /harness-audit baseline, identifies top 3 leverage areas, proposes minimal reversible changes, applies and validates, reports deltas.",
+      "tools": ["Read", "Grep", "Glob", "Bash", "Edit"],
+      "model": "claude-sonnet-4-5"
+    },
+    "gemini": {
+      "name": "harness-optimizer",
+      "description": "Analyzes and improves agent harness for reliability and cost. Runs harness audit baseline, identifies top 3 leverage areas, proposes minimal reversible changes, applies and validates.",
+      "kind": "TASK",
+      "tools": ["read_file", "search_files", "list_files", "run_shell_command", "replace_in_file"],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.5,
+      "max_turns": 20
+    }
+  }
+}

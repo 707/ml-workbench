@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ml-workbench
+    runtime: docker
+    dockerfilePath: workbench/Dockerfile
+    dockerContext: workbench
+    plan: free
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
