@@ -11,6 +11,7 @@ REQUIRED_MODULES = [
     "app",
     "charts",
     "corpora",
+    "diagnostics",
     "model_registry",
     "openrouter",
     "pricing",

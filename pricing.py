@@ -10,6 +10,8 @@ static MODEL_PRICING.  Static entries (tokenizer keys) take precedence.
 
 from datetime import datetime, timezone
 
+from diagnostics import log_event
+
 LAST_UPDATED = "2026-03-25"
 
 # ---------------------------------------------------------------------------
@@ -113,10 +115,12 @@ def refresh_from_openrouter() -> None:
     MODEL_PRICING remains available as fallback.
     """
     global _last_refreshed, _last_refresh_error
+    log_event("catalog.refresh.start", "Refreshing OpenRouter catalog pricing")
     try:
         from openrouter import fetch_models
 
         models = fetch_models()
+        _pricing_cache.clear()
         for m in models:
             model_id = m.get("id", "")
             pricing = m.get("pricing", {})
@@ -130,8 +134,19 @@ def refresh_from_openrouter() -> None:
             }
         _last_refreshed = datetime.now(timezone.utc)
         _last_refresh_error = ""
+        log_event(
+            "catalog.refresh.success",
+            "OpenRouter pricing refresh succeeded",
+            model_count=len(models),
+            cache_size=len(_pricing_cache),
+        )
     except Exception as exc:
         _last_refresh_error = str(exc)
+        log_event(
+            "catalog.refresh.error",
+            "OpenRouter pricing refresh failed",
+            error=str(exc),
+        )
         # static fallback remains available
 
 

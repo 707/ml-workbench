@@ -10,6 +10,7 @@ COPY app.py ./
 COPY bootstrap.py ./
 COPY charts.py ./
 COPY corpora.py ./
+COPY diagnostics.py ./
 COPY model_registry.py ./
 COPY openrouter.py ./
 COPY pricing.py ./

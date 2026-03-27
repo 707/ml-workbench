@@ -154,22 +154,24 @@ Runs the workbench test suite with coverage.
 
 ---
 
-## Deploy to Hugging Face Spaces
+## Deploy to Render
 
-### First-time setup
+Render is the primary hosted target for this repo.
 
 ```bash
-# Authenticate with Hugging Face
-hf login
+# Push to GitHub (Render auto-deploys from the connected repo)
+make deploy
 ```
 
-Create a new Space at [huggingface.co/new-space](https://huggingface.co/new-space):
-- SDK: **Docker**
-- Visibility: Public or Private
+In Render:
+- Create a new Blueprint or Web Service from `707/ml-workbench`
+- Branch: `main`
+- Runtime: `Docker`
+- Plan: `Free`
 
-### Set your OpenRouter API key as a Space secret
+### Set your OpenRouter API key
 
-In your Space settings → **Secrets** → add:
+In Render environment variables, add:
 ```
 Name:  OPENROUTER_API_KEY
 Value: sk-or-...
@@ -177,17 +179,13 @@ Value: sk-or-...
 
 This lets the app run without users needing their own key.
 
-### Deploy
+### Hugging Face fallback
 
 ```bash
-HF_SPACE=your-username/your-space-name make deploy
+HF_SPACE=your-username/your-space-name make deploy-hf
 ```
 
-This pushes the current repo root directly to your Space.
-
-### Update after changes
-
-Same command — `make deploy` uploads the current repo state on every run.
+Use this only if you explicitly want to keep a HF Space in sync.
 
 ---
 
@@ -195,5 +193,5 @@ Same command — `make deploy` uploads the current repo state on every run.
 
 - API keys are never stored; used only for the duration of each request.
 - The tokenizer tab downloads model tokenizer configs on first use (~seconds). Subsequent calls use a local cache.
-- This Space runs as a Docker Space and starts via `bootstrap.py`.
+- The Docker image starts via `bootstrap.py`.
 - The image is intentionally minimal: Python, `requirements.txt`, and the runtime modules only.

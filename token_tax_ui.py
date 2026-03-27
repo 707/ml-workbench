@@ -13,6 +13,7 @@ from charts import (
     build_metric_scatter,
 )
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, list_corpora
+from diagnostics import clear_events, render_markdown
 from model_registry import build_catalog_entries, list_tokenizer_families
 from token_tax import (
     analyze_text_across_models,
@@ -230,11 +231,18 @@ def _handle_benchmark_tab(
     row_limit: int,
     include_estimates: bool,
     include_proxy: bool,
-) -> tuple[dict, object, object, str]:
+) -> tuple[dict, object, object, str, str]:
     if not tokenizer_keys:
-        return {"headers": BENCHMARK_COLUMNS, "data": []}, build_heatmap({}, [], []), build_distribution_chart([], metric_key), "Select at least one tokenizer family."
+        return (
+            {"headers": BENCHMARK_COLUMNS, "data": []},
+            build_heatmap({}, [], []),
+            build_distribution_chart([], metric_key),
+            "Select at least one tokenizer family.",
+            render_markdown(),
+        )
 
     try:
+        clear_events()
         result = benchmark_corpus(
             corpus_key,
             languages,
@@ -249,22 +257,24 @@ def _handle_benchmark_tab(
             build_heatmap({}, [], [], metric_key=metric_key),
             build_distribution_chart([], metric_key),
             f"{benchmark_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
+            render_markdown(),
         )
 
     table = serialize_table(result["rows"], BENCHMARK_COLUMNS)
     heatmap = build_heatmap(result["matrix"], result["languages"], result["tokenizers"], metric_key=metric_key)
     distribution = build_distribution_chart(result["rows"], metric_key)
     appendix = benchmark_appendix(corpus_key)
-    return table, heatmap, distribution, appendix
+    return table, heatmap, distribution, appendix, render_markdown()
 
 
-def _handle_catalog_tab(include_proxy: bool, refresh_live: bool) -> tuple[dict, str]:
+def _handle_catalog_tab(include_proxy: bool, refresh_live: bool) -> tuple[dict, str, str]:
+    clear_events()
     if refresh_live:
         rows, _ = refresh_catalog()
     else:
         rows = build_catalog_entries(include_proxy=include_proxy, refresh_live=False)
     visible_rows = rows if include_proxy else [row for row in rows if row["mapping_quality"] != "proxy"]
-    return serialize_table(visible_rows, CATALOG_COLUMNS), catalog_appendix(include_proxy)
+    return serialize_table(visible_rows, CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
 
 
 def _handle_scenario_tab(
@@ -281,7 +291,7 @@ def _handle_scenario_tab(
     size_key: str,
     include_estimates: bool,
     include_proxy: bool,
-) -> tuple[dict, object, object, object, object, object, str]:
+) -> tuple[dict, object, object, object, object, object, str, str]:
     if not model_ids:
         empty = serialize_table([], SCENARIO_COLUMNS)
         return (
@@ -292,9 +302,11 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
             "Select at least one model.",
+            render_markdown(),
         )
 
     try:
+        clear_events()
         rows = scenario_analysis(
             corpus_key=corpus_key,
             languages=languages,
@@ -318,6 +330,7 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
             f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
+            render_markdown(),
         )
 
     table = serialize_table(rows, SCENARIO_COLUMNS)
@@ -366,7 +379,7 @@ def _handle_scenario_tab(
         x_title=x_key,
         y_title=y_key,
     )
-    return table, cost_plot, latency_plot, throughput_plot, scale_plot, custom_plot, scenario_appendix()
+    return table, cost_plot, latency_plot, throughput_plot, scale_plot, custom_plot, scenario_appendix(), render_markdown()
 
 
 def build_token_tax_ui() -> gr.Blocks:
@@ -425,6 +438,8 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Table"):
                         benchmark_table = gr.DataFrame(label="Benchmark Table", interactive=False)
                 benchmark_appendix_md = gr.Markdown(label="Benchmark Appendix")
+                with gr.Accordion("Diagnostics", open=False):
+                    benchmark_diagnostics_md = gr.Markdown()
 
                 benchmark_run.click(
                     fn=_handle_benchmark_tab,
@@ -442,6 +457,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_heatmap,
                         benchmark_distribution,
                         benchmark_appendix_md,
+                        benchmark_diagnostics_md,
                     ],
                 )
 
@@ -452,10 +468,12 @@ def build_token_tax_ui() -> gr.Blocks:
                     catalog_run = gr.Button("Load Catalog", variant="primary")
                 catalog_table = gr.DataFrame(label="Catalog", interactive=False)
                 catalog_appendix_md = gr.Markdown(label="Catalog Appendix")
+                with gr.Accordion("Diagnostics", open=False):
+                    catalog_diagnostics_md = gr.Markdown()
                 catalog_run.click(
                     fn=_handle_catalog_tab,
                     inputs=[catalog_include_proxy, catalog_refresh_live],
-                    outputs=[catalog_table, catalog_appendix_md],
+                    outputs=[catalog_table, catalog_appendix_md, catalog_diagnostics_md],
                 )
 
             with gr.TabItem("Scenario Lab"):
@@ -523,6 +541,8 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_custom_plot = gr.Plot(label="Custom Slice")
                 scenario_table = gr.DataFrame(label="Scenario Rows", interactive=False)
                 scenario_appendix_md = gr.Markdown(label="Scenario Appendix")
+                with gr.Accordion("Diagnostics", open=False):
+                    scenario_diagnostics_md = gr.Markdown()
 
                 scenario_run.click(
                     fn=_handle_scenario_tab,
@@ -549,6 +569,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_scale_plot,
                         scenario_custom_plot,
                         scenario_appendix_md,
+                        scenario_diagnostics_md,
                     ],
                 )
 

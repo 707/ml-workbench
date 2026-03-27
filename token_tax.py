@@ -8,6 +8,7 @@ import json
 from statistics import median
 
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, fetch_corpus_samples, list_corpora
+from diagnostics import log_event
 from model_registry import build_catalog_entries, list_tokenizer_families, resolve_selection
 from pricing import get_pricing, pricing_status, refresh_from_openrouter
 from provenance import (
@@ -426,6 +427,14 @@ def benchmark_corpus(
     include_proxy: bool = False,
 ) -> dict:
     """Compute aggregate tokenizer benchmark rows from a registered corpus."""
+    log_event(
+        "benchmark.run.start",
+        "Running benchmark",
+        corpus_key=corpus_key,
+        languages=languages or list(DEFAULT_BENCHMARK_LANGUAGES),
+        tokenizer_keys=tokenizer_keys,
+        row_limit=row_limit,
+    )
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
     samples = fetch_corpus_samples(corpus_key, selected_languages, row_limit=row_limit)
     rows: list[dict] = []
@@ -469,6 +478,25 @@ def benchmark_corpus(
             rows.append(aggregated)
             matrix[(language, selection["tokenizer_key"])] = aggregated
 
+    if not rows:
+        log_event(
+            "benchmark.run.empty",
+            "Benchmark produced no rows",
+            corpus_key=corpus_key,
+            languages=selected_languages,
+            tokenizer_keys=tokenizer_keys,
+        )
+        raise RuntimeError(
+            "No benchmark rows were produced. The strict corpus fetch may have failed or returned zero samples."
+        )
+
+    log_event(
+        "benchmark.run.success",
+        "Benchmark completed",
+        row_count=len(rows),
+        language_count=len(selected_languages),
+        tokenizer_count=len(tokenizer_keys),
+    )
     return {
         "rows": rows,
         "matrix": matrix,
@@ -492,6 +520,14 @@ def scenario_analysis(
     include_proxy: bool = False,
 ) -> list[dict]:
     """Build scenario rows joining benchmark metrics and deployable model metadata."""
+    log_event(
+        "scenario.run.start",
+        "Running scenario analysis",
+        corpus_key=corpus_key,
+        languages=languages,
+        tokenizer_keys=tokenizer_keys,
+        model_ids=model_ids,
+    )
     benchmark = benchmark_corpus(
         corpus_key,
         languages,
@@ -539,6 +575,23 @@ def scenario_analysis(
                 "provenance": model["provenance"],
                 "mapping_quality": model["mapping_quality"],
             })
+    if not rows:
+        log_event(
+            "scenario.run.empty",
+            "Scenario analysis produced no rows",
+            corpus_key=corpus_key,
+            languages=benchmark["languages"],
+            model_ids=model_ids,
+        )
+        raise RuntimeError(
+            "No scenario rows were produced. This usually means benchmark data was unavailable for the selected languages/models."
+        )
+    log_event(
+        "scenario.run.success",
+        "Scenario analysis completed",
+        row_count=len(rows),
+        model_count=len(selected_models),
+    )
     return rows
 
 
@@ -633,7 +686,7 @@ def scenario_appendix() -> str:
         "- Input cost formula: `monthly_requests * (avg_input_tokens * RTC) * input_price / 1e6`",
         "- Output cost formula: `monthly_requests * (avg_output_tokens * (1 + reasoning_share)) * output_price / 1e6`",
         "- Context loss formula: `1 - (1 / RTC)`",
-        "- Latency and throughput are only shown when surfaced metadata exists",
+        "- Latency and throughput charts require performance telemetry. Current v1 catalog wiring only guarantees pricing and context metadata.",
         "- Derived scenario rows are labeled as estimates even when the benchmark and catalog inputs are verified",
     ])
 
@@ -721,4 +774,9 @@ def refresh_catalog() -> tuple[list[dict], dict]:
     """Refresh live pricing cache and return visible catalog rows and status."""
     refresh_from_openrouter()
     rows = build_catalog_entries(include_proxy=False, refresh_live=False)
+    log_event(
+        "catalog.rows.ready",
+        "Catalog rows prepared",
+        row_count=len(rows),
+    )
     return rows, pricing_status()

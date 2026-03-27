@@ -589,6 +589,7 @@ def build_tokenizer_ui() -> gr.Blocks:
                     label="Input Text",
                     placeholder="Type text to tokenize...",
                     lines=3,
+                    elem_id="tokenizer-single-text",
                 )
                 oov_threshold = gr.Slider(
                     minimum=1, maximum=10, value=3, step=1,
@@ -598,6 +599,7 @@ def build_tokenizer_ui() -> gr.Blocks:
                     label="English Equivalent (optional)",
                     placeholder="Paste English translation for RTC comparison...",
                     lines=2,
+                    elem_id="tokenizer-single-english-text",
                 )
                 single_decoded_view = gr.Checkbox(
                     label="Readable token view (decode tokens, hide special tokens)",
@@ -619,6 +621,7 @@ def build_tokenizer_ui() -> gr.Blocks:
                     label="Input Text",
                     placeholder="Type text to compare tokenizers...",
                     lines=3,
+                    elem_id="tokenizer-compare-text",
                 )
                 with gr.Row():
                     cmp_model_a = gr.Dropdown(
@@ -635,6 +638,7 @@ def build_tokenizer_ui() -> gr.Blocks:
                     label="English Equivalent (optional)",
                     placeholder="Paste English translation for RTC comparison...",
                     lines=2,
+                    elem_id="tokenizer-compare-english-text",
                 )
                 compare_btn = gr.Button("Compare", variant="primary")
                 with gr.Row():

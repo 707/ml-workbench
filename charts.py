@@ -64,13 +64,24 @@ def build_metric_scatter(
     """Build a flexible scatter/bubble chart."""
     import plotly.graph_objects as go
 
+    if not rows:
+        return _empty_figure("No scenario data available. Run the scenario first.")
+
     filtered = [
         row for row in rows
         if isinstance(_value(row, x_key), (int, float))
         and isinstance(_value(row, y_key), (int, float))
     ]
     if not filtered:
-        return _empty_figure("No verified data available for this chart")
+        if x_key in {"latency_ms", "throughput_tps"}:
+            label = "latency" if x_key == "latency_ms" else "throughput"
+            return _empty_figure(
+                f"No {label} metadata is wired for the selected models. "
+                "Current catalog refresh surfaces pricing and context, not performance telemetry."
+            )
+        return _empty_figure(
+            f"No numeric data is available for {x_key} vs {y_key} in the current scenario rows."
+        )
 
     fig = go.Figure()
     for row in filtered:

@@ -7,6 +7,7 @@ from functools import lru_cache
 
 import requests
 
+from diagnostics import log_event
 
 HF_DATASET_VIEWER_URL = "https://datasets-server.huggingface.co/first-rows"
 
@@ -134,6 +135,7 @@ def _extract_text_pair(row: dict, language: str) -> tuple[str, str] | None:
 
 @lru_cache(maxsize=64)
 def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
+    log_event("benchmark.fetch.start", "Fetching corpus rows", dataset_id=dataset_id, config=config, split=split)
     response = requests.get(
         HF_DATASET_VIEWER_URL,
         params={"dataset": dataset_id, "config": config, "split": split},
@@ -147,6 +149,14 @@ def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
         row = entry.get("row", {})
         if isinstance(row, dict):
             parsed_rows.append(row)
+    log_event(
+        "benchmark.fetch.success",
+        "Fetched corpus rows",
+        dataset_id=dataset_id,
+        config=config,
+        split=split,
+        row_count=len(parsed_rows),
+    )
     return parsed_rows
 
 
@@ -166,6 +176,13 @@ def fetch_strict_parallel_samples(
                 rows = _fetch_first_rows(corpus.dataset_id, config, corpus.split)
             except Exception as exc:  # pragma: no cover - exercised via callers
                 errors.append(exc)
+                log_event(
+                    "benchmark.fetch.error",
+                    "Corpus fetch failed",
+                    language=language,
+                    config=config,
+                    error=str(exc),
+                )
                 continue
 
             for row in rows:
@@ -190,8 +207,23 @@ def fetch_strict_parallel_samples(
 
         if pair_rows:
             result[language] = pair_rows[:row_limit]
+            log_event(
+                "benchmark.language.ready",
+                "Prepared benchmark samples",
+                language=language,
+                sample_count=len(result[language]),
+                corpus_key=corpus.key,
+            )
         # If all configs failed, skip this language silently.
         # Callers handle missing languages (e.g. samples.get(lang, [])).
+        elif errors:
+            log_event(
+                "benchmark.language.empty",
+                "No corpus samples available for language",
+                language=language,
+                corpus_key=corpus.key,
+                error_count=len(errors),
+            )
 
     return result
 

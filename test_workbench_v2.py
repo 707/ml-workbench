@@ -1,5 +1,6 @@
 """Focused tests for the Token Tax Workbench v2 paths."""
 
+import pytest
 from unittest.mock import patch, MagicMock
 
 
@@ -29,6 +30,13 @@ class TestBenchmarkCorpus:
 
         assert len(result["rows"]) == 2
         assert ("ar", "gpt2") in result["matrix"]
+
+    def test_benchmark_corpus_raises_when_no_rows_are_available(self):
+        from token_tax import benchmark_corpus
+
+        with patch("token_tax.fetch_corpus_samples", return_value={}):
+            with pytest.raises(RuntimeError, match="No benchmark rows were produced"):
+                benchmark_corpus("strict_parallel", ["en"], ["gpt2"])
 
 
 class TestScenarioAnalysis:
@@ -77,6 +85,37 @@ class TestScenarioAnalysis:
         assert len(rows) == 1
         assert rows[0]["monthly_cost"] > 0
 
+    def test_scenario_analysis_raises_when_benchmark_is_empty(self):
+        from token_tax import scenario_analysis
+
+        with patch("token_tax.benchmark_corpus", return_value={"rows": [], "languages": ["ar"]}):
+            with patch("token_tax.build_catalog_entries", return_value=[]):
+                with pytest.raises(RuntimeError, match="No scenario rows were produced"):
+                    scenario_analysis(
+                        corpus_key="strict_parallel",
+                        languages=["ar"],
+                        tokenizer_keys=["gpt2"],
+                        model_ids=["openai/gpt-4o"],
+                        row_limit=25,
+                        monthly_requests=1000,
+                        avg_input_tokens=100,
+                        avg_output_tokens=50,
+                        reasoning_share=0.1,
+                    )
+
+
+class TestScenarioCharts:
+    def test_latency_chart_explains_missing_metadata(self):
+        from charts import build_metric_scatter
+
+        fig = build_metric_scatter(
+            [{"label": "GPT-4o", "monthly_cost": 10.0, "latency_ms": None}],
+            x_key="latency_ms",
+            y_key="monthly_cost",
+        )
+
+        assert "latency metadata" in fig.layout.annotations[0].text.lower()
+
 
 class TestAuditMarkdown:
     def test_audit_markdown_mentions_sources(self):
@@ -114,6 +153,7 @@ class TestBootstrap:
             "app",
             "charts",
             "corpora",
+            "diagnostics",
             "model_registry",
             "pricing",
             "provenance",
@@ -139,9 +179,12 @@ class TestRequirements:
 
 
 class TestDeployVerification:
-    def test_makefile_verifies_hf_runtime_when_token_is_available(self):
+    def test_makefile_exposes_render_and_hf_deploy_paths(self):
         from pathlib import Path
 
         makefile = Path(__file__).with_name("Makefile").read_text(encoding="utf-8")
+        assert "deploy-render" in makefile
+        assert "git push $(GITHUB_REMOTE) main" in makefile
+        assert "deploy-hf" in makefile
         assert "verify_hf_space.py" in makefile
         assert "Verifying Hugging Face runtime" in makefile

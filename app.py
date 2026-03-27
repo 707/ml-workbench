@@ -276,6 +276,7 @@ def _build_comparison_blocks() -> gr.Blocks:
                     type="password",
                     placeholder="sk-or-... — get a free key at openrouter.ai",
                     value="",
+                    elem_id="openrouter-api-key",
                 )
 
         # Model selection dropdowns with per-model inference controls
@@ -318,6 +319,7 @@ def _build_comparison_blocks() -> gr.Blocks:
             custom = gr.Textbox(
                 label="Custom Prompt (optional, overrides selected input)",
                 placeholder="Type your own question here...",
+                elem_id="comparison-custom-prompt",
             )
 
         submit_btn = gr.Button("Compare →", variant="primary")

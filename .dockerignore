@@ -6,6 +6,7 @@
 !bootstrap.py
 !charts.py
 !corpora.py
+!diagnostics.py
 !model_registry.py
 !openrouter.py
 !pricing.py

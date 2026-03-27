@@ -1,15 +1,17 @@
 # ML Workbench — dev + deploy targets
-# Requires: uv, git remote "hf" pointing at HF Space repo
+# Primary deploy target: Render via the GitHub remote
 #
 # Usage:
 #   make install        Install deps (creates .venv)
 #   make run            Launch app locally
 #   make test           Run full test suite with coverage
-#   make deploy         Push to HF Spaces via git
+#   make deploy         Push to GitHub main (Render auto-deploys)
+#   make deploy-hf      Push to Hugging Face Space via git
 
-HF_SPACE ?= nad707/llm-workbench
+GITHUB_REMOTE ?= github
+HF_SPACE ?= nad707/wb
 
-.PHONY: install run test deploy verify-space
+.PHONY: install run test deploy deploy-render deploy-hf verify-hf-space
 
 install:
 	uv sync --all-groups
@@ -20,7 +22,14 @@ run:
 test:
 	uv run pytest -v --cov --cov-report=term-missing
 
-deploy:
+deploy: deploy-render
+
+deploy-render:
+	@echo "Pushing repo root to GitHub for Render auto-deploy..."
+	@git push $(GITHUB_REMOTE) main
+	@echo "Done. Render should auto-deploy from the connected GitHub repo."
+
+deploy-hf:
 	@echo "Deploying repo root to HuggingFace Space..."
 	@git push hf main
 	@if [ -n "$$HF_TOKEN" ]; then \
@@ -31,7 +40,7 @@ deploy:
 	fi
 	@echo "Done. https://huggingface.co/spaces/$(HF_SPACE)"
 
-verify-space:
+verify-hf-space:
 	@if [ -n "$$HF_TOKEN" ]; then \
 		UV_CACHE_DIR=$(pwd)/.uv-cache uv run python verify_hf_space.py --space "$(HF_SPACE)"; \
 	else \
