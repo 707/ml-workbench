@@ -58,7 +58,7 @@ MODEL_PRICING: dict[str, dict] = {
         "input_per_million": 0.07,
         "output_per_million": 0.07,
         "context_window": 8192,
-        "label": "Phi-2 (Gemma proxy)",
+        "label": "Gemma 2 2B (unsloth/gemma-2-2b)",
     },
     "command-r": {
         "input_per_million": 0.15,
@@ -78,8 +78,8 @@ MODEL_PRICING: dict[str, dict] = {
 def get_pricing(model_name: str) -> dict:
     """Look up pricing data for a model.
 
-    Checks static MODEL_PRICING first (tokenizer keys), then the live
-    pricing cache (OpenRouter model IDs).
+    Checks live pricing cache first (freshest data), then falls back
+    to static MODEL_PRICING (tokenizer keys).
 
     Args:
         model_name: Key in MODEL_PRICING or cached OpenRouter model ID.
@@ -90,11 +90,12 @@ def get_pricing(model_name: str) -> dict:
     Raises:
         KeyError: If model_name is not found in either source.
     """
-    if model_name in MODEL_PRICING:
-        return MODEL_PRICING[model_name]
     with _pricing_lock:
         if model_name in _pricing_cache:
             return _pricing_cache[model_name]
+    if model_name in MODEL_PRICING:
+        return MODEL_PRICING[model_name]
+    with _pricing_lock:
         raise KeyError(
             f"unknown model: '{model_name}'. "
             f"Choose from {sorted(set(MODEL_PRICING) | set(_pricing_cache))}"
@@ -179,6 +180,15 @@ def pricing_status() -> dict:
             "last_refresh_error": _last_refresh_error or None,
             "cache_size": len(_pricing_cache),
         }
+
+
+def pricing_age_days() -> int | None:
+    """Return days since last refresh, or None if never refreshed."""
+    with _pricing_lock:
+        if _last_refreshed is None:
+            return None
+        delta = datetime.now(timezone.utc) - _last_refreshed
+        return delta.days
 
 
 def _clear_cache() -> None:

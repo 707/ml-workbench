@@ -60,8 +60,8 @@ TOKENIZER_FAMILIES: dict[str, TokenizerFamily] = {
     "llama-3": TokenizerFamily("llama-3", "Llama 3 family", "NousResearch/Meta-Llama-3-8B", "exact", "strict_verified"),
     "mistral": TokenizerFamily("mistral", "Mistral family", "mistralai/Mistral-7B-v0.1", "exact", "strict_verified"),
     "qwen-2.5": TokenizerFamily("qwen-2.5", "Qwen 2.5 family", "Qwen/Qwen2.5-7B", "exact", "strict_verified"),
-    "gemma-2": TokenizerFamily("gemma-2", "Gemma family", "microsoft/phi-2", "proxy", "proxy"),
-    "command-r": TokenizerFamily("command-r", "Command R family", "bigscience/bloom-560m", "proxy", "proxy"),
+    "gemma-2": TokenizerFamily("gemma-2", "Gemma family", "unsloth/gemma-2-2b", "proxy", "proxy"),
+    "command-r": TokenizerFamily("command-r", "Command R family (BLOOM proxy)", "bigscience/bloom-560m", "proxy", "proxy"),
     "gpt2": TokenizerFamily("gpt2", "GPT-2 legacy", "gpt2", "exact", "strict_verified"),
 }
 
@@ -76,8 +76,8 @@ MODEL_MAPPINGS: dict[str, ModelMapping] = {
     "meta-llama/llama-3.2-3b-instruct:free": ModelMapping("meta-llama/llama-3.2-3b-instruct:free", "llama-3", "Llama 3.2 3B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "mistralai/mistral-7b-instruct": ModelMapping("mistralai/mistral-7b-instruct", "mistral", "Mistral 7B Instruct", "exact", "strict_verified", "Static exact mapping"),
     "mistralai/mistral-7b-instruct:free": ModelMapping("mistralai/mistral-7b-instruct:free", "mistral", "Mistral 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "google/gemma-2-9b-it": ModelMapping("google/gemma-2-9b-it", "gemma-2", "Gemma 2 9B IT", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer is wired"),
-    "google/gemma-3-27b-it:free": ModelMapping("google/gemma-3-27b-it:free", "gemma-2", "Gemma 3 27B IT (Free)", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer is wired"),
+    "google/gemma-2-9b-it": ModelMapping("google/gemma-2-9b-it", "gemma-2", "Gemma 2 9B IT", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer equivalence is documented"),
+    "google/gemma-3-27b-it:free": ModelMapping("google/gemma-3-27b-it:free", "gemma-2", "Gemma 3 27B IT (Free)", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer equivalence is documented"),
     "qwen/qwen-2.5-7b-instruct:free": ModelMapping("qwen/qwen-2.5-7b-instruct:free", "qwen-2.5", "Qwen 2.5 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "qwen/qwen-2.5-72b-instruct": ModelMapping("qwen/qwen-2.5-72b-instruct", "qwen-2.5", "Qwen 2.5 72B Instruct", "exact", "strict_verified", "Static exact mapping"),
     "cohere/command-r": ModelMapping("cohere/command-r", "command-r", "Command R", "proxy", "proxy", "Tokenizer proxy until exact Command R tokenizer is wired"),

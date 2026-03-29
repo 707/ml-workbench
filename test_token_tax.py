@@ -921,3 +921,60 @@ class TestIsContinuedToken:
         # Safe default: assume word-start rather than continuation
         assert _is_continued_token("hello", "unknown_family") is False
         assert _is_continued_token("ing", "some_future_tokenizer") is False
+
+
+# ---------------------------------------------------------------------------
+# _safe_iqr
+# ---------------------------------------------------------------------------
+
+
+class TestSafeIqr:
+    """Tests for _safe_iqr()."""
+
+    def test_returns_none_for_empty(self):
+        from token_tax import _safe_iqr
+        assert _safe_iqr([]) is None
+
+    def test_returns_none_for_too_few_values(self):
+        from token_tax import _safe_iqr
+        assert _safe_iqr([1.0, 2.0, 3.0]) is None
+
+    def test_returns_none_for_all_none(self):
+        from token_tax import _safe_iqr
+        assert _safe_iqr([None, None, None, None]) is None
+
+    def test_returns_float_for_sufficient_values(self):
+        from token_tax import _safe_iqr
+        result = _safe_iqr([1.0, 2.0, 3.0, 4.0])
+        assert isinstance(result, float)
+
+    def test_iqr_is_nonnegative(self):
+        from token_tax import _safe_iqr
+        result = _safe_iqr([1.0, 1.5, 2.0, 2.5, 3.0])
+        assert result is not None
+        assert result >= 0.0
+
+    def test_skips_none_values(self):
+        from token_tax import _safe_iqr
+        result = _safe_iqr([1.0, None, 2.0, None, 3.0, 4.0])
+        assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# portfolio_analysis — estimation_method
+# ---------------------------------------------------------------------------
+
+
+class TestPortfolioAnalysisEstimationMethod:
+    """estimation_method field should be present on all return paths."""
+
+    def test_empty_traffic_has_estimation_method(self):
+        from token_tax import portfolio_analysis
+        result = portfolio_analysis([], "o200k_base")
+        assert result["estimation_method"] == "heuristic"
+
+    def test_nonempty_traffic_has_estimation_method(self):
+        from token_tax import portfolio_analysis
+        traffic = [{"language": "en", "request_count": 100, "avg_chars": 200}]
+        result = portfolio_analysis(traffic, "o200k_base")
+        assert result["estimation_method"] == "heuristic"

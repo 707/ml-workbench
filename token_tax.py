@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from statistics import median
+from statistics import median, quantiles
 
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, fetch_corpus_samples, list_corpora
 from diagnostics import log_event
@@ -330,6 +330,7 @@ def portfolio_analysis(
             "total_monthly_cost": 0.0,
             "token_tax_exposure": 1.0,
             "languages": [],
+            "estimation_method": "heuristic",
         }
 
     tokenizer_key = resolve_selection(model_name)["tokenizer_key"]
@@ -377,6 +378,7 @@ def portfolio_analysis(
         "total_monthly_cost": total_cost,
         "token_tax_exposure": weighted_rtc,
         "languages": entries,
+        "estimation_method": "heuristic",
     }
 
 
@@ -396,6 +398,15 @@ def _safe_median(values: list[float | int | None]) -> float | None:
     if not filtered:
         return None
     return float(median(filtered))
+
+
+def _safe_iqr(values: list[float | int | None]) -> float | None:
+    """Return the interquartile range of numeric values, or None if too few."""
+    filtered = [float(v) for v in values if isinstance(v, (int, float))]
+    if len(filtered) < 4:
+        return None
+    q1, _, q3 = quantiles(filtered, n=4)
+    return q3 - q1
 
 
 def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> dict:
@@ -582,6 +593,8 @@ def iter_benchmark_rows(
                     relative_tokenization_cost(item["token_count"], english_baseline)
                     for item in computed
                 ])
+            rtc_values = [item.get("rtc") for item in computed]
+            rtc_iqr = _safe_iqr(rtc_values)
             aggregated = {
                 "language": language,
                 "label": selection["label"],
@@ -592,6 +605,7 @@ def iter_benchmark_rows(
                 "unique_tokens": int(sum(item["unique_tokens"] for item in computed)),
                 "continued_word_rate": round(_safe_median([item["continued_word_rate"] for item in computed]) or 0.0, 4),
                 "rtc": round(rtc, 4) if rtc is not None else None,
+                "rtc_iqr": round(rtc_iqr, 4) if rtc_iqr is not None else None,
                 "byte_premium": round(_safe_median([item.get("byte_premium") for item in computed]) or 0.0, 4)
                 if rtc is not None else None,
                 "risk_level": quality_risk_level(rtc) if rtc is not None else "low",

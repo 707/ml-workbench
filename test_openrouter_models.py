@@ -241,8 +241,8 @@ class TestGetPricingWithCache:
         result = get_pricing("test/model")
         assert result["input_per_million"] == 1.0
 
-    def test_static_preferred_over_cache_for_tokenizer_keys(self):
-        """Static MODEL_PRICING entries (tokenizer keys) take precedence."""
+    def test_cache_preferred_over_static_for_tokenizer_keys(self):
+        """Live cache takes precedence over static MODEL_PRICING entries."""
         from pricing import get_pricing, _pricing_cache, _clear_cache
 
         _clear_cache()
@@ -250,11 +250,11 @@ class TestGetPricingWithCache:
             "input_per_million": 999.0,
             "output_per_million": 999.0,
             "context_window": 999,
-            "label": "Wrong",
+            "label": "Live override",
         }
         result = get_pricing("gpt2")
-        # Static takes precedence
-        assert result["input_per_million"] == 0.0
+        # Live cache takes precedence
+        assert result["input_per_million"] == 999.0
 
 
 class TestAvailableModelsWithCache:

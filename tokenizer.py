@@ -40,7 +40,7 @@ SUPPORTED_TOKENIZERS: dict[str, str] = {
     "llama-3": "NousResearch/Meta-Llama-3-8B",
     "mistral": "mistralai/Mistral-7B-v0.1",
     "qwen-2.5": "Qwen/Qwen2.5-7B",
-    "gemma-2": "microsoft/phi-2",
+    "gemma-2": "unsloth/gemma-2-2b",
     "command-r": "bigscience/bloom-560m",
     "gpt2": "gpt2",
 }
@@ -332,6 +332,104 @@ def quality_risk_level(rtc: float) -> str:
 _NORMAL_BG_COLOURS = ("#e8f4f8", "#d4ecd4")
 
 
+def _decode_via_convert_tokens(
+    tokens: list[dict],
+    token_ids: list[int],
+    special_ids: set[int],
+    hide_special_tokens: bool,
+    tokenizer,
+) -> list[str] | None:
+    """Decode using tokenizer.convert_tokens_to_string. Returns None on failure."""
+    tmp_chunks: list[str] = []
+    visible_tokens: list[str] = []
+    prev_decoded = ""
+    for i, token_id in enumerate(token_ids):
+        if hide_special_tokens and token_id in special_ids:
+            tmp_chunks.append("")
+            continue
+        visible_tokens.append(str(tokens[i]["token"]))
+        try:
+            curr_decoded = tokenizer.convert_tokens_to_string(visible_tokens)
+        except Exception:
+            return None
+        if not isinstance(curr_decoded, str):
+            return None
+        safe_prev = prev_decoded.replace("\ufffd", "")
+        safe_curr = curr_decoded.replace("\ufffd", "")
+        chunk = safe_curr[len(safe_prev):] if safe_curr.startswith(safe_prev) else ""
+        tmp_chunks.append(chunk)
+        prev_decoded = curr_decoded
+    return tmp_chunks
+
+
+def _decode_via_bytes(
+    tokens: list[dict],
+    token_ids: list[int],
+    special_ids: set[int],
+    hide_special_tokens: bool,
+    byte_decoder: dict,
+) -> list[str]:
+    """Decode byte-level tokenizers (GPT-2/Llama-family) via raw byte accumulation."""
+    chunks: list[str] = []
+    buffer = bytearray()
+    prev_decoded = ""
+    for i, token_id in enumerate(token_ids):
+        if hide_special_tokens and token_id in special_ids:
+            chunks.append("")
+            continue
+        raw_token = str(tokens[i]["token"])
+        for ch in raw_token:
+            if ch in byte_decoder:
+                buffer.append(int(byte_decoder[ch]))
+            else:
+                buffer.extend(ch.encode("utf-8", errors="ignore"))
+        curr_decoded = bytes(buffer).decode("utf-8", errors="ignore")
+        chunk = curr_decoded[len(prev_decoded):] if curr_decoded.startswith(prev_decoded) else ""
+        chunks.append(chunk)
+        prev_decoded = curr_decoded
+    return chunks
+
+
+def _decode_via_cumulative(
+    tokens: list[dict],
+    token_ids: list[int],
+    special_ids: set[int],
+    hide_special_tokens: bool,
+    tokenizer,
+) -> list[str]:
+    """Generic fallback: cumulative tokenizer decode + prefix diff."""
+    chunks: list[str] = []
+    prev_decoded = ""
+    for idx, token_id in enumerate(token_ids):
+        if hide_special_tokens and token_id in special_ids:
+            chunks.append("")
+            continue
+        try:
+            curr_decoded = tokenizer.decode(
+                token_ids[: idx + 1],
+                skip_special_tokens=hide_special_tokens,
+                clean_up_tokenization_spaces=False,
+            )
+        except Exception:
+            curr_decoded = prev_decoded
+        if curr_decoded.startswith(prev_decoded):
+            chunk = curr_decoded[len(prev_decoded):]
+        else:
+            try:
+                chunk = tokenizer.decode(
+                    [token_id],
+                    skip_special_tokens=hide_special_tokens,
+                    clean_up_tokenization_spaces=False,
+                )
+            except Exception:
+                chunk = ""
+        if "\ufffd" in chunk:
+            chunk = chunk.replace("\ufffd", "")
+        chunks.append(chunk)
+        prev_decoded = curr_decoded
+    return chunks
+
+
 def render_tokens_html(
     tokens: list[dict],
     oov_words: set[str],
@@ -356,89 +454,16 @@ def render_tokens_html(
 
     if decoded_view and tokenizer is not None:
         used_convert_path = False
-        # Prefer tokenizer-native token-string reconstruction when available.
-        # This handles byte-level tokenizers more reliably than per-token decode.
         if has_convert_tokens_to_string:
-            tmp_chunks: list[str] = []
-            visible_tokens: list[str] = []
-            prev_decoded = ""
-            convert_path_ok = True
-            for i, token_id in enumerate(token_ids):
-                if hide_special_tokens and token_id in special_ids:
-                    tmp_chunks.append("")
-                    continue
-                visible_tokens.append(str(tokens[i]["token"]))
-                try:
-                    curr_decoded = tokenizer.convert_tokens_to_string(visible_tokens)
-                except Exception:
-                    convert_path_ok = False
-                    break
-                if not isinstance(curr_decoded, str):
-                    convert_path_ok = False
-                    break
-                safe_prev = prev_decoded.replace("\ufffd", "")
-                safe_curr = curr_decoded.replace("\ufffd", "")
-                chunk = safe_curr[len(safe_prev):] if safe_curr.startswith(safe_prev) else ""
-                tmp_chunks.append(chunk)
-                prev_decoded = curr_decoded
-            if convert_path_ok:
-                display_chunks = tmp_chunks
+            result = _decode_via_convert_tokens(tokens, token_ids, special_ids, hide_special_tokens, tokenizer)
+            if result is not None:
+                display_chunks = result
                 used_convert_path = True
 
-        # For byte-level tokenizers (GPT-2/Llama-family), decode via raw byte
-        # accumulation to avoid replacement-character noise in multibyte scripts.
         if not used_convert_path and isinstance(byte_decoder, dict) and byte_decoder:
-            buffer = bytearray()
-            prev_decoded = ""
-            for i, token_id in enumerate(token_ids):
-                if hide_special_tokens and token_id in special_ids:
-                    display_chunks.append("")
-                    continue
-
-                raw_token = str(tokens[i]["token"])
-                for ch in raw_token:
-                    if ch in byte_decoder:
-                        buffer.append(int(byte_decoder[ch]))
-                    else:
-                        buffer.extend(ch.encode("utf-8", errors="ignore"))
-
-                curr_decoded = bytes(buffer).decode("utf-8", errors="ignore")
-                chunk = curr_decoded[len(prev_decoded):] if curr_decoded.startswith(prev_decoded) else ""
-                display_chunks.append(chunk)
-                prev_decoded = curr_decoded
+            display_chunks = _decode_via_bytes(tokens, token_ids, special_ids, hide_special_tokens, byte_decoder)
         elif not used_convert_path:
-            # Generic fallback: cumulative tokenizer decode + prefix diff.
-            prev_decoded = ""
-            for idx, token_id in enumerate(token_ids):
-                if hide_special_tokens and token_id in special_ids:
-                    display_chunks.append("")
-                    continue
-                try:
-                    curr_decoded = tokenizer.decode(
-                        token_ids[: idx + 1],
-                        skip_special_tokens=hide_special_tokens,
-                        clean_up_tokenization_spaces=False,
-                    )
-                except Exception:
-                    curr_decoded = prev_decoded
-
-                if curr_decoded.startswith(prev_decoded):
-                    chunk = curr_decoded[len(prev_decoded):]
-                else:
-                    # Conservative fallback if tokenizer decode is non-prefix-stable.
-                    try:
-                        chunk = tokenizer.decode(
-                            [token_id],
-                            skip_special_tokens=hide_special_tokens,
-                            clean_up_tokenization_spaces=False,
-                        )
-                    except Exception:
-                        chunk = ""
-                # Strip replacement chars in readable mode.
-                if "\ufffd" in chunk:
-                    chunk = chunk.replace("\ufffd", "")
-                display_chunks.append(chunk)
-                prev_decoded = curr_decoded
+            display_chunks = _decode_via_cumulative(tokens, token_ids, special_ids, hide_special_tokens, tokenizer)
     else:
         display_chunks = [str(entry["token"]) for entry in tokens]
 

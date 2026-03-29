@@ -186,8 +186,14 @@ def load_strict_parallel_snapshot(snapshot_path: str | None = None) -> dict[str,
     return result
 
 
-@lru_cache(maxsize=64)
+_fetch_cache: dict[tuple, list[dict]] = {}
+
+
 def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
+    cache_key = (dataset_id, config, split)
+    if cache_key in _fetch_cache:
+        return _fetch_cache[cache_key]
+
     log_event("benchmark.fetch.start", "Fetching corpus rows", dataset_id=dataset_id, config=config, split=split)
     response = requests.get(
         HF_DATASET_VIEWER_URL,
@@ -210,6 +216,8 @@ def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
         split=split,
         row_count=len(parsed_rows),
     )
+    if parsed_rows:
+        _fetch_cache[cache_key] = parsed_rows
     return parsed_rows
 
 

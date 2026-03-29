@@ -127,3 +127,95 @@ class TestStreamingExplorationSamples:
         with patch("corpora._fetch_streaming_rows", side_effect=RuntimeError("stream unavailable")):
             with pytest.raises(RuntimeError, match="Streaming exploration fetch failed"):
                 fetch_corpus_samples("streaming_exploration", ["fr"], row_limit=5)
+
+
+# ---------------------------------------------------------------------------
+# _fetch_first_rows — failure caching
+# ---------------------------------------------------------------------------
+
+
+class TestFetchFirstRowsFailureCache:
+    """_fetch_first_rows must not cache failures (empty/exception results)."""
+
+    def setup_method(self):
+        from corpora import _fetch_cache
+        _fetch_cache.clear()
+
+    def test_successful_result_is_cached(self):
+        from corpora import _fetch_first_rows, _fetch_cache
+        from unittest.mock import patch, MagicMock
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"rows": [{"row": {"text": "hello"}}]}
+
+        with patch("corpora.requests.get", return_value=mock_resp) as mock_get:
+            _fetch_first_rows("ds", "cfg", "split")
+            _fetch_first_rows("ds", "cfg", "split")
+
+        assert mock_get.call_count == 1
+        assert ("ds", "cfg", "split") in _fetch_cache
+
+    def test_empty_result_is_not_cached(self):
+        from corpora import _fetch_first_rows, _fetch_cache
+        from unittest.mock import patch, MagicMock
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"rows": []}
+
+        with patch("corpora.requests.get", return_value=mock_resp) as mock_get:
+            _fetch_first_rows("ds2", "cfg2", "split2")
+            _fetch_first_rows("ds2", "cfg2", "split2")
+
+        assert mock_get.call_count == 2
+        assert ("ds2", "cfg2", "split2") not in _fetch_cache
+
+    def test_exception_not_cached(self):
+        from corpora import _fetch_first_rows, _fetch_cache
+        from unittest.mock import patch, MagicMock
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = Exception("500 error")
+
+        with patch("corpora.requests.get", return_value=mock_resp):
+            with pytest.raises(Exception):
+                _fetch_first_rows("ds3", "cfg3", "split3")
+
+        assert ("ds3", "cfg3", "split3") not in _fetch_cache
+
+    def test_second_call_after_failure_retries(self):
+        from corpora import _fetch_first_rows, _fetch_cache
+        from unittest.mock import patch, MagicMock
+
+        fail_resp = MagicMock()
+        fail_resp.raise_for_status.side_effect = Exception("transient error")
+        success_resp = MagicMock()
+        success_resp.raise_for_status = MagicMock()
+        success_resp.json.return_value = {"rows": [{"row": {"text": "recovered"}}]}
+
+        with patch("corpora.requests.get", side_effect=[fail_resp, success_resp]):
+            with pytest.raises(Exception):
+                _fetch_first_rows("ds4", "cfg4", "split4")
+            result = _fetch_first_rows("ds4", "cfg4", "split4")
+
+        assert len(result) == 1
+
+    def test_separate_keys_cached_independently(self):
+        from corpora import _fetch_first_rows, _fetch_cache
+        from unittest.mock import patch, MagicMock
+
+        def make_resp(text):
+            r = MagicMock()
+            r.raise_for_status = MagicMock()
+            r.json.return_value = {"rows": [{"row": {"text": text}}]}
+            return r
+
+        with patch("corpora.requests.get", side_effect=[make_resp("a"), make_resp("b")]):
+            _fetch_first_rows("dsA", "cfgA", "s")
+            _fetch_first_rows("dsB", "cfgB", "s")
+
+        assert ("dsA", "cfgA", "s") in _fetch_cache
+        assert ("dsB", "cfgB", "s") in _fetch_cache
+        assert _fetch_cache[("dsA", "cfgA", "s")][0]["text"] == "a"
+        assert _fetch_cache[("dsB", "cfgB", "s")][0]["text"] == "b"
