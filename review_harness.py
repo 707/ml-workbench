@@ -80,7 +80,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Benchmark"),
                 ReviewAction("click_button", "Run Benchmark"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
             ),
             captures=(CaptureRequest("benchmark-strict-defaults"),),
             notes=(
@@ -97,7 +97,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_inner_tab", "Benchmark"),
                 ReviewAction("click_text", "Streaming Exploration"),
                 ReviewAction("click_button", "Run Benchmark"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
             ),
             captures=(CaptureRequest("benchmark-streaming-defaults"),),
             notes=(
@@ -113,7 +113,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Catalog"),
                 ReviewAction("click_button", "Load Catalog"),
-                ReviewAction("wait_ms", "settle", value=1000),
+                ReviewAction("wait_ms", "settle", value=2500),
             ),
             captures=(CaptureRequest("catalog-defaults"),),
             notes=(
@@ -128,7 +128,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
                 ReviewAction("open_inner_tab", "Cost"),
             ),
             captures=(CaptureRequest("scenario-defaults-cost"),),
@@ -144,7 +144,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
                 ReviewAction("open_inner_tab", "Context Loss"),
             ),
             captures=(CaptureRequest("scenario-defaults-context"),),
@@ -157,7 +157,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
                 ReviewAction("open_inner_tab", "Speed Metadata"),
             ),
             captures=(CaptureRequest("scenario-defaults-speed"),),
@@ -173,7 +173,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
                 ReviewAction("open_inner_tab", "Scale"),
             ),
             captures=(CaptureRequest("scenario-defaults-scale"),),
@@ -186,7 +186,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_ms", "settle", value=1500),
+                ReviewAction("wait_ms", "settle", value=6000),
                 ReviewAction("open_inner_tab", "Custom Slice"),
             ),
             captures=(CaptureRequest("scenario-defaults-custom"),),
@@ -254,9 +254,30 @@ def _first_visible(locator):
     raise LookupError("No visible locator matched the requested selector")
 
 
+def _wait_for_app_ready(page, timeout_ms: int) -> None:
+    """Wait for the Gradio app to render beyond the hosting splash screen."""
+    candidates = [
+        lambda: page.get_by_text("Token Tax Workbench", exact=True),
+        lambda: page.get_by_role("button", name="Run Benchmark", exact=True),
+        lambda: page.get_by_role("button", name="Load Catalog", exact=True),
+        lambda: page.get_by_role("button", name="Run Scenario Lab", exact=True),
+    ]
+    for factory in candidates:
+        try:
+            factory().first.wait_for(state="visible", timeout=timeout_ms)
+            page.wait_for_timeout(500)
+            return
+        except Exception:
+            continue
+    raise TimeoutError("The Gradio app did not finish rendering before the timeout.")
+
+
 def _perform_action(page, action: ReviewAction) -> None:
     if action.kind in {"open_top_tab", "open_inner_tab"}:
-        target = _first_visible(page.get_by_role("tab", name=action.target, exact=True))
+        try:
+            target = _first_visible(page.get_by_role("tab", name=action.target, exact=True))
+        except LookupError:
+            target = _first_visible(page.get_by_text(action.target, exact=True))
         target.click()
         page.wait_for_timeout(250)
         return
@@ -313,8 +334,8 @@ def capture_review_bundle(
             ) from exc
         context = browser.new_context(viewport={"width": viewport_width, "height": viewport_height})
         page = context.new_page()
-        page.goto(base_url, wait_until="networkidle", timeout=timeout_ms)
-        page.wait_for_timeout(1000)
+        page.goto(base_url, wait_until="domcontentloaded", timeout=timeout_ms)
+        _wait_for_app_ready(page, timeout_ms)
 
         for scenario in scenario_list:
             result = ScenarioResult(
