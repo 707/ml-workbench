@@ -182,7 +182,7 @@ class TestTokenizerFirstCatalog:
 
         rows = build_tokenizer_catalog(include_proxy=True)
         llama = next(row for row in rows if row["tokenizer_key"] == "llama-3")
-        assert len(llama["free_models"]) >= 2
+        assert len(llama["free_models"]) >= 1
 
     def test_catalog_rows_are_tokenizer_first(self):
         from model_registry import build_tokenizer_catalog
@@ -263,3 +263,9 @@ class TestFreeRuntimeChoices:
         rows = list_free_runtime_choices(include_proxy=False)
         assert rows
         assert all(row["runtime_badge"] == "Runnable here for free" for row in rows)
+
+    def test_free_runtime_choices_expose_only_explicit_free_model_ids(self):
+        from model_registry import list_free_runtime_choices
+
+        rows = list_free_runtime_choices(include_proxy=False)
+        assert all(row["model_id"].endswith(":free") for row in rows)

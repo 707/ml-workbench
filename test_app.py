@@ -437,12 +437,12 @@ class TestRunComparison:
 
     def test_r1_failure_does_not_crash_llama_result(self):
         """If R1 call raises, llama result must still be returned (not exception)."""
-        from app import run_comparison
+        from app import MODEL_R1, run_comparison
 
         llama_resp = self._make_response("Llama is fine.")
 
         def side_effect(api_key, model, prompt):
-            if "stepfun" in model:
+            if model == MODEL_R1:
                 raise Exception("R1 network error")
             return llama_resp
 
@@ -471,7 +471,7 @@ class TestRunComparison:
 
     def test_calls_both_models(self):
         """Both model IDs must be passed to call_openrouter."""
-        from app import run_comparison
+        from app import MODEL_LLAMA, MODEL_R1, run_comparison
 
         r1_resp = self._make_response("<think>t</think>a")
         llama_resp = self._make_response("b")
@@ -482,8 +482,8 @@ class TestRunComparison:
             run_comparison("key", "q?")
 
         called_models = [call.args[1] for call in mock_call.call_args_list]
-        assert any("stepfun" in m for m in called_models)
-        assert any("llama" in m for m in called_models)
+        assert MODEL_R1 in called_models
+        assert MODEL_LLAMA in called_models
 
 
 # ---------------------------------------------------------------------------
@@ -793,6 +793,13 @@ class TestFreeModels:
         for _, model_id in FREE_MODELS:
             assert model_id.strip() != ""
 
+    def test_free_models_ids_are_strictly_free(self):
+        """Every live comparison model must be an explicit OpenRouter free-tier ID."""
+        from app import FREE_MODELS
+
+        for _, model_id in FREE_MODELS:
+            assert model_id.endswith(":free")
+
     def test_model_r1_default_present_in_free_models(self):
         """MODEL_R1 default must be one of the model IDs in FREE_MODELS."""
         from app import FREE_MODELS, MODEL_R1
@@ -806,6 +813,15 @@ class TestFreeModels:
 
         model_ids = [m_id for _, m_id in FREE_MODELS]
         assert MODEL_LLAMA in model_ids
+
+
+class TestHostedKeyDisclosure:
+    def test_comparison_ui_discloses_hosted_key_usage_when_server_key_is_present(self):
+        import inspect
+        import app
+
+        src = inspect.getsource(app._build_comparison_blocks)
+        assert "hosted server-side OpenRouter key" in src
 
 
 # ---------------------------------------------------------------------------

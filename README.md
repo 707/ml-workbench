@@ -64,14 +64,13 @@ The left panel shows the model's reasoning trace (if it has one) plus its final 
 
 ### Models available
 
-All free-tier via [OpenRouter](https://openrouter.ai) — no credit card required.
+All comparison-tab models are explicit [OpenRouter](https://openrouter.ai) free-tier IDs so the hosted app can stay on a free-only runtime path.
 
 | Label | Model ID |
 |-------|----------|
-| Step 3.5 Flash (Reasoning) | `stepfun/step-3.5-flash` |
-| Llama-3.1-8B | `meta-llama/llama-3.1-8b-instruct` |
-| Gemma-3-27B | `google/gemma-3-27b-it:free` |
-| Mistral-7B | `mistralai/mistral-7b-instruct:free` |
+| Qwen 2.5 7B Instruct (Free) | `qwen/qwen-2.5-7b-instruct:free` |
+| Llama 3.2 3B Instruct (Free) | `meta-llama/llama-3.2-3b-instruct:free` |
+| Mistral 7B Instruct (Free) | `mistralai/mistral-7b-instruct:free` |
 
 ### Preset questions
 
@@ -136,9 +135,9 @@ make install
 make run
 ```
 
-Open the local Gradio URL printed in your terminal. Set your OpenRouter API key in the UI.
+Open the local Gradio URL printed in your terminal. Set your own OpenRouter API key in the UI if you are running locally without a hosted server key.
 
-To run with a pre-set server key (skips the key input field):
+To run with a pre-set server key (skips the key input field and uses the host's quota for comparisons):
 
 ```bash
 OPENROUTER_API_KEY=sk-or-... make run
@@ -177,7 +176,7 @@ Name:  OPENROUTER_API_KEY
 Value: sk-or-...
 ```
 
-This lets the app run without users needing their own key.
+This lets the comparison tab run without users entering their own key. The UI discloses when the hosted server-side key is being used.
 
 ### Hugging Face fallback
 

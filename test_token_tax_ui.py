@@ -36,7 +36,7 @@ class TestWorkbenchHandlers:
                 "tokenizer_source": "NousResearch/Meta-Llama-3-8B",
                 "mapping_quality": "exact",
                 "provenance": "strict_verified",
-                "free_models": [{"label": "Llama 3.1 8B", "model_id": "meta-llama/llama-3.1-8b-instruct"}],
+                "free_models": [{"label": "Llama 3.2 3B (Free)", "model_id": "meta-llama/llama-3.2-3b-instruct:free"}],
                 "aa_matches": [{"label": "Llama 3.1 8B", "ttft_seconds": 0.44}],
             },
         ]
@@ -195,6 +195,22 @@ class TestWorkbenchHandlers:
 
         assert rows[0]["unique_tokens"] == 12
         assert rows[0]["continued_word_rate"] == 0.4
+
+    def test_observed_composition_uses_full_token_texts_not_preview(self):
+        from token_tax_ui import build_observed_composition_rows
+
+        rows = build_observed_composition_rows(
+            [
+                {
+                    "language": "fr",
+                    "tokenizer_key": "gpt2",
+                    "token_preview": "Bon | jour",
+                    "token_texts": ["Bon", "jour", "monde"],
+                },
+            ]
+        )
+
+        assert sum(row["token_count"] for row in rows) == 3
 
 
 # ---------------------------------------------------------------------------

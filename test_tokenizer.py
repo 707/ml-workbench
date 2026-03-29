@@ -23,31 +23,37 @@ class TestGetTokenizer:
 
     def test_returns_tokenizer_for_gpt2(self):
         """get_tokenizer('gpt2') must return a tokenizer object."""
+        import tokenizer as tok_module
         from tokenizer import get_tokenizer
 
         mock_tok = MagicMock()
-        with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok) as mock_fp:
-            result = get_tokenizer("gpt2")
+        with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
+            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok) as mock_fp:
+                result = get_tokenizer("gpt2")
 
         assert result is mock_tok
 
     def test_returns_tokenizer_for_llama3(self):
         """get_tokenizer('llama-3') must return a tokenizer object."""
+        import tokenizer as tok_module
         from tokenizer import get_tokenizer
 
         mock_tok = MagicMock()
-        with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
-            result = get_tokenizer("llama-3")
+        with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
+            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
+                result = get_tokenizer("llama-3")
 
         assert result is mock_tok
 
     def test_returns_tokenizer_for_mistral(self):
         """get_tokenizer('mistral') must return a tokenizer object."""
+        import tokenizer as tok_module
         from tokenizer import get_tokenizer
 
         mock_tok = MagicMock()
-        with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
-            result = get_tokenizer("mistral")
+        with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
+            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
+                result = get_tokenizer("mistral")
 
         assert result is mock_tok
 

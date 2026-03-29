@@ -33,7 +33,6 @@ FREE_OPENROUTER_MODELS: dict[str, tuple[str, ...]] = {
     "o200k_base": (),
     "cl100k_base": (),
     "llama-3": (
-        "meta-llama/llama-3.1-8b-instruct",
         "meta-llama/llama-3.2-3b-instruct:free",
     ),
     "mistral": (

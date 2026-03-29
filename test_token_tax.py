@@ -517,6 +517,63 @@ class TestBenchmarkDetails:
         assert rows[0]["lane"] == "Strict Evidence"
         assert rows[0]["token_preview"]
         assert rows[0]["sample_index"] == 0
+        assert rows[0]["token_texts"] == ["Bon", "jour", "monde"]
+
+    def test_iter_benchmark_rows_dedupes_unique_tokens_across_selected_rows(self):
+        from corpora import CorpusSample
+        from token_tax import iter_benchmark_rows
+
+        samples = {
+            "fr": [
+                CorpusSample("fr", "Bonjour", "Hello", "streaming_exploration", "https://example.com", "research_forward"),
+                CorpusSample("fr", "Salut", "Hi", "streaming_exploration", "https://example.com", "research_forward"),
+            ],
+            "en": [
+                CorpusSample("en", "Hello", "Hello", "streaming_exploration", "https://example.com", "research_forward"),
+            ],
+        }
+
+        metrics = [
+            {
+                "token_count": 2,
+                "token_fertility": 1.0,
+                "bytes_per_token": 1.5,
+                "unique_tokens": 2,
+                "continued_word_rate": 0.0,
+                "token_texts": ["Hello", "world"],
+                "english_baseline_ratio": None,
+                "byte_premium": None,
+                "risk_level": "low",
+            },
+            {
+                "token_count": 3,
+                "token_fertility": 1.0,
+                "bytes_per_token": 2.0,
+                "unique_tokens": 2,
+                "continued_word_rate": 0.25,
+                "token_texts": ["Bon", "jour", "Bon"],
+                "english_baseline_ratio": None,
+                "byte_premium": None,
+                "risk_level": "low",
+            },
+            {
+                "token_count": 2,
+                "token_fertility": 1.0,
+                "bytes_per_token": 1.5,
+                "unique_tokens": 2,
+                "continued_word_rate": 0.1,
+                "token_texts": ["jour", "Salut"],
+                "english_baseline_ratio": None,
+                "byte_premium": None,
+                "risk_level": "low",
+            },
+        ]
+
+        with patch("token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("token_tax._sample_metrics", side_effect=metrics):
+                rows = list(iter_benchmark_rows("streaming_exploration", ["fr"], ["gpt2"], row_limit=5))
+
+        assert rows[0]["unique_tokens"] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -895,6 +952,13 @@ class TestIsContinuedToken:
             assert _is_continued_token("ello", key) is True, (
                 f"No-prefix token should be continuation for {key}"
             )
+
+    def test_command_r_uses_gpt2_style_word_starts(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("Ġhello", "command-r") is False
+        assert _is_continued_token("ello", "command-r") is True
+        assert _is_continued_token("▁hello", "command-r") is True
 
     # ------------------------------------------------------------------
     # BERT-style (not one of the 8 families but the logic must exist)

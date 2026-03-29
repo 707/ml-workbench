@@ -22,6 +22,7 @@ from model_registry import (
     list_tokenizer_families,
 )
 from token_tax import (
+    _iter_benchmark_payload,
     analyze_text_across_models,
     audit_markdown,
     benchmark_appendix,
@@ -57,7 +58,7 @@ LANE_TO_CORPUS_KEY = {
 }
 
 
-BENCHMARK_COLUMNS = [
+STRICT_BENCHMARK_COLUMNS = [
     "lane",
     "language",
     "tokenizer_key",
@@ -69,6 +70,36 @@ BENCHMARK_COLUMNS = [
     "continued_word_rate",
     "sample_count",
     "provenance",
+]
+STREAMING_BENCHMARK_COLUMNS = [
+    "lane",
+    "language",
+    "tokenizer_key",
+    "english_baseline_ratio",
+    "token_count",
+    "bytes_per_token",
+    "token_fertility",
+    "unique_tokens",
+    "continued_word_rate",
+    "sample_count",
+    "provenance",
+]
+STRICT_BENCHMARK_METRICS = [
+    "rtc",
+    "token_count",
+    "bytes_per_token",
+    "token_fertility",
+    "byte_premium",
+    "unique_tokens",
+    "continued_word_rate",
+]
+STREAMING_BENCHMARK_METRICS = [
+    "english_baseline_ratio",
+    "token_count",
+    "bytes_per_token",
+    "token_fertility",
+    "unique_tokens",
+    "continued_word_rate",
 ]
 
 
@@ -123,6 +154,44 @@ RAW_BENCHMARK_COLUMNS = [
     "english_text",
     "token_preview",
 ]
+STREAMING_RAW_BENCHMARK_COLUMNS = [
+    "lane",
+    "language",
+    "tokenizer_key",
+    "sample_index",
+    "token_count",
+    "unique_tokens",
+    "continued_word_rate",
+    "bytes_per_token",
+    "english_baseline_ratio",
+    "text",
+    "english_text",
+    "token_preview",
+]
+
+
+def _benchmark_columns_for(corpus_key: str) -> list[str]:
+    return STRICT_BENCHMARK_COLUMNS if corpus_key == "strict_parallel" else STREAMING_BENCHMARK_COLUMNS
+
+
+def _raw_benchmark_columns_for(corpus_key: str) -> list[str]:
+    return RAW_BENCHMARK_COLUMNS if corpus_key == "strict_parallel" else STREAMING_RAW_BENCHMARK_COLUMNS
+
+
+def _benchmark_metric_choices_for(corpus_key: str) -> list[str]:
+    return STRICT_BENCHMARK_METRICS if corpus_key == "strict_parallel" else STREAMING_BENCHMARK_METRICS
+
+
+def _default_benchmark_metric_for(corpus_key: str) -> str:
+    return "rtc" if corpus_key == "strict_parallel" else "english_baseline_ratio"
+
+
+def configure_benchmark_metric(lane_or_corpus: str) -> gr.Dropdown:
+    corpus_key = _resolve_corpus_key(lane_or_corpus)
+    return gr.Dropdown(
+        choices=_benchmark_metric_choices_for(corpus_key),
+        value=_default_benchmark_metric_for(corpus_key),
+    )
 
 
 def _catalog_display_rows(rows: list[dict]) -> list[dict]:
@@ -220,8 +289,10 @@ def build_observed_composition_rows(raw_rows: list[dict]) -> list[dict]:
     counts: dict[tuple[str, str], int] = {}
     seen_tokens: set[tuple[str, str, str]] = set()
     for row in raw_rows:
-        preview = row.get("token_preview", "")
-        tokens = [token.strip() for token in preview.split("|") if token.strip()]
+        tokens = row.get("token_texts") or []
+        if not tokens:
+            preview = row.get("token_preview", "")
+            tokens = [token.strip() for token in preview.split("|") if token.strip()]
         for token in tokens:
             token_key = (row["tokenizer_key"], row["language"], token)
             if token_key in seen_tokens:
@@ -250,6 +321,11 @@ def _build_benchmark_outputs(
     preview_tokenizer: str,
     preview_sample_index: int,
 ):
+    corpus_key = "strict_parallel"
+    if rows:
+        corpus_key = rows[0].get("corpus_key", corpus_key)
+    elif raw_rows:
+        corpus_key = raw_rows[0].get("corpus_key", corpus_key)
     matrix = {
         (row["language"], row["tokenizer_key"]): row
         for row in rows
@@ -258,11 +334,11 @@ def _build_benchmark_outputs(
     coverage_rows = build_coverage_rows(rows)
     composition_rows = build_observed_composition_rows(raw_rows)
     return (
-        serialize_table(rows, BENCHMARK_COLUMNS),
+        serialize_table(rows, _benchmark_columns_for(corpus_key)),
         build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key),
         build_distribution_chart(rows, metric_key),
         build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
-        serialize_table(raw_rows, RAW_BENCHMARK_COLUMNS),
+        serialize_table(raw_rows, _raw_benchmark_columns_for(corpus_key)),
         build_metric_scatter(
             coverage_rows,
             x_key="unique_tokens",
@@ -376,7 +452,7 @@ def _build_scenario_outputs(
         x_title=x_key,
         y_title=y_key,
     )
-    return table, cost_plot, context_plot, speed_plot, scale_plot, custom_plot, scenario_appendix(corpus_key), render_markdown()
+    return table, cost_plot, context_plot, speed_plot, scale_plot, custom_plot, scenario_appendix(), render_markdown()
 
 
 # ---------------------------------------------------------------------------
@@ -545,13 +621,16 @@ def _handle_benchmark_tab(
     live_updates: bool,
 ):
     corpus_key = _resolve_corpus_key(lane_or_corpus)
+    benchmark_columns = _benchmark_columns_for(corpus_key)
+    raw_benchmark_columns = _raw_benchmark_columns_for(corpus_key)
+    metric_key = metric_key if metric_key in _benchmark_metric_choices_for(corpus_key) else _default_benchmark_metric_for(corpus_key)
     if not tokenizer_keys:
         yield (
-            {"headers": BENCHMARK_COLUMNS, "data": []},
+            {"headers": benchmark_columns, "data": []},
             build_heatmap({}, [], []),
             build_distribution_chart([], metric_key),
             "### Preview\n- Select at least one tokenizer family.",
-            serialize_table([], RAW_BENCHMARK_COLUMNS),
+            serialize_table([], raw_benchmark_columns),
             build_metric_scatter([], x_key="unique_tokens", y_key="continued_word_rate"),
             build_category_bar([], category_key="script", value_key="token_count"),
             "Select at least one tokenizer family.",
@@ -563,25 +642,20 @@ def _handle_benchmark_tab(
         clear_events()
         selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
         appendix = benchmark_appendix(corpus_key)
-        raw_rows = build_benchmark_detail_rows(
-            corpus_key,
-            selected_languages,
-            tokenizer_keys,
-            row_limit=int(row_limit),
-        )
+        raw_rows: list[dict] = []
         yield (
-            {"headers": BENCHMARK_COLUMNS, "data": []},
+            {"headers": benchmark_columns, "data": []},
             build_heatmap({}, [], [], metric_key=metric_key),
             build_distribution_chart([], metric_key),
             build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
-            serialize_table(raw_rows, RAW_BENCHMARK_COLUMNS),
+            serialize_table(raw_rows, raw_benchmark_columns),
             build_metric_scatter([], x_key="unique_tokens", y_key="continued_word_rate"),
             build_category_bar([], category_key="script", value_key="token_count"),
             appendix,
             render_markdown(),
         )
         rows: list[dict] = []
-        for row in iter_benchmark_rows(
+        for row, current_raw_rows in _iter_benchmark_payload(
             corpus_key,
             selected_languages,
             tokenizer_keys,
@@ -590,6 +664,7 @@ def _handle_benchmark_tab(
             include_proxy=include_proxy,
         ):
             rows.append(row)
+            raw_rows = current_raw_rows
             if live_updates:
                 yield _build_benchmark_outputs(
                     rows,
@@ -607,11 +682,11 @@ def _handle_benchmark_tab(
             )
     except Exception as exc:
         yield (
-            {"headers": BENCHMARK_COLUMNS, "data": []},
+            {"headers": benchmark_columns, "data": []},
             build_heatmap({}, [], [], metric_key=metric_key),
             build_distribution_chart([], metric_key),
             "### Preview\n- Runtime error before preview generation.",
-            serialize_table([], RAW_BENCHMARK_COLUMNS),
+            serialize_table([], raw_benchmark_columns),
             build_metric_scatter([], x_key="unique_tokens", y_key="continued_word_rate"),
             build_category_bar([], category_key="script", value_key="token_count"),
             f"{benchmark_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
@@ -641,7 +716,6 @@ def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: b
 
 
 def _handle_scenario_tab(
-    lane_or_corpus: str,
     languages: list[str],
     tokenizer_keys: list[str],
     model_ids: list[str],
@@ -656,7 +730,7 @@ def _handle_scenario_tab(
     include_proxy: bool,
     live_updates: bool,
 ):
-    corpus_key = _resolve_corpus_key(lane_or_corpus)
+    corpus_key = "strict_parallel"
     if not model_ids:
         empty = serialize_table([], SCENARIO_COLUMNS)
         yield (
@@ -680,7 +754,7 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
-            scenario_appendix(corpus_key),
+            scenario_appendix(),
             render_markdown(),
         )
         rows = scenario_analysis(
@@ -707,7 +781,7 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
-            f"{scenario_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
+            f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
         return
@@ -738,8 +812,8 @@ def build_token_tax_ui() -> gr.Blocks:
                         label="Benchmark Lane",
                     )
                     benchmark_metric = gr.Dropdown(
-                        choices=["rtc", "token_count", "bytes_per_token", "token_fertility", "byte_premium", "unique_tokens", "continued_word_rate"],
-                        value="rtc",
+                        choices=_benchmark_metric_choices_for("strict_parallel"),
+                        value=_default_benchmark_metric_for("strict_parallel"),
                         label="Metric",
                     )
                     benchmark_limit = gr.Slider(5, 50, value=12, step=1, label="Rows per language")
@@ -765,6 +839,11 @@ def build_token_tax_ui() -> gr.Blocks:
                     fn=apply_language_preset,
                     inputs=[benchmark_preset],
                     outputs=[benchmark_languages],
+                )
+                benchmark_lane.change(
+                    fn=configure_benchmark_metric,
+                    inputs=[benchmark_lane],
+                    outputs=[benchmark_metric],
                 )
                 with gr.Row():
                     preview_language = gr.Dropdown(
@@ -802,7 +881,7 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Observed Composition"):
                         benchmark_composition_plot = gr.Plot(label="Observed Composition")
                 benchmark_appendix_md = gr.Markdown(label="Benchmark Appendix")
-                with gr.Accordion("Diagnostics", open=False):
+                with gr.Accordion("Diagnostics", open=True):
                     benchmark_diagnostics_md = gr.Markdown()
 
                 benchmark_run.click(
@@ -845,7 +924,7 @@ def build_token_tax_ui() -> gr.Blocks:
                 )
                 catalog_table = gr.DataFrame(label="Catalog", interactive=False)
                 catalog_appendix_md = gr.Markdown(label="Catalog Appendix")
-                with gr.Accordion("Diagnostics", open=False):
+                with gr.Accordion("Diagnostics", open=True):
                     catalog_diagnostics_md = gr.Markdown()
                 catalog_run.click(
                     fn=_handle_catalog_tab,
@@ -855,11 +934,6 @@ def build_token_tax_ui() -> gr.Blocks:
 
             with gr.TabItem("Scenario Lab"):
                 with gr.Row():
-                    scenario_lane = gr.Radio(
-                        choices=list(LANE_TO_CORPUS_KEY.keys()),
-                        value="Strict Evidence",
-                        label="Benchmark Lane",
-                    )
                     scenario_languages = gr.Dropdown(
                         choices=DEFAULT_BENCHMARK_LANGUAGES,
                         value=["en", "ar", "hi", "ja"],
@@ -906,8 +980,9 @@ def build_token_tax_ui() -> gr.Blocks:
                     scenario_live_updates = gr.Checkbox(label="Live diagnostics", value=True)
                     scenario_run = gr.Button("Run Scenario Lab", variant="primary")
                 gr.Markdown(
-                    "Why these controls matter: Scenario Lab reuses the chosen benchmark lane as the multilingual baseline, "
-                    "then attaches model pricing, context windows, and optional benchmark-only speed metadata."
+                    "Why these controls matter: Scenario Lab is strict-only for deploy-grade cost and context estimates. "
+                    "Streaming Exploration stays in Benchmark as exploratory evidence, while Scenario Lab attaches pricing, context windows, "
+                    "and optional benchmark-only speed metadata to the strict multilingual baseline."
                 )
 
                 with gr.Tabs():
@@ -923,13 +998,12 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_custom_plot = gr.Plot(label="Custom Slice")
                 scenario_table = gr.DataFrame(label="Scenario Rows", interactive=False)
                 scenario_appendix_md = gr.Markdown(label="Scenario Appendix")
-                with gr.Accordion("Diagnostics", open=False):
+                with gr.Accordion("Diagnostics", open=True):
                     scenario_diagnostics_md = gr.Markdown()
 
                 scenario_run.click(
                     fn=_handle_scenario_tab,
                     inputs=[
-                        scenario_lane,
                         scenario_languages,
                         scenario_tokenizers,
                         scenario_models,

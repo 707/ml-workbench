@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 
 import requests
 
@@ -82,7 +84,7 @@ CORPUS_REGISTRY: dict[str, CorpusDefinition] = {
         dataset_id="HuggingFaceFW/fineweb-2",
         split="train",
         description="Live natural-language rows for exploratory tokenizer analysis on real web text.",
-        supported_metrics=("rtc", "token_count", "bytes_per_token", "token_fertility", "unique_tokens", "continued_word_rate"),
+        supported_metrics=("english_baseline_ratio", "token_count", "bytes_per_token", "token_fertility", "unique_tokens", "continued_word_rate"),
         provenance="research_forward",
         status="active",
         note="Live remote fetches are exploratory only and are not the default evidence lane.",
@@ -186,13 +188,18 @@ def load_strict_parallel_snapshot(snapshot_path: str | None = None) -> dict[str,
     return result
 
 
-_fetch_cache: dict[tuple, list[dict]] = {}
+_FETCH_CACHE_MAX_ENTRIES = 32
+_fetch_cache: OrderedDict[tuple, list[dict]] = OrderedDict()
+_fetch_cache_lock = Lock()
 
 
 def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
     cache_key = (dataset_id, config, split)
-    if cache_key in _fetch_cache:
-        return _fetch_cache[cache_key]
+    with _fetch_cache_lock:
+        cached_rows = _fetch_cache.get(cache_key)
+        if cached_rows is not None:
+            _fetch_cache.move_to_end(cache_key)
+            return cached_rows
 
     log_event("benchmark.fetch.start", "Fetching corpus rows", dataset_id=dataset_id, config=config, split=split)
     response = requests.get(
@@ -217,7 +224,11 @@ def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
         row_count=len(parsed_rows),
     )
     if parsed_rows:
-        _fetch_cache[cache_key] = parsed_rows
+        with _fetch_cache_lock:
+            _fetch_cache[cache_key] = parsed_rows
+            _fetch_cache.move_to_end(cache_key)
+            while len(_fetch_cache) > _FETCH_CACHE_MAX_ENTRIES:
+                _fetch_cache.popitem(last=False)
     return parsed_rows
 
 

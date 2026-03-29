@@ -43,6 +43,9 @@ class TestBenchmarkCorpus:
         from token_tax import benchmark_corpus
 
         samples = {
+            "en": [
+                CorpusSample("en", "hello there", None, "streaming_exploration", "https://example.com", "research_forward"),
+            ],
             "fr": [
                 CorpusSample("fr", "bonjour", "hello", "streaming_exploration", "https://example.com", "research_forward"),
             ],
@@ -53,12 +56,15 @@ class TestBenchmarkCorpus:
                 result = benchmark_corpus("streaming_exploration", ["fr"], ["gpt2"])
 
         assert result["rows"][0]["lane"] == "Streaming Exploration"
+        assert result["rows"][0]["english_baseline_ratio"] is not None
+        assert result["rows"][0]["rtc"] is None
 
     def test_benchmark_appendix_mentions_streaming_lane(self):
         from token_tax import benchmark_appendix
 
         appendix = benchmark_appendix("streaming_exploration")
         assert "exploratory only" in appendix.lower()
+        assert "english_baseline_ratio" in appendix
 
 
 class TestScenarioAnalysis:
@@ -70,6 +76,7 @@ class TestScenarioAnalysis:
                 "language": "ar",
                 "tokenizer_key": "gpt2",
                 "rtc": 2.0,
+                "lane": "Strict Evidence",
                 "provenance": "strict_verified",
                 "mapping_quality": "exact",
             },
@@ -133,6 +140,7 @@ class TestScenarioAnalysis:
                 "language": "ar",
                 "tokenizer_key": "llama-3",
                 "rtc": 2.0,
+                "lane": "Strict Evidence",
                 "provenance": "strict_verified",
                 "mapping_quality": "exact",
             },
@@ -181,6 +189,7 @@ class TestScenarioAnalysis:
                 "language": "ja",
                 "tokenizer_key": "llama-3",
                 "rtc": 1.7,
+                "lane": "Strict Evidence",
                 "provenance": "strict_verified",
                 "mapping_quality": "exact",
             },
@@ -233,50 +242,21 @@ class TestScenarioAnalysis:
 
         assert len(rows) == 2
 
-    def test_scenario_analysis_carries_benchmark_lane(self):
+    def test_scenario_analysis_rejects_streaming_exploration_as_cost_basis(self):
         from token_tax import scenario_analysis
 
-        benchmark_rows = [
-            {
-                "language": "fr",
-                "tokenizer_key": "gpt2",
-                "rtc": 1.2,
-                "provenance": "research_forward",
-                "mapping_quality": "exact",
-                "lane": "Streaming Exploration",
-            },
-        ]
-        catalog_rows = [
-            {
-                "model_id": "mistralai/mistral-7b-instruct:free",
-                "label": "Mistral 7B Instruct (Free)",
-                "tokenizer_key": "gpt2",
-                "mapping_quality": "exact",
-                "provenance": "strict_verified",
-                "input_per_million": 0.04,
-                "output_per_million": 0.04,
-                "context_window": 32768,
-                "latency_ms": None,
-                "throughput_tps": None,
-                "source": "test",
-            },
-        ]
-
-        with patch("token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["fr"]}):
-            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
-                rows = scenario_analysis(
-                    corpus_key="streaming_exploration",
-                    languages=["fr"],
-                    tokenizer_keys=["gpt2"],
-                    model_ids=["mistralai/mistral-7b-instruct:free"],
-                    row_limit=25,
-                    monthly_requests=1000,
-                    avg_input_tokens=100,
-                    avg_output_tokens=50,
-                    reasoning_share=0.1,
-                )
-
-        assert rows[0]["lane"] == "Streaming Exploration"
+        with pytest.raises(ValueError, match="Strict Evidence"):
+            scenario_analysis(
+                corpus_key="streaming_exploration",
+                languages=["fr"],
+                tokenizer_keys=["gpt2"],
+                model_ids=["mistralai/mistral-7b-instruct:free"],
+                row_limit=25,
+                monthly_requests=1000,
+                avg_input_tokens=100,
+                avg_output_tokens=50,
+                reasoning_share=0.1,
+            )
 
 
 class TestScenarioCharts:

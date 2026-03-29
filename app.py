@@ -1,8 +1,5 @@
 """
-ML Workbench — Gradio app for HuggingFace Spaces.
-
-Sends a question to DeepSeek-R1 and Llama-3.1-8B simultaneously via OpenRouter,
-parses R1's <think> block, and displays a side-by-side comparison.
+ML Workbench — Gradio app for tokenizer analysis and free-model comparisons.
 """
 
 import html as _html
@@ -19,8 +16,8 @@ from token_tax_ui import build_token_tax_ui
 # Config
 # ---------------------------------------------------------------------------
 
-# Set OPENROUTER_API_KEY as a HF Space secret. When set, users run for free
-# without entering their own key.
+# Set OPENROUTER_API_KEY as a server-side secret to run the comparison tab
+# without exposing the key to the browser.
 SERVER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 # ---------------------------------------------------------------------------
@@ -28,14 +25,13 @@ SERVER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 # ---------------------------------------------------------------------------
 
 FREE_MODELS: list[tuple[str, str]] = [
-    ("Step 3.5 Flash (Reasoning)", "stepfun/step-3.5-flash"),
-    ("Llama-3.1-8B", "meta-llama/llama-3.1-8b-instruct"),
-    ("Gemma-3-27B", "google/gemma-3-27b-it:free"),
-    ("Mistral-7B", "mistralai/mistral-7b-instruct:free"),
+    ("Qwen 2.5 7B Instruct (Free)", "qwen/qwen-2.5-7b-instruct:free"),
+    ("Llama 3.2 3B Instruct (Free)", "meta-llama/llama-3.2-3b-instruct:free"),
+    ("Mistral 7B Instruct (Free)", "mistralai/mistral-7b-instruct:free"),
 ]
 
-MODEL_R1 = "stepfun/step-3.5-flash"
-MODEL_LLAMA = "meta-llama/llama-3.1-8b-instruct"
+MODEL_R1 = "qwen/qwen-2.5-7b-instruct:free"
+MODEL_LLAMA = "meta-llama/llama-3.2-3b-instruct:free"
 
 PRESET_QUESTIONS = [
     'How many r\'s are in "strawberry"?',
@@ -225,8 +221,8 @@ def _build_card(
     r1_stats_md: str,
     llama_answer: str,
     llama_stats_md: str,
-    model_a_label: str = "Step 3.5 Flash (Reasoning)",
-    model_b_label: str = "Llama-3.1-8B",
+    model_a_label: str = "Qwen 2.5 7B Instruct (Free)",
+    model_b_label: str = "Llama 3.2 3B Instruct (Free)",
 ) -> str:
     """Render one comparison result as an HTML card."""
     q = _html.escape(question)
@@ -264,11 +260,18 @@ def _build_comparison_blocks() -> gr.Blocks:
     model_ids = {label: m_id for label, m_id in FREE_MODELS}
 
     with gr.Blocks(title="Reasoning Model Comparison") as demo:
-        gr.Markdown("# Reasoning Model Comparison\nCompare any two free models via OpenRouter")
+        gr.Markdown(
+            "# Reasoning Model Comparison\n"
+            "Compare any two explicit OpenRouter free-tier models via OpenRouter."
+        )
 
         # Never serialize the server-side key into frontend component state.
         if SERVER_KEY:
             api_key = gr.State("")
+            gr.Markdown(
+                "This space is using a **hosted server-side OpenRouter key**. "
+                "Your requests run against the host's quota; the key itself is never sent to the browser."
+            )
         else:
             with gr.Accordion("OpenRouter API Key", open=False, visible=True):
                 api_key = gr.Textbox(

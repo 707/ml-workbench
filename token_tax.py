@@ -409,11 +409,33 @@ def _safe_iqr(values: list[float | int | None]) -> float | None:
     return q3 - q1
 
 
-def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> dict:
+def _unit_count(text: str) -> int:
+    if not text:
+        return 0
+    cjk_thai_count = sum(1 for ch in text if (
+        '\u4e00' <= ch <= '\u9fff' or
+        '\u3040' <= ch <= '\u309f' or
+        '\u30a0' <= ch <= '\u30ff' or
+        '\uac00' <= ch <= '\ud7af' or
+        '\u0e00' <= ch <= '\u0e7f'
+    ))
+    if cjk_thai_count > len(text) * 0.3:
+        return len(text)
+    return len(text.split())
+
+
+def _sample_metrics(
+    text: str,
+    english_text: str | None,
+    tokenizer_key: str,
+    *,
+    english_baseline_token_count: float | None = None,
+) -> dict:
     tok = get_tokenizer(tokenizer_key)
     token_rows = tokenize_text(text, tok)
     token_count = len(token_rows)
-    fertility = fragmentation_ratio(text, tok)["ratio"]
+    unit_count = _unit_count(text)
+    fertility = (token_count / unit_count) if unit_count else 0.0
     text_bytes = len(text.encode("utf-8"))
     bytes_per_token = float(text_bytes) / token_count if token_count else 0.0
     token_texts = [token["token"] for token in token_rows]
@@ -426,6 +448,7 @@ def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> 
         "unique_tokens": unique_tokens,
         "continued_word_rate": (continued_count / token_count) if token_count else 0.0,
         "token_texts": token_texts,
+        "english_baseline_ratio": None,
     }
     if english_text:
         english_token_count = len(tokenize_text(english_text, tok))
@@ -437,12 +460,14 @@ def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> 
         result["rtc"] = None
         result["byte_premium"] = None
         result["risk_level"] = "low"
+    if english_baseline_token_count:
+        result["english_baseline_ratio"] = relative_tokenization_cost(token_count, english_baseline_token_count)
     return result
 
 
 _TIKTOKEN_KEYS = frozenset({"o200k_base", "cl100k_base"})
-_GPT2_KEYS = frozenset({"gpt2"})
-_SENTENCEPIECE_KEYS = frozenset({"llama-3", "mistral", "qwen-2.5", "gemma-2", "command-r"})
+_GPT2_KEYS = frozenset({"gpt2", "command-r"})
+_SENTENCEPIECE_KEYS = frozenset({"llama-3", "mistral", "qwen-2.5", "gemma-2"})
 _BERT_KEYS = frozenset()  # none of the 8 active families; kept for external callers
 
 _PUNCTUATION = frozenset(".,;:!?()" + "[]{}\"'")
@@ -487,49 +512,7 @@ def _lane_label(corpus_key: str) -> str:
     return "Strict Evidence" if corpus_key == "strict_parallel" else "Streaming Exploration"
 
 
-def build_benchmark_detail_rows(
-    corpus_key: str,
-    languages: list[str] | None,
-    tokenizer_keys: list[str],
-    *,
-    row_limit: int = 25,
-) -> list[dict]:
-    """Return per-sample benchmark details for preview/raw-data subviews."""
-    selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
-    fetch_languages = list(selected_languages)
-    if corpus_key == "streaming_exploration" and "en" not in fetch_languages:
-        fetch_languages.append("en")
-    samples = fetch_corpus_samples(corpus_key, fetch_languages, row_limit=row_limit)
-    lane = _lane_label(corpus_key)
-    rows: list[dict] = []
-
-    for tokenizer in tokenizer_keys:
-        selection = resolve_selection(tokenizer)
-        for language in selected_languages:
-            for sample_index, sample in enumerate(samples.get(language, [])):
-                metrics = _sample_metrics(sample.text, sample.english_text, selection["tokenizer_key"])
-                rows.append({
-                    "lane": lane,
-                    "language": language,
-                    "tokenizer_key": selection["tokenizer_key"],
-                    "label": selection["label"],
-                    "sample_index": sample_index,
-                    "text": sample.text,
-                    "english_text": sample.english_text,
-                    "token_count": metrics["token_count"],
-                    "unique_tokens": metrics["unique_tokens"],
-                    "continued_word_rate": round(metrics["continued_word_rate"], 4),
-                    "token_fertility": round(metrics["token_fertility"], 4),
-                    "bytes_per_token": round(metrics["bytes_per_token"], 4),
-                    "rtc": round(metrics["rtc"], 4) if metrics.get("rtc") is not None else None,
-                    "token_preview": " | ".join(metrics["token_texts"][:20]),
-                    "provenance": sample.provenance,
-                    "corpus_key": corpus_key,
-                })
-    return rows
-
-
-def iter_benchmark_rows(
+def _iter_benchmark_payload(
     corpus_key: str,
     languages: list[str] | None,
     tokenizer_keys: list[str],
@@ -538,13 +521,13 @@ def iter_benchmark_rows(
     include_estimates: bool = False,
     include_proxy: bool = False,
 ):
-    """Yield aggregate benchmark rows one tokenizer/language at a time."""
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
     fetch_languages = list(selected_languages)
     if corpus_key == "streaming_exploration" and "en" not in fetch_languages:
         fetch_languages.append("en")
     samples = fetch_corpus_samples(corpus_key, fetch_languages, row_limit=row_limit)
     lane = _lane_label(corpus_key)
+    raw_rows: list[dict] = []
 
     for tokenizer in tokenizer_keys:
         selection = resolve_selection(tokenizer)
@@ -562,15 +545,17 @@ def iter_benchmark_rows(
             language_count=len(selected_languages),
             lane=lane,
         )
+
         english_baseline = None
         if corpus_key == "streaming_exploration":
             english_samples = samples.get("en", [])
             if english_samples:
-                english_counts = [
-                    _sample_metrics(sample.text, None, selection["tokenizer_key"])["token_count"]
+                english_metrics = [
+                    _sample_metrics(sample.text, None, selection["tokenizer_key"])
                     for sample in english_samples
                 ]
-                english_baseline = _safe_median(english_counts)
+                english_baseline = _safe_median([item["token_count"] for item in english_metrics])
+
         for language in selected_languages:
             language_samples = samples.get(language, [])
             if not language_samples:
@@ -583,18 +568,46 @@ def iter_benchmark_rows(
                 )
                 continue
 
-            computed = [
-                _sample_metrics(sample.text, sample.english_text, selection["tokenizer_key"])
-                for sample in language_samples
-            ]
-            rtc = _safe_median([item.get("rtc") for item in computed])
-            if rtc is None and corpus_key == "streaming_exploration" and english_baseline:
-                rtc = _safe_median([
-                    relative_tokenization_cost(item["token_count"], english_baseline)
-                    for item in computed
-                ])
-            rtc_values = [item.get("rtc") for item in computed]
-            rtc_iqr = _safe_iqr(rtc_values)
+            computed: list[dict] = []
+            observed_tokens: set[str] = set()
+            for sample_index, sample in enumerate(language_samples):
+                metrics = _sample_metrics(
+                    sample.text,
+                    sample.english_text if corpus_key == "strict_parallel" else None,
+                    selection["tokenizer_key"],
+                    english_baseline_token_count=english_baseline if corpus_key == "streaming_exploration" else None,
+                )
+                observed_tokens.update(metrics["token_texts"])
+                raw_rows.append({
+                    "lane": lane,
+                    "language": language,
+                    "tokenizer_key": selection["tokenizer_key"],
+                    "label": selection["label"],
+                    "sample_index": sample_index,
+                    "text": sample.text,
+                    "english_text": sample.english_text,
+                    "token_count": metrics["token_count"],
+                    "unique_tokens": metrics["unique_tokens"],
+                    "continued_word_rate": round(metrics["continued_word_rate"], 4),
+                    "token_fertility": round(metrics["token_fertility"], 4),
+                    "bytes_per_token": round(metrics["bytes_per_token"], 4),
+                    "rtc": round(metrics["rtc"], 4) if metrics.get("rtc") is not None else None,
+                    "english_baseline_ratio": round(metrics["english_baseline_ratio"], 4)
+                    if metrics.get("english_baseline_ratio") is not None else None,
+                    "token_preview": " | ".join(metrics["token_texts"][:20]),
+                    "token_texts": metrics["token_texts"],
+                    "provenance": sample.provenance,
+                    "corpus_key": corpus_key,
+                })
+                computed.append(metrics)
+
+            rtc = _safe_median([item.get("rtc") for item in computed]) if corpus_key == "strict_parallel" else None
+            rtc_iqr = _safe_iqr([item.get("rtc") for item in computed]) if corpus_key == "strict_parallel" else None
+            english_baseline_ratio = (
+                _safe_median([item.get("english_baseline_ratio") for item in computed])
+                if corpus_key == "streaming_exploration"
+                else None
+            )
             aggregated = {
                 "language": language,
                 "label": selection["label"],
@@ -602,13 +615,15 @@ def iter_benchmark_rows(
                 "token_count": round(_safe_median([item["token_count"] for item in computed]) or 0, 2),
                 "token_fertility": round(_safe_median([item["token_fertility"] for item in computed]) or 0.0, 4),
                 "bytes_per_token": round(_safe_median([item["bytes_per_token"] for item in computed]) or 0.0, 4),
-                "unique_tokens": int(sum(item["unique_tokens"] for item in computed)),
+                "unique_tokens": len(observed_tokens),
                 "continued_word_rate": round(_safe_median([item["continued_word_rate"] for item in computed]) or 0.0, 4),
                 "rtc": round(rtc, 4) if rtc is not None else None,
                 "rtc_iqr": round(rtc_iqr, 4) if rtc_iqr is not None else None,
+                "english_baseline_ratio": round(english_baseline_ratio, 4)
+                if english_baseline_ratio is not None else None,
                 "byte_premium": round(_safe_median([item.get("byte_premium") for item in computed]) or 0.0, 4)
                 if rtc is not None else None,
-                "risk_level": quality_risk_level(rtc) if rtc is not None else "low",
+                "risk_level": quality_risk_level(rtc) if rtc is not None else "exploratory",
                 "sample_count": len(computed),
                 "provenance": selection["provenance"],
                 "mapping_quality": selection["mapping_quality"],
@@ -623,7 +638,47 @@ def iter_benchmark_rows(
                 sample_count=len(computed),
                 lane=lane,
             )
-            yield aggregated
+            yield aggregated, raw_rows
+
+
+def build_benchmark_detail_rows(
+    corpus_key: str,
+    languages: list[str] | None,
+    tokenizer_keys: list[str],
+    *,
+    row_limit: int = 25,
+) -> list[dict]:
+    """Return per-sample benchmark details for preview/raw-data subviews."""
+    rows: list[dict] = []
+    for _, current_raw_rows in _iter_benchmark_payload(
+        corpus_key,
+        languages,
+        tokenizer_keys,
+        row_limit=row_limit,
+    ):
+        rows = current_raw_rows
+    return rows
+
+
+def iter_benchmark_rows(
+    corpus_key: str,
+    languages: list[str] | None,
+    tokenizer_keys: list[str],
+    *,
+    row_limit: int = 25,
+    include_estimates: bool = False,
+    include_proxy: bool = False,
+):
+    """Yield aggregate benchmark rows one tokenizer/language at a time."""
+    for row, _ in _iter_benchmark_payload(
+        corpus_key,
+        languages,
+        tokenizer_keys,
+        row_limit=row_limit,
+        include_estimates=include_estimates,
+        include_proxy=include_proxy,
+    ):
+        yield row
 
 
 def benchmark_corpus(
@@ -645,14 +700,18 @@ def benchmark_corpus(
         row_limit=row_limit,
     )
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
-    rows = list(iter_benchmark_rows(
+    rows: list[dict] = []
+    raw_rows: list[dict] = []
+    for row, current_raw_rows in _iter_benchmark_payload(
         corpus_key,
         selected_languages,
         tokenizer_keys,
         row_limit=row_limit,
         include_estimates=include_estimates,
         include_proxy=include_proxy,
-    ))
+    ):
+        rows.append(row)
+        raw_rows = current_raw_rows
     matrix: dict[tuple[str, str], dict] = {
         (row["language"], row["tokenizer_key"]): row
         for row in rows
@@ -679,6 +738,7 @@ def benchmark_corpus(
     )
     return {
         "rows": rows,
+        "raw_rows": raw_rows,
         "matrix": matrix,
         "languages": selected_languages,
         "tokenizers": list(dict.fromkeys(row["tokenizer_key"] for row in rows)),
@@ -700,6 +760,10 @@ def scenario_analysis(
     include_proxy: bool = False,
 ) -> list[dict]:
     """Build scenario rows joining benchmark metrics and deployable model metadata."""
+    if corpus_key != "strict_parallel":
+        raise ValueError(
+            "Scenario Lab uses Strict Evidence only for deploy-grade cost/context estimates."
+        )
     log_event(
         "scenario.run.start",
         "Running scenario analysis",
@@ -839,13 +903,15 @@ def benchmark_appendix(corpus_key: str) -> str:
         f"- Corpus: **{corpus['label']}**",
         f"- Source: {corpus['source_url']}",
         f"- Provenance: {provenance_badge(corpus['provenance'])} {provenance_description(corpus['provenance'])}",
-        "- Formula: `RTC = source_tokens / english_tokens` on aligned samples only",
         "- Formula: `bytes_per_token = utf8_bytes / token_count`",
         "- Formula: `token_fertility = token_count / language_unit_count`",
     ]
     if corpus_key == "strict_parallel":
+        lines.append("- Formula: `rtc = source_tokens / english_tokens` on aligned parallel samples only")
         lines.append("- Caveat: strict benchmark claims use only the verified parallel corpus in v1")
     else:
+        lines.append("- Formula: `english_baseline_ratio = source_tokens / median(english_token_count)` using live English samples from the same tokenizer family")
+        lines.append("- Caveat: `english_baseline_ratio` is not aligned bilingual RTC and is benchmark-only exploratory context")
         lines.append("- Caveat: streaming exploration is live remote data and exploratory only; do not treat it as the default headline evidence lane")
     if corpus["note"]:
         lines.append(f"- Note: {corpus['note']}")
@@ -870,19 +936,18 @@ def catalog_appendix(include_proxy: bool) -> str:
     return "\n".join(lines)
 
 
-def scenario_appendix(corpus_key: str = "strict_parallel") -> str:
+def scenario_appendix() -> str:
     """Build markdown appendix for the Scenario Lab tab."""
     lines = [
         "### Scenario Appendix",
-        f"- Benchmark lane: **{_lane_label(corpus_key)}**",
+        "- Benchmark lane: **Strict Evidence**",
         "- Input cost formula: `monthly_requests * (avg_input_tokens * RTC) * input_price / 1e6`",
         "- Output cost formula: `monthly_requests * (avg_output_tokens * (1 + reasoning_share)) * output_price / 1e6`",
         "- Context loss formula: `1 - (1 / RTC)`",
+        "- Streaming Exploration remains available in Benchmark only and is not used for deploy-grade cost/context estimates.",
         "- Speed metadata is benchmark-only in v1 and comes from the local Artificial Analysis snapshot when a model match exists.",
         "- Derived scenario rows are labeled as estimates even when the benchmark and catalog inputs are verified",
     ]
-    if corpus_key == "streaming_exploration":
-        lines.append("- Caveat: streaming exploration scenarios are exploratory and less reproducible than the strict evidence lane.")
     return "\n".join(lines)
 
 
@@ -912,6 +977,7 @@ def audit_markdown() -> str:
         "",
         "### Data Dictionary",
         "- `rtc`: Relative Tokenization Cost against aligned English text",
+        "- `english_baseline_ratio`: Exploratory normalization against live English streaming samples for the same tokenizer family",
         "- `byte_premium`: UTF-8 byte ratio against aligned English text",
         "- `token_fertility`: tokens per language unit in the sampled text",
         "- `context_loss_pct`: effective context loss derived from RTC",
