@@ -6,6 +6,7 @@ different tokenizers handle input text.
 """
 
 import html
+import threading
 import gradio as gr
 from langdetect import detect, LangDetectException
 
@@ -72,6 +73,7 @@ class TiktokenAdapter:
 
 # Module-level cache: name -> tokenizer object
 _tokenizer_cache: dict[str, object] = {}
+_tokenizer_lock = threading.Lock()
 
 
 def get_tokenizer(name: str):
@@ -89,22 +91,23 @@ def get_tokenizer(name: str):
     if name not in SUPPORTED_TOKENIZERS:
         raise ValueError(f"unknown tokenizer: '{name}'. Choose from {list(SUPPORTED_TOKENIZERS)}")
 
-    if name not in _tokenizer_cache:
-        repo_id = SUPPORTED_TOKENIZERS[name]
-        if repo_id.startswith("tiktoken:"):
-            encoding_name = repo_id.split(":", 1)[1]
-            _tokenizer_cache[name] = TiktokenAdapter(encoding_name)
-        else:
-            try:
-                _tokenizer_cache[name] = AutoTokenizer.from_pretrained(repo_id)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Failed to load tokenizer '{name}' from '{repo_id}'. "
-                    f"Check your network connection or set TRANSFORMERS_OFFLINE=1 "
-                    f"if you have a local cache. Original error: {exc}"
-                ) from exc
+    with _tokenizer_lock:
+        if name not in _tokenizer_cache:
+            repo_id = SUPPORTED_TOKENIZERS[name]
+            if repo_id.startswith("tiktoken:"):
+                encoding_name = repo_id.split(":", 1)[1]
+                _tokenizer_cache[name] = TiktokenAdapter(encoding_name)
+            else:
+                try:
+                    _tokenizer_cache[name] = AutoTokenizer.from_pretrained(repo_id)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Failed to load tokenizer '{name}' from '{repo_id}'. "
+                        f"Check your network connection or set TRANSFORMERS_OFFLINE=1 "
+                        f"if you have a local cache. Original error: {exc}"
+                    ) from exc
 
-    return _tokenizer_cache[name]
+        return _tokenizer_cache[name]
 
 
 # ---------------------------------------------------------------------------

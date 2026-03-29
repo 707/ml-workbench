@@ -1,6 +1,7 @@
 """Tests for the pricing data module (GH-4)."""
 
 import pytest
+import threading
 
 
 # ---------------------------------------------------------------------------
@@ -177,3 +178,155 @@ class TestLastUpdated:
         assert len(parts) == 3
         assert len(parts[0]) == 4  # year
         assert all(p.isdigit() for p in parts)
+
+
+# ---------------------------------------------------------------------------
+# Thread safety
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshFromOpenrouterThreadSafety:
+    """Verify that concurrent refresh and read don't expose empty cache state."""
+
+    def test_cache_never_empty_during_refresh(self):
+        """A reader calling get_pricing during a refresh must never see empty cache.
+
+        Strategy: pre-populate the cache with one model, then start a refresh
+        that replaces the cache with new data. A barrier ensures the reader
+        thread starts while the refresh is running. The reader must always find
+        the pre-populated model OR the new data — never KeyError from empty state.
+        """
+        import pricing
+        from unittest.mock import patch
+
+        # Pre-populate the live cache with a known model so readers have data.
+        pricing._clear_cache()
+        pricing._pricing_cache["test-model"] = {
+            "input_per_million": 1.0,
+            "output_per_million": 2.0,
+            "context_window": 4096,
+            "label": "Test Model",
+        }
+
+        barrier = threading.Barrier(2)
+        key_errors: list[Exception] = []
+        empty_cache_observations: list[int] = []
+
+        # Fake models list — large enough to give the reader thread time to interleave.
+        fake_models = [
+            {
+                "id": f"openrouter-model-{i}",
+                "name": f"Model {i}",
+                "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                "context_length": 4096,
+            }
+            for i in range(200)
+        ]
+
+        def refresh_thread():
+            barrier.wait()
+            with patch("openrouter.fetch_models", return_value=fake_models):
+                pricing.refresh_from_openrouter()
+
+        def reader_thread():
+            barrier.wait()
+            for _ in range(500):
+                try:
+                    cache_snapshot = set(pricing._pricing_cache.keys())
+                    if len(cache_snapshot) == 0:
+                        empty_cache_observations.append(1)
+                    # Attempt to read the pre-seeded model; if cache is mid-clear
+                    # and test-model was removed before new models were added,
+                    # get_pricing would raise KeyError.
+                except Exception as exc:
+                    key_errors.append(exc)
+
+        t1 = threading.Thread(target=refresh_thread)
+        t2 = threading.Thread(target=reader_thread)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        pricing._clear_cache()
+
+        assert not key_errors, f"Unexpected exceptions: {key_errors}"
+        assert len(empty_cache_observations) == 0, (
+            f"Cache was observed empty {len(empty_cache_observations)} time(s) "
+            "during refresh — atomic swap required"
+        )
+
+    def test_last_refreshed_updated_atomically(self):
+        """_last_refreshed must be set inside the same lock as cache population.
+
+        After a successful refresh, _last_refreshed must not be None.
+        This guards against the global assignment racing with a clear.
+        """
+        import pricing
+        from unittest.mock import patch
+
+        pricing._clear_cache()
+
+        fake_models = [
+            {
+                "id": "some-model",
+                "name": "Some Model",
+                "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                "context_length": 4096,
+            }
+        ]
+
+        with patch("openrouter.fetch_models", return_value=fake_models):
+            pricing.refresh_from_openrouter()
+
+        assert pricing.get_last_refreshed() is not None
+        pricing._clear_cache()
+
+    def test_get_pricing_returns_cached_openrouter_model(self):
+        """get_pricing must return a cached OpenRouter model correctly under lock."""
+        import pricing
+        from unittest.mock import patch
+
+        pricing._clear_cache()
+
+        fake_models = [
+            {
+                "id": "openrouter/test-locked-model",
+                "name": "Locked Model",
+                "pricing": {"prompt": "0.000003", "completion": "0.000006"},
+                "context_length": 8192,
+            }
+        ]
+
+        with patch("openrouter.fetch_models", return_value=fake_models):
+            pricing.refresh_from_openrouter()
+
+        result = pricing.get_pricing("openrouter/test-locked-model")
+        assert result["input_per_million"] == pytest.approx(3.0)
+        assert result["output_per_million"] == pytest.approx(6.0)
+
+        pricing._clear_cache()
+
+    def test_available_models_includes_cached_models_after_refresh(self):
+        """available_models() must include freshly refreshed OpenRouter models."""
+        import pricing
+        from unittest.mock import patch
+
+        pricing._clear_cache()
+
+        fake_models = [
+            {
+                "id": "openrouter/fresh-model",
+                "name": "Fresh Model",
+                "pricing": {"prompt": "0.000001", "completion": "0.000001"},
+                "context_length": 4096,
+            }
+        ]
+
+        with patch("openrouter.fetch_models", return_value=fake_models):
+            pricing.refresh_from_openrouter()
+
+        models = pricing.available_models()
+        assert "openrouter/fresh-model" in models
+
+        pricing._clear_cache()

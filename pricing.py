@@ -8,6 +8,7 @@ Live pricing from OpenRouter is cached in _pricing_cache and merged with
 static MODEL_PRICING.  Static entries (tokenizer keys) take precedence.
 """
 
+import threading
 from datetime import datetime, timezone
 
 from diagnostics import log_event
@@ -20,6 +21,7 @@ LAST_UPDATED = "2026-03-25"
 _pricing_cache: dict[str, dict] = {}
 _last_refreshed: datetime | None = None
 _last_refresh_error: str = ""
+_pricing_lock = threading.Lock()
 
 MODEL_PRICING: dict[str, dict] = {
     "o200k_base": {
@@ -90,17 +92,19 @@ def get_pricing(model_name: str) -> dict:
     """
     if model_name in MODEL_PRICING:
         return MODEL_PRICING[model_name]
-    if model_name in _pricing_cache:
-        return _pricing_cache[model_name]
-    raise KeyError(
-        f"unknown model: '{model_name}'. "
-        f"Choose from {sorted(set(MODEL_PRICING) | set(_pricing_cache))}"
-    )
+    with _pricing_lock:
+        if model_name in _pricing_cache:
+            return _pricing_cache[model_name]
+        raise KeyError(
+            f"unknown model: '{model_name}'. "
+            f"Choose from {sorted(set(MODEL_PRICING) | set(_pricing_cache))}"
+        )
 
 
 def available_models() -> list[str]:
     """Return a sorted list of model names with pricing data."""
-    return sorted(set(MODEL_PRICING.keys()) | set(_pricing_cache.keys()))
+    with _pricing_lock:
+        return sorted(set(MODEL_PRICING.keys()) | set(_pricing_cache.keys()))
 
 
 # ---------------------------------------------------------------------------
@@ -120,20 +124,23 @@ def refresh_from_openrouter() -> None:
         from openrouter import fetch_models
 
         models = fetch_models()
-        _pricing_cache.clear()
+        new_cache: dict[str, dict] = {}
         for m in models:
             model_id = m.get("id", "")
             pricing = m.get("pricing", {})
             prompt_per_token = float(pricing.get("prompt", 0))
             completion_per_token = float(pricing.get("completion", 0))
-            _pricing_cache[model_id] = {
+            new_cache[model_id] = {
                 "input_per_million": prompt_per_token * 1_000_000,
                 "output_per_million": completion_per_token * 1_000_000,
                 "context_window": m.get("context_length", 0),
                 "label": m.get("name", model_id),
             }
-        _last_refreshed = datetime.now(timezone.utc)
-        _last_refresh_error = ""
+        with _pricing_lock:
+            _pricing_cache.clear()
+            _pricing_cache.update(new_cache)
+            _last_refreshed = datetime.now(timezone.utc)
+            _last_refresh_error = ""
         log_event(
             "catalog.refresh.success",
             "OpenRouter pricing refresh succeeded",
@@ -141,7 +148,8 @@ def refresh_from_openrouter() -> None:
             cache_size=len(_pricing_cache),
         )
     except Exception as exc:
-        _last_refresh_error = str(exc)
+        with _pricing_lock:
+            _last_refresh_error = str(exc)
         log_event(
             "catalog.refresh.error",
             "OpenRouter pricing refresh failed",
@@ -152,27 +160,31 @@ def refresh_from_openrouter() -> None:
 
 def get_last_refreshed() -> datetime | None:
     """Return the timestamp of the last successful OpenRouter refresh."""
-    return _last_refreshed
+    with _pricing_lock:
+        return _last_refreshed
 
 
 def get_last_refresh_error() -> str:
     """Return the last refresh error, if any."""
-    return _last_refresh_error
+    with _pricing_lock:
+        return _last_refresh_error
 
 
 def pricing_status() -> dict:
     """Return freshness and error metadata for pricing/cached model data."""
-    return {
-        "last_updated": LAST_UPDATED,
-        "last_refreshed": _last_refreshed.isoformat() if _last_refreshed else None,
-        "last_refresh_error": _last_refresh_error or None,
-        "cache_size": len(_pricing_cache),
-    }
+    with _pricing_lock:
+        return {
+            "last_updated": LAST_UPDATED,
+            "last_refreshed": _last_refreshed.isoformat() if _last_refreshed else None,
+            "last_refresh_error": _last_refresh_error or None,
+            "cache_size": len(_pricing_cache),
+        }
 
 
 def _clear_cache() -> None:
     """Reset the live pricing cache (for testing)."""
     global _last_refreshed, _last_refresh_error
-    _pricing_cache.clear()
-    _last_refreshed = None
-    _last_refresh_error = ""
+    with _pricing_lock:
+        _pricing_cache.clear()
+        _last_refreshed = None
+        _last_refresh_error = ""

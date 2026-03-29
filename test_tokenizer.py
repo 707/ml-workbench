@@ -1421,6 +1421,7 @@ class TestGetTokenizerThreadSafety:
         """
         import importlib
         import tokenizer as tok_module
+        import time
 
         importlib.reload(tok_module)
 
@@ -1429,23 +1430,23 @@ class TestGetTokenizerThreadSafety:
         barrier = threading.Barrier(2)
 
         def slow_from_pretrained(repo_id):
-            # Simulate a slow load so threads genuinely race.
-            import time
+            # Simulate a slow load so threads genuinely race without the lock.
             time.sleep(0.05)
             load_count.append(1)
             return mock_tok
 
-        def thread_fn():
-            barrier.wait()
-            with patch("tokenizer.AutoTokenizer.from_pretrained", side_effect=slow_from_pretrained):
+        # Patch at module level before threads start so both threads see the same mock.
+        with patch("tokenizer.AutoTokenizer.from_pretrained", side_effect=slow_from_pretrained):
+            def thread_fn():
+                barrier.wait()
                 tok_module.get_tokenizer("gpt2")
 
-        t1 = threading.Thread(target=thread_fn)
-        t2 = threading.Thread(target=thread_fn)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+            t1 = threading.Thread(target=thread_fn)
+            t2 = threading.Thread(target=thread_fn)
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
 
         # Both threads should return the same cached object.
         result = tok_module._tokenizer_cache.get("gpt2")
@@ -1466,18 +1467,18 @@ class TestGetTokenizerThreadSafety:
         barrier = threading.Barrier(2)
         results: list = []
 
-        def thread_fn():
-            barrier.wait()
-            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
+        with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
+            def thread_fn():
+                barrier.wait()
                 t = tok_module.get_tokenizer("gpt2")
-            results.append(t)
+                results.append(t)
 
-        t1 = threading.Thread(target=thread_fn)
-        t2 = threading.Thread(target=thread_fn)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+            t1 = threading.Thread(target=thread_fn)
+            t2 = threading.Thread(target=thread_fn)
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
 
         assert len(results) == 2
         # Both must have received the same tokenizer object.
