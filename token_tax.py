@@ -407,7 +407,7 @@ def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> 
     bytes_per_token = float(text_bytes) / token_count if token_count else 0.0
     token_texts = [token["token"] for token in token_rows]
     unique_tokens = len(set(token_texts))
-    continued_count = sum(1 for token_text in token_texts if _is_continued_token(token_text))
+    continued_count = sum(1 for token_text in token_texts if _is_continued_token(token_text, tokenizer_key))
     result = {
         "token_count": token_count,
         "token_fertility": fertility,
@@ -429,17 +429,47 @@ def _sample_metrics(text: str, english_text: str | None, tokenizer_key: str) -> 
     return result
 
 
-def _is_continued_token(token_text: str) -> bool:
+_TIKTOKEN_KEYS = frozenset({"o200k_base", "cl100k_base"})
+_GPT2_KEYS = frozenset({"gpt2"})
+_SENTENCEPIECE_KEYS = frozenset({"llama-3", "mistral", "qwen-2.5", "gemma-2", "command-r"})
+_BERT_KEYS = frozenset()  # none of the 8 active families; kept for external callers
+
+_PUNCTUATION = frozenset(".,;:!?()" + "[]{}\"'")
+
+
+def _is_continued_token(token_text: str, tokenizer_key: str) -> bool:
+    """Return True when token_text is a subword continuation (not a word-start).
+
+    The determination is tokenizer-family-aware:
+    - tiktoken (o200k_base, cl100k_base): leading space marks word-start
+    - GPT-2: Ġ prefix marks word-start
+    - SentencePiece (llama-3, mistral, qwen-2.5, gemma-2): ▁ prefix marks word-start
+    - BERT-style: ## prefix marks continuation
+    - Unknown family: default to False (assume word-start — safer than assuming continuation)
+    """
+    # Universal pre-checks
     stripped = token_text.strip()
     if not stripped:
         return False
-    if stripped.startswith(("##",)):
+    if stripped[0] in _PUNCTUATION:
+        return False
+
+    # Family-specific logic
+    if tokenizer_key in _TIKTOKEN_KEYS:
+        return not token_text.startswith(" ")
+
+    if tokenizer_key in _GPT2_KEYS:
+        return not token_text.startswith("Ġ")
+
+    if tokenizer_key in _SENTENCEPIECE_KEYS:
+        return not token_text.startswith("▁")
+
+    # BERT-style: ## prefix is the continuation marker
+    if token_text.startswith("##"):
         return True
-    if token_text.startswith(("Ġ", "▁", " ")):
-        return False
-    if stripped[0] in {".", ",", ";", ":", "!", "?", "(", ")", "[", "]", "{", "}", "\"", "'"}:
-        return False
-    return True
+
+    # Unknown family — safe default: assume word-start, not continuation
+    return False
 
 
 def _lane_label(corpus_key: str) -> str:

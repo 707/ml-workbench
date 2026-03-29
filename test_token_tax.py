@@ -801,3 +801,123 @@ class TestPortfolioAnalysis:
         assert result["total_monthly_cost"] == pytest.approx(0.0)
         assert result["token_tax_exposure"] == pytest.approx(1.0)
         assert result["languages"] == []
+
+
+# ---------------------------------------------------------------------------
+# _is_continued_token — tokenizer-family-aware heuristic
+# ---------------------------------------------------------------------------
+
+
+class TestIsContinuedToken:
+    """Tests for _is_continued_token(token_text, tokenizer_key)."""
+
+    # ------------------------------------------------------------------
+    # Universal pre-checks (apply before family logic)
+    # ------------------------------------------------------------------
+
+    def test_empty_string_not_continued_for_any_family(self):
+        from token_tax import _is_continued_token
+
+        for key in ("o200k_base", "cl100k_base", "gpt2", "llama-3", "mistral",
+                    "qwen-2.5", "gemma-2", "unknown_family"):
+            assert _is_continued_token("", key) is False, f"Failed for {key}"
+
+    def test_whitespace_only_not_continued(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("   ", "o200k_base") is False
+
+    def test_punctuation_not_continued_regardless_of_family(self):
+        from token_tax import _is_continued_token
+
+        for punct in (".", ",", ";", ":", "!", "?", "(", ")", "[", "]",
+                      "{", "}", '"', "'"):
+            for key in ("o200k_base", "gpt2", "llama-3", "unknown_family"):
+                assert _is_continued_token(punct, key) is False, (
+                    f"Punctuation '{punct}' should not be continued for {key}"
+                )
+
+    # ------------------------------------------------------------------
+    # tiktoken family: o200k_base, cl100k_base
+    # ------------------------------------------------------------------
+
+    def test_tiktoken_space_prefix_is_word_start(self):
+        from token_tax import _is_continued_token
+
+        # Leading space = word-start token in tiktoken
+        assert _is_continued_token(" Hello", "o200k_base") is False
+        assert _is_continued_token(" world", "cl100k_base") is False
+
+    def test_tiktoken_no_space_prefix_is_continuation(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("ello", "o200k_base") is True
+        assert _is_continued_token("ing", "cl100k_base") is True
+
+    def test_tiktoken_bare_word_is_continuation(self):
+        from token_tax import _is_continued_token
+
+        # A token with no leading space that starts a subword is a continuation
+        assert _is_continued_token("oken", "o200k_base") is True
+
+    # ------------------------------------------------------------------
+    # GPT-2 family
+    # ------------------------------------------------------------------
+
+    def test_gpt2_g_prefix_is_word_start(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("Ġhello", "gpt2") is False
+        assert _is_continued_token("Ġworld", "gpt2") is False
+
+    def test_gpt2_no_g_prefix_is_continuation(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("ello", "gpt2") is True
+        assert _is_continued_token("ing", "gpt2") is True
+
+    # ------------------------------------------------------------------
+    # SentencePiece families: llama-3, mistral, qwen-2.5, gemma-2
+    # ------------------------------------------------------------------
+
+    def test_sentencepiece_underscore_prefix_is_word_start(self):
+        from token_tax import _is_continued_token
+
+        for key in ("llama-3", "mistral", "qwen-2.5", "gemma-2"):
+            assert _is_continued_token("▁hello", key) is False, (
+                f"▁-prefixed token should be word-start for {key}"
+            )
+
+    def test_sentencepiece_no_underscore_is_continuation(self):
+        from token_tax import _is_continued_token
+
+        for key in ("llama-3", "mistral", "qwen-2.5", "gemma-2"):
+            assert _is_continued_token("ello", key) is True, (
+                f"No-prefix token should be continuation for {key}"
+            )
+
+    # ------------------------------------------------------------------
+    # BERT-style (not one of the 8 families but the logic must exist)
+    # ------------------------------------------------------------------
+
+    def test_bert_double_hash_is_continuation(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("##ing", "bert-base-uncased") is True
+        assert _is_continued_token("##tion", "bert-base-uncased") is True
+
+    def test_bert_no_double_hash_is_word_start(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("hello", "bert-base-uncased") is False
+
+    # ------------------------------------------------------------------
+    # Unknown / unrecognized family — safe default is word-start (False)
+    # ------------------------------------------------------------------
+
+    def test_unknown_family_defaults_to_not_continued(self):
+        from token_tax import _is_continued_token
+
+        # Safe default: assume word-start rather than continuation
+        assert _is_continued_token("hello", "unknown_family") is False
+        assert _is_continued_token("ing", "some_future_tokenizer") is False
