@@ -407,6 +407,181 @@ class TestFragmentationRatio:
 
         assert result["token_count"] == 3
 
+    def test_contains_unit_key(self):
+        """Result must contain a 'unit' key."""
+        from tokenizer import fragmentation_ratio
+
+        tok = self._mock_tokenizer([1, 2], ["Hello", " world"])
+        result = fragmentation_ratio("Hello world", tok)
+
+        assert "unit" in result
+
+    def test_latin_text_unit_is_word(self):
+        """English/Latin text must use word-level counting (unit='word')."""
+        from tokenizer import fragmentation_ratio
+
+        # 4 tokens for 2 words
+        tok = self._mock_tokenizer([1, 2, 3, 4], ["Hel", "lo", " wor", "ld"])
+        result = fragmentation_ratio("Hello world", tok)
+
+        assert result["unit"] == "word"
+
+    def test_latin_text_ratio_is_tokens_per_word(self):
+        """English text ratio = tokens / words (unchanged behavior)."""
+        from tokenizer import fragmentation_ratio
+
+        tok = self._mock_tokenizer([1, 2, 3, 4], ["Hel", "lo", " wor", "ld"])
+        result = fragmentation_ratio("Hello world", tok)
+
+        assert result["ratio"] == pytest.approx(2.0)
+
+    def test_japanese_text_unit_is_character(self):
+        """Japanese text must use character-level counting (unit='character')."""
+        from tokenizer import fragmentation_ratio
+
+        # "素早い茶色の狐" = 7 chars; mock returns 10 tokens
+        text = "素早い茶色の狐"
+        tok = self._mock_tokenizer(list(range(10)), [str(i) for i in range(10)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["unit"] == "character"
+
+    def test_japanese_text_ratio_is_tokens_per_char(self):
+        """Japanese text ratio = tokens / chars, not tokens / whitespace-words."""
+        from tokenizer import fragmentation_ratio
+
+        # "素早い茶色の狐" = 7 chars; 10 tokens → ratio = 10/7
+        text = "素早い茶色の狐"
+        tok = self._mock_tokenizer(list(range(10)), [str(i) for i in range(10)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["ratio"] == pytest.approx(10 / 7)
+
+    def test_chinese_text_unit_is_character(self):
+        """Chinese text must use character-level counting (unit='character')."""
+        from tokenizer import fragmentation_ratio
+
+        text = "快速棕色的狐狸"  # 7 chars
+        tok = self._mock_tokenizer(list(range(8)), [str(i) for i in range(8)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["unit"] == "character"
+
+    def test_chinese_text_ratio_is_tokens_per_char(self):
+        """Chinese text ratio = tokens / chars."""
+        from tokenizer import fragmentation_ratio
+
+        text = "快速棕色的狐狸"  # 7 chars; 8 tokens
+        tok = self._mock_tokenizer(list(range(8)), [str(i) for i in range(8)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["ratio"] == pytest.approx(8 / 7)
+
+    def test_thai_text_unit_is_character(self):
+        """Thai text must use character-level counting (unit='character')."""
+        from tokenizer import fragmentation_ratio
+
+        text = "สวัสดีชาวโลก"  # Thai: no spaces
+        tok = self._mock_tokenizer(list(range(6)), [str(i) for i in range(6)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["unit"] == "character"
+
+    def test_korean_text_unit_is_character(self):
+        """Korean Hangul text must use character-level counting (unit='character')."""
+        from tokenizer import fragmentation_ratio
+
+        text = "빠른갈색여우"  # 6 Korean chars
+        tok = self._mock_tokenizer(list(range(9)), [str(i) for i in range(9)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["unit"] == "character"
+
+    def test_mixed_mostly_latin_unit_is_word(self):
+        """Text that is mostly Latin with a few CJK chars uses word counting."""
+        from tokenizer import fragmentation_ratio
+
+        # 20 ASCII chars + 2 CJK = ~9% CJK → below 30% threshold
+        text = "hello world foo bar 日本"
+        tok = self._mock_tokenizer(list(range(6)), [str(i) for i in range(6)])
+        result = fragmentation_ratio(text, tok)
+
+        assert result["unit"] == "word"
+
+    def test_empty_text_unit_key_present(self):
+        """Empty text must still return a 'unit' key."""
+        from tokenizer import fragmentation_ratio
+
+        tok = self._mock_tokenizer([], [])
+        result = fragmentation_ratio("", tok)
+
+        assert "unit" in result
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — _is_non_space_delimited
+# ---------------------------------------------------------------------------
+
+
+class TestIsNonSpaceDelimited:
+    """Unit tests for _is_non_space_delimited(text) -> bool."""
+
+    def test_pure_cjk_unified_returns_true(self):
+        """CJK Unified Ideographs are non-space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("快速棕色的狐狸") is True
+
+    def test_hiragana_returns_true(self):
+        """Hiragana is non-space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("はやいきつね") is True
+
+    def test_katakana_returns_true(self):
+        """Katakana is non-space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("ハヤイキツネ") is True
+
+    def test_korean_hangul_returns_true(self):
+        """Korean Hangul is non-space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("빠른갈색여우") is True
+
+    def test_thai_returns_true(self):
+        """Thai script is non-space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("สวัสดีชาวโลก") is True
+
+    def test_latin_english_returns_false(self):
+        """Latin/English text is space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("the quick brown fox") is False
+
+    def test_empty_string_returns_false(self):
+        """Empty string is not non-space-delimited (no CJK/Thai chars)."""
+        from tokenizer import _is_non_space_delimited
+
+        assert _is_non_space_delimited("") is False
+
+    def test_mostly_latin_with_some_cjk_returns_false(self):
+        """Text under 30% CJK/Thai is treated as space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        # "hello world foo bar 日本" — 2 CJK out of ~22 chars = ~9%
+        assert _is_non_space_delimited("hello world foo bar 日本") is False
+
+    def test_above_threshold_returns_true(self):
+        """Text over 30% CJK/Thai chars is non-space-delimited."""
+        from tokenizer import _is_non_space_delimited
+
+        # "ab日本語" — 3 CJK out of 5 chars = 60%
+        assert _is_non_space_delimited("ab日本語") is True
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — flag_oov_words

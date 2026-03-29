@@ -130,8 +130,31 @@ def tokenize_text(text: str, tokenizer) -> list[dict]:
     return [{"token": str(tok), "id": int(tid)} for tok, tid in zip(tokens, token_ids)]
 
 
-def fragmentation_ratio(text: str, tokenizer) -> dict[str, float]:
-    """Compute the fragmentation ratio (tokens per word) for text.
+def _is_non_space_delimited(text: str) -> bool:
+    """Return True if the text is primarily CJK or Thai script.
+
+    Uses a 30% threshold: if more than 30% of characters fall in CJK/Thai
+    Unicode ranges, the text is treated as non-space-delimited.
+    """
+    if not text:
+        return False
+    cjk_thai_count = sum(1 for ch in text if (
+        '\u4e00' <= ch <= '\u9fff' or   # CJK Unified Ideographs
+        '\u3040' <= ch <= '\u309f' or   # Hiragana
+        '\u30a0' <= ch <= '\u30ff' or   # Katakana
+        '\uac00' <= ch <= '\ud7af' or   # Korean Hangul syllables
+        '\u0e00' <= ch <= '\u0e7f'      # Thai
+    ))
+    return cjk_thai_count > len(text) * 0.3
+
+
+def fragmentation_ratio(text: str, tokenizer) -> dict:
+    """Compute the fragmentation ratio (tokens per unit) for text.
+
+    For space-delimited scripts (Latin, Cyrillic, etc.) the unit is a
+    whitespace-separated word.  For non-space-delimited scripts (CJK,
+    Thai) the unit is a single character, since whitespace splitting
+    produces meaningless "words".
 
     Args:
         text:      Input string.
@@ -139,15 +162,22 @@ def fragmentation_ratio(text: str, tokenizer) -> dict[str, float]:
 
     Returns:
         Dict with:
-          - 'ratio': float tokens-per-word (0.0 when text is empty)
+          - 'ratio':       float tokens-per-unit (0.0 when text is empty)
           - 'token_count': int total token count
+          - 'unit':        str "word" or "character" indicating what was counted
     """
     token_ids = tokenizer.encode(text)
     token_count = len(token_ids)
-    words = text.split()
-    word_count = len(words)
-    ratio = token_count / word_count if word_count > 0 else 0.0
-    return {"ratio": float(ratio), "token_count": token_count}
+
+    if _is_non_space_delimited(text):
+        unit_count = len(text)
+        unit = "character"
+    else:
+        unit_count = len(text.split())
+        unit = "word"
+
+    ratio = token_count / unit_count if unit_count > 0 else 0.0
+    return {"ratio": float(ratio), "token_count": token_count, "unit": unit}
 
 
 def flag_oov_words(text: str, tokenizer, threshold: int = 3) -> set[str]:
