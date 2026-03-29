@@ -3,12 +3,13 @@ TDD tests for workbench/tokenizer.py — Tokenizer Inspector module.
 
 Test order matches implementation phases:
   Phase 1: get_tokenizer, tokenize_text, fragmentation_ratio, flag_oov_words,
-           detect_language, efficiency_score, translate_to_english
+           detect_language, efficiency_score
   Phase 2: render_tokens_html
   Phase 3: build_tokenizer_ui (smoke test)
 """
 
 import pytest
+import threading
 from unittest.mock import patch, MagicMock
 
 
@@ -785,67 +786,6 @@ class TestQualityRiskLevel:
 
 
 # ---------------------------------------------------------------------------
-# Phase 1 — translate_to_english
-# ---------------------------------------------------------------------------
-
-
-class TestTranslateToEnglish:
-    """Unit tests for translate_to_english(text, api_key) -> str."""
-
-    def _make_response(self, translated_text: str) -> dict:
-        return {
-            "choices": [{"message": {"content": translated_text}}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 20},
-        }
-
-    def test_returns_string(self):
-        """translate_to_english must return a string."""
-        from tokenizer import translate_to_english
-
-        with patch("tokenizer.call_openrouter", return_value=self._make_response("Hello")):
-            result = translate_to_english("Bonjour", "sk-key")
-
-        assert isinstance(result, str)
-
-    def test_calls_call_openrouter(self):
-        """translate_to_english must call call_openrouter."""
-        from tokenizer import translate_to_english
-
-        with patch("tokenizer.call_openrouter", return_value=self._make_response("Hi")) as mock_call:
-            translate_to_english("Hola", "sk-key")
-
-        assert mock_call.called
-
-    def test_passes_api_key_to_call_openrouter(self):
-        """API key must be forwarded to call_openrouter."""
-        from tokenizer import translate_to_english
-
-        with patch("tokenizer.call_openrouter", return_value=self._make_response("Hi")) as mock_call:
-            translate_to_english("Hola", "my-key")
-
-        assert mock_call.call_args.args[0] == "my-key"
-
-    def test_returns_translated_content(self):
-        """Return value is the content from the model response."""
-        from tokenizer import translate_to_english
-
-        with patch("tokenizer.call_openrouter", return_value=self._make_response("Hello world")):
-            result = translate_to_english("Bonjour monde", "key")
-
-        assert result == "Hello world"
-
-    def test_prompt_contains_source_text(self):
-        """The prompt sent to the model must include the source text."""
-        from tokenizer import translate_to_english
-
-        with patch("tokenizer.call_openrouter", return_value=self._make_response("ok")) as mock_call:
-            translate_to_english("Guten Tag", "key")
-
-        prompt_arg = mock_call.call_args.args[2]
-        assert "Guten Tag" in prompt_arg
-
-
-# ---------------------------------------------------------------------------
 # Phase 2 — render_tokens_html
 # ---------------------------------------------------------------------------
 
@@ -1465,3 +1405,81 @@ class TestBuildTokenizerUi:
         demo = build_tokenizer_ui()
 
         assert isinstance(demo, gr.Blocks)
+
+
+# ---------------------------------------------------------------------------
+# Thread safety
+# ---------------------------------------------------------------------------
+
+
+class TestGetTokenizerThreadSafety:
+    """Verify that concurrent get_tokenizer calls don't double-load tokenizers."""
+
+    def test_concurrent_calls_load_tokenizer_only_once(self):
+        """Two threads calling get_tokenizer for the same uncached name must only
+        call from_pretrained once — the lock prevents redundant loads.
+        """
+        import importlib
+        import tokenizer as tok_module
+
+        importlib.reload(tok_module)
+
+        mock_tok = MagicMock()
+        load_count = []
+        barrier = threading.Barrier(2)
+
+        def slow_from_pretrained(repo_id):
+            # Simulate a slow load so threads genuinely race.
+            import time
+            time.sleep(0.05)
+            load_count.append(1)
+            return mock_tok
+
+        def thread_fn():
+            barrier.wait()
+            with patch("tokenizer.AutoTokenizer.from_pretrained", side_effect=slow_from_pretrained):
+                tok_module.get_tokenizer("gpt2")
+
+        t1 = threading.Thread(target=thread_fn)
+        t2 = threading.Thread(target=thread_fn)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # Both threads should return the same cached object.
+        result = tok_module._tokenizer_cache.get("gpt2")
+        assert result is mock_tok
+        # With the lock, from_pretrained must be called exactly once.
+        assert len(load_count) == 1, (
+            f"from_pretrained called {len(load_count)} times — lock prevents redundant loads"
+        )
+
+    def test_cache_populated_correctly_after_concurrent_load(self):
+        """After concurrent get_tokenizer calls, cache must hold the tokenizer."""
+        import importlib
+        import tokenizer as tok_module
+
+        importlib.reload(tok_module)
+
+        mock_tok = MagicMock()
+        barrier = threading.Barrier(2)
+        results: list = []
+
+        def thread_fn():
+            barrier.wait()
+            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
+                t = tok_module.get_tokenizer("gpt2")
+            results.append(t)
+
+        t1 = threading.Thread(target=thread_fn)
+        t2 = threading.Thread(target=thread_fn)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert len(results) == 2
+        # Both must have received the same tokenizer object.
+        assert results[0] is results[1]
+        assert tok_module._tokenizer_cache["gpt2"] is mock_tok

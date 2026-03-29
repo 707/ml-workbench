@@ -29,8 +29,6 @@ class _LazyAutoTokenizer:
 
 AutoTokenizer = _LazyAutoTokenizer()
 
-from openrouter import call_openrouter
-
 # ---------------------------------------------------------------------------
 # Tokenizer registry
 # ---------------------------------------------------------------------------
@@ -292,24 +290,6 @@ def quality_risk_level(rtc: float) -> str:
     if rtc < 4.0:
         return "high"
     return "severe"
-
-
-def translate_to_english(text: str, api_key: str) -> str:
-    """Translate text to English using OpenRouter.
-
-    Args:
-        text:    Source text to translate.
-        api_key: OpenRouter API key.
-
-    Returns:
-        Translated English string.
-    """
-    prompt = (
-        f"Translate the following text to English. "
-        f"Return only the translation, no explanations.\n\nText: {text}"
-    )
-    response = call_openrouter(api_key, "meta-llama/llama-3.1-8b-instruct", prompt)
-    return response["choices"][0]["message"]["content"]
 
 
 # ---------------------------------------------------------------------------
