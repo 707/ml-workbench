@@ -193,6 +193,40 @@ class TestBuildMetricScatter:
 
         assert "benchmark-only speed metadata" in fig.layout.annotations[0].text.lower()
 
+    def test_bubble_sizes_are_bounded_for_large_size_values(self):
+        from charts import build_metric_scatter
+
+        fig = build_metric_scatter(
+            [
+                {"label": "A", "rtc": 1.9, "monthly_cost": 29.55, "monthly_input_tokens": 415_000_000, "tokenizer_key": "llama-3"},
+                {"label": "B", "rtc": 3.05, "monthly_cost": 29.20, "monthly_input_tokens": 620_100_000, "tokenizer_key": "mistral"},
+                {"label": "C", "rtc": 3.06, "monthly_cost": 94.12, "monthly_input_tokens": 517_500_000, "tokenizer_key": "qwen-2.5"},
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+            size_key="monthly_input_tokens",
+        )
+
+        sizes = [trace.marker.size for trace in fig.data]
+        assert all(size <= 34 for size in sizes)
+        assert all(size >= 14 for size in sizes)
+
+    def test_equal_size_values_use_stable_midpoint_bubbles(self):
+        from charts import build_metric_scatter
+
+        fig = build_metric_scatter(
+            [
+                {"label": "A", "rtc": 1.0, "monthly_cost": 10.0, "monthly_input_tokens": 1000, "tokenizer_key": "gpt2"},
+                {"label": "B", "rtc": 2.0, "monthly_cost": 20.0, "monthly_input_tokens": 1000, "tokenizer_key": "llama-3"},
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+            size_key="monthly_input_tokens",
+        )
+
+        sizes = [trace.marker.size for trace in fig.data]
+        assert sizes[0] == pytest.approx(sizes[1])
+
 
 # ---------------------------------------------------------------------------
 # build_cost_waterfall (Issue 8)

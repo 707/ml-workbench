@@ -24,6 +24,9 @@ TOKENIZER_COLORS = {
     "gpt2": "#bcbd22",
 }
 
+_MIN_BUBBLE_SIZE = 14
+_MAX_BUBBLE_SIZE = 34
+
 
 def _empty_figure(message: str = "No data available for this view"):
     """Return an empty plotly Figure with a centered annotation."""
@@ -47,6 +50,27 @@ def _empty_figure(message: str = "No data available for this view"):
 
 def _value(row: dict, key: str):
     return row.get(key)
+
+
+def _normalize_bubble_sizes(values: list[float]) -> list[float]:
+    """Map raw size values to a bounded visual range."""
+    if not values:
+        return []
+
+    positive = [max(float(value), 0.0) for value in values]
+    sqrt_values = [math.sqrt(value) for value in positive]
+    min_value = min(sqrt_values)
+    max_value = max(sqrt_values)
+
+    if math.isclose(min_value, max_value):
+        midpoint = (_MIN_BUBBLE_SIZE + _MAX_BUBBLE_SIZE) / 2.0
+        return [midpoint for _ in positive]
+
+    span = max_value - min_value
+    return [
+        _MIN_BUBBLE_SIZE + ((value - min_value) / span) * (_MAX_BUBBLE_SIZE - _MIN_BUBBLE_SIZE)
+        for value in sqrt_values
+    ]
 
 
 def build_metric_scatter(
@@ -90,12 +114,19 @@ def build_metric_scatter(
 
     fig = go.Figure()
     show_text = len(filtered) <= 12
-    for row in filtered:
+    bubble_sizes = [16.0 for _ in filtered]
+    if size_key:
+        size_values = [
+            float(row[size_key])
+            for row in filtered
+            if isinstance(row.get(size_key), (int, float))
+        ]
+        if len(size_values) == len(filtered):
+            bubble_sizes = _normalize_bubble_sizes(size_values)
+
+    for row, bubble_size in zip(filtered, bubble_sizes):
         color_name = row.get(color_key, "")
         color = TOKENIZER_COLORS.get(color_name, "#4C78A8")
-        bubble_size = 16
-        if size_key and isinstance(row.get(size_key), (int, float)):
-            bubble_size = max(math.sqrt(float(row[size_key])) * 2.5, 12)
 
         fig.add_trace(go.Scatter(
             x=[row[x_key]],
