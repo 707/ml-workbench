@@ -19,6 +19,7 @@ ActionKind = Literal[
     "fill_text",
     "wait_ms",
     "wait_for_text_gone",
+    "wait_for_text_cycle",
 ]
 CaptureKind = Literal["full_page"]
 
@@ -89,7 +90,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Benchmark"),
                 ReviewAction("click_button", "Run Benchmark"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
             ),
             captures=(CaptureRequest("benchmark-strict-defaults"),),
@@ -107,7 +108,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_inner_tab", "Benchmark"),
                 ReviewAction("click_text", "Streaming Exploration"),
                 ReviewAction("click_button", "Run Benchmark"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
             ),
             captures=(CaptureRequest("benchmark-streaming-defaults"),),
@@ -124,7 +125,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Catalog"),
                 ReviewAction("click_button", "Load Catalog"),
-                ReviewAction("wait_for_text_gone", "processing |", value=20_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=20_000),
                 ReviewAction("wait_ms", "settle", value=750),
             ),
             captures=(CaptureRequest("catalog-defaults"),),
@@ -140,7 +141,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
                 ReviewAction("open_inner_tab", "Cost"),
             ),
@@ -157,7 +158,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
                 ReviewAction("open_inner_tab", "Context Loss"),
             ),
@@ -171,7 +172,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
                 ReviewAction("open_inner_tab", "Speed Metadata"),
             ),
@@ -188,7 +189,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
                 ReviewAction("open_inner_tab", "Scale"),
             ),
@@ -202,7 +203,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_top_tab", "Token Tax Workbench"),
                 ReviewAction("open_inner_tab", "Scenario Lab"),
                 ReviewAction("click_button", "Run Scenario Lab"),
-                ReviewAction("wait_for_text_gone", "processing |", value=45_000),
+                ReviewAction("wait_for_text_cycle", "processing |", value=45_000),
                 ReviewAction("wait_ms", "settle", value=1_000),
                 ReviewAction("open_inner_tab", "Custom Slice"),
             ),
@@ -220,7 +221,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                     ReviewAction("open_top_tab", "Tokenizer Inspector"),
                     ReviewAction("fill_text", "Input Text", value="Hello from London in Arabic العربية and Japanese 日本語"),
                     ReviewAction("click_button", "Tokenize"),
-                    ReviewAction("wait_for_text_gone", "processing |", value=30_000),
+                    ReviewAction("wait_for_text_cycle", "processing |", value=30_000),
                     ReviewAction("wait_ms", "settle", value=1_000),
                 ),
                 captures=(CaptureRequest("tokenizer-inspector-defaults"),),
@@ -232,7 +233,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 actions=(
                     ReviewAction("open_top_tab", "Model Comparison"),
                     ReviewAction("click_button", "Compare →"),
-                    ReviewAction("wait_for_text_gone", "processing |", value=60_000),
+                    ReviewAction("wait_for_text_cycle", "processing |", value=60_000),
                     ReviewAction("wait_ms", "settle", value=1_000),
                 ),
                 captures=(CaptureRequest("model-comparison-defaults"),),
@@ -339,6 +340,25 @@ def _perform_action(page, action: ReviewAction) -> None:
                 return
             page.wait_for_timeout(250)
         raise TimeoutError(f"Timed out waiting for text to disappear: {action.target}")
+    if action.kind == "wait_for_text_cycle":
+        locator = page.get_by_text(action.target)
+        timeout_ms = int(action.value or 0)
+        deadline = time.monotonic() + (timeout_ms / 1000.0)
+        saw_visible = False
+        while time.monotonic() < deadline:
+            try:
+                visible = locator.count() > 0 and any(locator.nth(index).is_visible() for index in range(locator.count()))
+            except Exception:
+                visible = False
+            if visible:
+                saw_visible = True
+            elif saw_visible:
+                page.wait_for_timeout(300)
+                return
+            page.wait_for_timeout(250)
+        if saw_visible:
+            raise TimeoutError(f"Timed out waiting for text cycle to finish: {action.target}")
+        raise TimeoutError(f"Timed out waiting for text to appear: {action.target}")
     raise ValueError(f"Unsupported action kind: {action.kind}")
 
 
