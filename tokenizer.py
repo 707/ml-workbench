@@ -7,6 +7,7 @@ different tokenizers handle input text.
 
 import html
 import threading
+from time import perf_counter
 import gradio as gr
 from langdetect import detect, LangDetectException
 
@@ -601,6 +602,87 @@ def _handle_compare(
         return "", "", f"Error: {exc}"
 
 
+def _runtime_status_markdown(title: str, lines: list[str]) -> str:
+    """Render a compact runtime status panel."""
+    return f"### {title}\n" + "\n".join(f"- {line}" for line in lines)
+
+
+def _handle_single_with_status(
+    model_name: str,
+    text: str,
+    threshold: int,
+    decoded_view: bool,
+    english_text: str = "",
+):
+    """Yield live status updates for the single-tokenizer flow."""
+    yield "", "", _runtime_status_markdown(
+        "Runtime Status",
+        [
+            f"Preparing tokenization for **{model_name}**.",
+            "Results will appear below once tokenization completes.",
+        ],
+    )
+    start = perf_counter()
+    token_html, stats = _handle_single(model_name, text, threshold, decoded_view, english_text)
+    duration = perf_counter() - start
+    if stats.startswith("Error:"):
+        status = _runtime_status_markdown(
+            "Runtime Status",
+            [
+                f"Tokenization failed after **{duration:.1f}s**.",
+                stats,
+            ],
+        )
+    else:
+        status = _runtime_status_markdown(
+            "Runtime Status",
+            [
+                f"Tokenization completed in **{duration:.1f}s**.",
+                f"Tokenizer: **{model_name}**.",
+                f"Input length: **{len(text)}** characters.",
+            ],
+        )
+    yield token_html, stats, status
+
+
+def _handle_compare_with_status(
+    text: str,
+    name_a: str,
+    name_b: str,
+    decoded_view: bool,
+    english_text: str = "",
+):
+    """Yield live status updates for the tokenizer compare flow."""
+    yield "", "", "", _runtime_status_markdown(
+        "Runtime Status",
+        [
+            f"Comparing tokenizers **{name_a}** and **{name_b}**.",
+            "Side-by-side token views will appear once comparison completes.",
+        ],
+    )
+    start = perf_counter()
+    html_a, html_b, ratio_md = _handle_compare(text, name_a, name_b, decoded_view, english_text)
+    duration = perf_counter() - start
+    if ratio_md.startswith("Error:"):
+        status = _runtime_status_markdown(
+            "Runtime Status",
+            [
+                f"Comparison failed after **{duration:.1f}s**.",
+                ratio_md,
+            ],
+        )
+    else:
+        status = _runtime_status_markdown(
+            "Runtime Status",
+            [
+                f"Comparison completed in **{duration:.1f}s**.",
+                f"Compared **{name_a}** vs **{name_b}**.",
+                f"Input length: **{len(text)}** characters.",
+            ],
+        )
+    yield html_a, html_b, ratio_md, status
+
+
 def build_tokenizer_ui() -> gr.Blocks:
     """Construct and return the Tokenizer Inspector Gradio Blocks UI.
 
@@ -612,7 +694,12 @@ def build_tokenizer_ui() -> gr.Blocks:
     tokenizer_names = list(SUPPORTED_TOKENIZERS.keys())
 
     with gr.Blocks(title="Tokenizer Inspector") as demo:
-        gr.Markdown("## Tokenizer Inspector\nExplore how different tokenizers split text.")
+        gr.Markdown(
+            "## Tokenizer Inspector\n"
+            "Explore how different tokenizers split text.\n\n"
+            "Runtime note: tokenization runs inside the app and can take a few seconds on cold start. "
+            "The status panel below each action reports progress and completion."
+        )
 
         with gr.Tabs():
             # --- Single tab ---
@@ -644,13 +731,19 @@ def build_tokenizer_ui() -> gr.Blocks:
                     value=False,
                 )
                 single_btn = gr.Button("Tokenize", variant="primary")
+                single_status = gr.Markdown(
+                    value=_runtime_status_markdown(
+                        "Runtime Status",
+                        ["Enter text and click **Tokenize** to inspect a tokenizer."],
+                    )
+                )
                 single_html = gr.HTML(label="Token Visualisation")
                 single_stats = gr.Markdown(label="Statistics")
 
                 single_btn.click(
-                    fn=_handle_single,
+                    fn=_handle_single_with_status,
                     inputs=[single_model, single_text, oov_threshold, single_decoded_view, single_english_text],
-                    outputs=[single_html, single_stats],
+                    outputs=[single_html, single_stats, single_status],
                 )
 
             # --- Compare tab ---
@@ -687,11 +780,17 @@ def build_tokenizer_ui() -> gr.Blocks:
                     value=False,
                 )
                 cmp_ratio_md = gr.Markdown(label="Comparison")
+                compare_status = gr.Markdown(
+                    value=_runtime_status_markdown(
+                        "Runtime Status",
+                        ["Enter shared text and click **Compare** to inspect two tokenizer families side by side."],
+                    )
+                )
 
                 compare_btn.click(
-                    fn=_handle_compare,
+                    fn=_handle_compare_with_status,
                     inputs=[compare_text, cmp_model_a, cmp_model_b, compare_decoded_view, compare_english_text],
-                    outputs=[cmp_html_a, cmp_html_b, cmp_ratio_md],
+                    outputs=[cmp_html_a, cmp_html_b, cmp_ratio_md, compare_status],
                 )
 
     return demo

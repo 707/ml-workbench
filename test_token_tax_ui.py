@@ -45,7 +45,7 @@ class TestWorkbenchHandlers:
             outputs = list(_handle_catalog_tab(include_proxy=False, refresh_live=False, live_updates=True))
             table, appendix, diagnostics = outputs[-1]
 
-        assert table["headers"][0] == "label"
+        assert table["headers"][0] == "Tokenizer Family"
         assert table["data"][0][1] == "llama-3"
         assert "Catalog Appendix" in appendix
         assert "Diagnostics" in diagnostics
@@ -144,7 +144,8 @@ class TestWorkbenchHandlers:
                 ))
 
         assert len(outputs) >= 2
-        assert len(outputs[-1]) == 9
+        assert len(outputs[-1]) == 10
+        assert "Benchmark Summary" in outputs[-1][0]
         assert "Diagnostics" in outputs[-1][-1]
 
     def test_language_script_presets_filter_supported_languages(self):
@@ -211,6 +212,87 @@ class TestWorkbenchHandlers:
         )
 
         assert sum(row["token_count"] for row in rows) == 3
+
+    def test_build_benchmark_summary_markdown_reports_key_ranges(self):
+        from token_tax_ui import build_benchmark_summary_markdown
+
+        markdown = build_benchmark_summary_markdown(
+            [
+                {
+                    "lane": "Strict Evidence",
+                    "language": "ar",
+                    "tokenizer_key": "gpt2",
+                    "rtc": 2.4,
+                    "bytes_per_token": 3.2,
+                    "continued_word_rate": 0.55,
+                },
+                {
+                    "lane": "Strict Evidence",
+                    "language": "ja",
+                    "tokenizer_key": "llama-3",
+                    "rtc": 1.6,
+                    "bytes_per_token": 1.8,
+                    "continued_word_rate": 0.22,
+                },
+            ],
+            metric_key="rtc",
+        )
+
+        assert "Benchmark Summary" in markdown
+        assert "Worst RTC pressure" in markdown
+        assert "Highest bytes/token" in markdown
+        assert "Highest split pressure" in markdown
+
+    def test_build_scenario_speed_summary_reports_matches_and_gaps(self):
+        from token_tax_ui import build_scenario_speed_summary_markdown
+
+        markdown = build_scenario_speed_summary_markdown(
+            [
+                {
+                    "label": "Llama 3.2 3B Instruct (Free)",
+                    "ttft_seconds": None,
+                    "output_tokens_per_second": None,
+                },
+                {
+                    "label": "Mistral 7B Instruct (Free)",
+                    "ttft_seconds": 0.45,
+                    "output_tokens_per_second": 88.0,
+                },
+                {
+                    "label": "Qwen 2.5 7B Instruct (Free)",
+                    "ttft_seconds": 0.62,
+                    "output_tokens_per_second": 71.5,
+                },
+            ]
+        )
+
+        assert "matched models: **2 / 3**" in markdown.lower()
+        assert "Mistral 7B Instruct (Free)" in markdown
+        assert "Llama 3.2 3B Instruct (Free)" in markdown
+
+    def test_catalog_display_rows_use_review_friendly_column_labels(self):
+        from token_tax_ui import CATALOG_COLUMNS, _catalog_display_rows
+
+        rows = _catalog_display_rows(
+            [
+                {
+                    "tokenizer_key": "llama-3",
+                    "label": "Llama 3 family",
+                    "tokenizer_source": "NousResearch/Meta-Llama-3-8B",
+                    "mapping_quality": "exact",
+                    "provenance": "strict_verified",
+                    "free_models": [{"label": "Llama 3.2 3B Instruct (Free)"}],
+                    "aa_matches": [{"label": "Llama 3.1 8B"}],
+                    "min_input_per_million": 0.05,
+                    "max_context_window": 128000,
+                },
+            ]
+        )
+
+        assert "Tokenizer Family" in CATALOG_COLUMNS
+        assert "Free Model Examples" in CATALOG_COLUMNS
+        assert rows[0]["Tokenizer Family"] == "Llama 3 family"
+        assert rows[0]["Free Model Examples"] == "Llama 3.2 3B Instruct (Free)"
 
 
 # ---------------------------------------------------------------------------

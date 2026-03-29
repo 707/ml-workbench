@@ -5,6 +5,7 @@ ML Workbench — Gradio app for tokenizer analysis and free-model comparisons.
 import html as _html
 import os
 import re
+from time import perf_counter
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -254,6 +255,82 @@ def _build_card(
 </div>"""
 
 
+def _comparison_status_markdown(lines: list[str]) -> str:
+    """Render a compact runtime status panel for model comparison."""
+    return "### Runtime Status\n" + "\n".join(f"- {line}" for line in lines)
+
+
+def render_comparison_with_status(
+    api_key_val: str,
+    model_a_label: str,
+    model_b_label: str,
+    temp_a_val: float,
+    temp_b_val: float,
+    max_tokens_a_val,
+    max_tokens_b_val,
+    preset_val: str,
+    custom_val: str,
+    history: list,
+    model_ids: dict[str, str],
+):
+    """Yield live status updates for the comparison runtime tab."""
+    effective_key = SERVER_KEY if SERVER_KEY else api_key_val
+    question = custom_val.strip() if custom_val.strip() else preset_val
+
+    if not effective_key.strip():
+        msg = "<p style='color:red'>No API key provided.</p>"
+        yield history, "".join(history) + msg, _comparison_status_markdown(["No API key provided."])
+        return
+    if not question:
+        msg = "<p style='color:red'>No question provided.</p>"
+        yield history, "".join(history) + msg, _comparison_status_markdown(["No question provided."])
+        return
+
+    yield history, "".join(history), _comparison_status_markdown(
+        [
+            f"Running comparison for **{model_a_label}** vs **{model_b_label}**.",
+            "The comparison card will appear below once both model calls complete.",
+        ],
+    )
+
+    m_a_id = model_ids[model_a_label]
+    m_b_id = model_ids[model_b_label]
+    params_a = {"temperature": temp_a_val, "max_tokens": int(max_tokens_a_val) if max_tokens_a_val else None}
+    params_b = {"temperature": temp_b_val, "max_tokens": int(max_tokens_b_val) if max_tokens_b_val else None}
+    params_a = {k: v for k, v in params_a.items() if v is not None}
+    params_b = {k: v for k, v in params_b.items() if v is not None}
+
+    start = perf_counter()
+    result_a, result_b = run_comparison(effective_key, question, m_a_id, m_b_id, params_a, params_b)
+    duration = perf_counter() - start
+
+    if "error" in result_a:
+        a_reasoning, a_answer, a_stats = "", f"Error: {result_a['error']}", ""
+    else:
+        a_reasoning = result_a.get("reasoning", "")
+        a_answer = result_a.get("answer", "")
+        a_stats = _format_usage(result_a.get("usage", {}))
+
+    if "error" in result_b:
+        b_answer, b_stats = f"Error: {result_b['error']}", ""
+    else:
+        b_answer = result_b.get("answer", "")
+        b_stats = _format_usage(result_b.get("usage", {}))
+
+    card = _build_card(
+        question, a_reasoning, a_answer, a_stats, b_answer, b_stats,
+        model_a_label=model_a_label, model_b_label=model_b_label,
+    )
+    new_history = [card] + history
+    status_lines = [
+        f"Comparison completed in **{duration:.1f}s**.",
+        f"Prompt length: **{len(question)}** characters.",
+    ]
+    if "error" in result_a or "error" in result_b:
+        status_lines.append("At least one model returned an error; review the comparison card for details.")
+    yield new_history, "".join(new_history), _comparison_status_markdown(status_lines)
+
+
 def _build_comparison_blocks() -> gr.Blocks:
     """Construct and return the Model Comparison Gradio Blocks."""
     model_choices = [label for label, _ in FREE_MODELS]
@@ -326,70 +403,35 @@ def _build_comparison_blocks() -> gr.Blocks:
             )
 
         submit_btn = gr.Button("Compare →", variant="primary")
+        comparison_status = gr.Markdown(
+            value=_comparison_status_markdown(
+                ["Choose two free models and click **Compare** to run the hosted comparison."]
+            )
+        )
 
         history_state = gr.State([])
         history_html = gr.HTML()
 
-        def _compare_and_render(
-            api_key_val: str,
-            model_a_label: str,
-            model_b_label: str,
-            temp_a_val: float,
-            temp_b_val: float,
-            max_tokens_a_val,
-            max_tokens_b_val,
-            preset_val: str,
-            custom_val: str,
-            history: list,
-        ):
-            effective_key = SERVER_KEY if SERVER_KEY else api_key_val
-            question = custom_val.strip() if custom_val.strip() else preset_val
-
-            if not effective_key.strip():
-                msg = "<p style='color:red'>No API key provided.</p>"
-                return history, "".join(history) + msg
-            if not question:
-                msg = "<p style='color:red'>No question provided.</p>"
-                return history, "".join(history) + msg
-
-            m_a_id = model_ids[model_a_label]
-            m_b_id = model_ids[model_b_label]
-            params_a = {"temperature": temp_a_val, "max_tokens": int(max_tokens_a_val) if max_tokens_a_val else None}
-            params_b = {"temperature": temp_b_val, "max_tokens": int(max_tokens_b_val) if max_tokens_b_val else None}
-            # Remove None values so they're not forwarded
-            params_a = {k: v for k, v in params_a.items() if v is not None}
-            params_b = {k: v for k, v in params_b.items() if v is not None}
-
-            result_a, result_b = run_comparison(effective_key, question, m_a_id, m_b_id, params_a, params_b)
-
-            if "error" in result_a:
-                a_reasoning, a_answer, a_stats = "", f"Error: {result_a['error']}", ""
-            else:
-                a_reasoning = result_a.get("reasoning", "")
-                a_answer = result_a.get("answer", "")
-                a_stats = _format_usage(result_a.get("usage", {}))
-
-            if "error" in result_b:
-                b_answer, b_stats = f"Error: {result_b['error']}", ""
-            else:
-                b_answer = result_b.get("answer", "")
-                b_stats = _format_usage(result_b.get("usage", {}))
-
-            card = _build_card(
-                question, a_reasoning, a_answer, a_stats, b_answer, b_stats,
-                model_a_label=model_a_label, model_b_label=model_b_label,
-            )
-            new_history = [card] + history
-            return new_history, "".join(new_history)
-
         submit_btn.click(
-            fn=_compare_and_render,
+            fn=lambda api_key_val, model_a_label, model_b_label, temp_a_val, temp_b_val, max_tokens_a_val, max_tokens_b_val, preset_val, custom_val, history: render_comparison_with_status(
+                api_key_val,
+                model_a_label,
+                model_b_label,
+                temp_a_val,
+                temp_b_val,
+                max_tokens_a_val,
+                max_tokens_b_val,
+                preset_val,
+                custom_val,
+                history,
+                model_ids,
+            ),
             inputs=[
                 api_key, model_a_drop, model_b_drop,
                 temp_a, temp_b, max_tokens_a, max_tokens_b,
                 preset, custom, history_state,
             ],
-            outputs=[history_state, history_html],
+            outputs=[history_state, history_html, comparison_status],
         )
 
     return demo

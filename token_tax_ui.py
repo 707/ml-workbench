@@ -112,17 +112,17 @@ def _resolve_corpus_key(selection: str) -> str:
     return LANE_TO_CORPUS_KEY.get(selection, selection)
 
 CATALOG_COLUMNS = [
-    "label",
-    "tokenizer_key",
-    "tokenizer_source",
-    "mapping_quality",
-    "free_model_count",
-    "free_models_summary",
-    "aa_match_count",
-    "aa_summary",
-    "min_input_per_million",
-    "max_context_window",
-    "provenance",
+    "Tokenizer Family",
+    "Tokenizer Key",
+    "Tokenizer Source",
+    "Mapping",
+    "Free Models",
+    "Free Model Examples",
+    "AA Benchmarks",
+    "AA Match Examples",
+    "Min $/1M In",
+    "Max Context",
+    "Provenance",
 ]
 
 SCENARIO_COLUMNS = [
@@ -200,19 +200,80 @@ def _catalog_display_rows(rows: list[dict]) -> list[dict]:
         free_models = row.get("free_models", [])
         aa_matches = row.get("aa_matches", [])
         display_rows.append({
-            "label": row["label"],
-            "tokenizer_key": row["tokenizer_key"],
-            "tokenizer_source": row["tokenizer_source"],
-            "mapping_quality": row["mapping_quality"],
-            "free_model_count": row.get("free_model_count", len(free_models)),
-            "free_models_summary": ", ".join(model["label"] for model in free_models) or "None attached",
-            "aa_match_count": row.get("aa_match_count", len(aa_matches)),
-            "aa_summary": ", ".join(match["label"] for match in aa_matches) or "No benchmark match",
-            "min_input_per_million": row.get("min_input_per_million"),
-            "max_context_window": row.get("max_context_window"),
-            "provenance": row["provenance"],
+            "Tokenizer Family": row["label"],
+            "Tokenizer Key": row["tokenizer_key"],
+            "Tokenizer Source": row["tokenizer_source"],
+            "Mapping": row["mapping_quality"],
+            "Free Models": row.get("free_model_count", len(free_models)),
+            "Free Model Examples": ", ".join(model["label"] for model in free_models) or "None attached",
+            "AA Benchmarks": row.get("aa_match_count", len(aa_matches)),
+            "AA Match Examples": ", ".join(match["label"] for match in aa_matches) or "No benchmark match",
+            "Min $/1M In": row.get("min_input_per_million"),
+            "Max Context": row.get("max_context_window"),
+            "Provenance": row["provenance"],
         })
     return display_rows
+
+
+def _format_benchmark_value(value: float | int | None) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, int):
+        return f"{value:,}"
+    if abs(float(value)) >= 10:
+        return f"{float(value):.1f}"
+    return f"{float(value):.2f}"
+
+
+def _benchmark_row_label(row: dict) -> str:
+    return f"{row.get('language', 'n/a')} / {row.get('tokenizer_key', 'n/a')}"
+
+
+def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
+    """Render a compact benchmark summary above the chart stack."""
+    if not rows:
+        return "### Benchmark Summary\n- Run the benchmark to populate the overview."
+
+    lane = rows[0].get("lane", "Benchmark")
+    languages = sorted({row.get("language", "n/a") for row in rows})
+    tokenizers = sorted({row.get("tokenizer_key", "n/a") for row in rows})
+    headline_key = "rtc" if any(isinstance(row.get("rtc"), (int, float)) for row in rows) else "english_baseline_ratio"
+    headline_label = "Worst RTC pressure" if headline_key == "rtc" else "Highest English-baseline ratio"
+
+    def _best_row(key: str):
+        numeric = [row for row in rows if isinstance(row.get(key), (int, float))]
+        if not numeric:
+            return None
+        return max(numeric, key=lambda row: float(row[key]))
+
+    headline_row = _best_row(headline_key)
+    bytes_row = _best_row("bytes_per_token")
+    split_row = _best_row("continued_word_rate")
+    metric_values = [float(row[metric_key]) for row in rows if isinstance(row.get(metric_key), (int, float))]
+    metric_range = (
+        f"{min(metric_values):.2f} to {max(metric_values):.2f}"
+        if metric_values else
+        "n/a"
+    )
+
+    lines = [
+        "### Benchmark Summary",
+        f"- Lane: **{lane}** across **{len(languages)}** languages, **{len(tokenizers)}** tokenizer families, and **{len(rows)}** aggregate rows.",
+        f"- Active metric range: **{metric_range}** for `{metric_key}`.",
+    ]
+    if headline_row:
+        lines.append(
+            f"- {headline_label}: **{_benchmark_row_label(headline_row)}** at **{_format_benchmark_value(headline_row.get(headline_key))}**."
+        )
+    if bytes_row:
+        lines.append(
+            f"- Highest bytes/token: **{_benchmark_row_label(bytes_row)}** at **{_format_benchmark_value(bytes_row.get('bytes_per_token'))}**."
+        )
+    if split_row:
+        lines.append(
+            f"- Highest split pressure: **{_benchmark_row_label(split_row)}** at **{_format_benchmark_value(split_row.get('continued_word_rate'))}**."
+        )
+    return "\n".join(lines)
 
 
 def build_benchmark_preview_markdown(
@@ -334,6 +395,7 @@ def _build_benchmark_outputs(
     coverage_rows = build_coverage_rows(rows)
     composition_rows = build_observed_composition_rows(raw_rows)
     return (
+        build_benchmark_summary_markdown(rows, metric_key),
         serialize_table(rows, _benchmark_columns_for(corpus_key)),
         build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key),
         build_distribution_chart(rows, metric_key),
@@ -399,6 +461,37 @@ def _aggregate_scenario_rows(rows: list[dict]) -> list[dict]:
     return sorted(aggregated, key=lambda row: row["label"].lower())
 
 
+def build_scenario_speed_summary_markdown(chart_rows: list[dict]) -> str:
+    """Render a speed coverage summary for the Scenario Lab speed tab."""
+    if not chart_rows:
+        return "### Speed Coverage\n- Run Scenario Lab to inspect benchmark-only speed coverage."
+
+    matched = [
+        row for row in chart_rows
+        if isinstance(row.get("ttft_seconds"), (int, float))
+        and isinstance(row.get("output_tokens_per_second"), (int, float))
+    ]
+    unmatched = [row for row in chart_rows if row not in matched]
+
+    lines = [
+        "### Speed Coverage",
+        f"- Matched models: **{len(matched)} / {len(chart_rows)}** with benchmark-only speed metadata.",
+    ]
+    if matched:
+        fastest = min(matched, key=lambda row: float(row["ttft_seconds"]))
+        highest_tps = max(matched, key=lambda row: float(row["output_tokens_per_second"]))
+        lines.append(
+            f"- Fastest time-to-first-token: **{fastest['label']}** at **{_format_benchmark_value(fastest['ttft_seconds'])}s**."
+        )
+        lines.append(
+            f"- Highest output throughput: **{highest_tps['label']}** at **{_format_benchmark_value(highest_tps['output_tokens_per_second'])} tok/s**."
+        )
+    if unmatched:
+        labels = ", ".join(row["label"] for row in unmatched)
+        lines.append(f"- No benchmark match yet: {labels}.")
+    return "\n".join(lines)
+
+
 def _build_scenario_outputs(
     rows: list[dict],
     corpus_key: str,
@@ -406,13 +499,17 @@ def _build_scenario_outputs(
     y_key: str,
     size_key: str,
 ) -> tuple[dict, object, object, object, object, object, str, str]:
-    table = serialize_table(rows, SCENARIO_COLUMNS)
+    table_rows = sorted(
+        rows,
+        key=lambda row: (float(row.get("monthly_cost") or 0.0), str(row.get("label", "")), str(row.get("language", ""))),
+        reverse=True,
+    )
+    table = serialize_table(table_rows, SCENARIO_COLUMNS)
     chart_rows = _aggregate_scenario_rows(rows)
     cost_plot = build_metric_scatter(
         chart_rows,
         x_key="rtc",
         y_key="monthly_cost",
-        size_key="monthly_input_tokens",
         title="Cost",
         x_title="RTC",
         y_title="Monthly cost ($)",
@@ -421,7 +518,6 @@ def _build_scenario_outputs(
         chart_rows,
         x_key="rtc",
         y_key="context_loss_pct",
-        size_key="monthly_input_tokens",
         title="Context Loss",
         x_title="RTC",
         y_title="Context loss (%)",
@@ -452,7 +548,17 @@ def _build_scenario_outputs(
         x_title=x_key,
         y_title=y_key,
     )
-    return table, cost_plot, context_plot, speed_plot, scale_plot, custom_plot, scenario_appendix(), render_markdown()
+    return (
+        table,
+        cost_plot,
+        context_plot,
+        build_scenario_speed_summary_markdown(chart_rows),
+        speed_plot,
+        scale_plot,
+        custom_plot,
+        scenario_appendix(),
+        render_markdown(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -626,6 +732,7 @@ def _handle_benchmark_tab(
     metric_key = metric_key if metric_key in _benchmark_metric_choices_for(corpus_key) else _default_benchmark_metric_for(corpus_key)
     if not tokenizer_keys:
         yield (
+            "### Benchmark Summary\n- Select at least one tokenizer family to populate the overview.",
             {"headers": benchmark_columns, "data": []},
             build_heatmap({}, [], []),
             build_distribution_chart([], metric_key),
@@ -644,6 +751,7 @@ def _handle_benchmark_tab(
         appendix = benchmark_appendix(corpus_key)
         raw_rows: list[dict] = []
         yield (
+            build_benchmark_summary_markdown([], metric_key),
             {"headers": benchmark_columns, "data": []},
             build_heatmap({}, [], [], metric_key=metric_key),
             build_distribution_chart([], metric_key),
@@ -682,6 +790,7 @@ def _handle_benchmark_tab(
             )
     except Exception as exc:
         yield (
+            "### Benchmark Summary\n- Benchmark generation failed before any summary could be prepared.",
             {"headers": benchmark_columns, "data": []},
             build_heatmap({}, [], [], metric_key=metric_key),
             build_distribution_chart([], metric_key),
@@ -737,6 +846,7 @@ def _handle_scenario_tab(
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_speed_summary_markdown([]),
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
@@ -751,6 +861,7 @@ def _handle_scenario_tab(
             serialize_table([], SCENARIO_COLUMNS),
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_speed_summary_markdown([]),
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
@@ -778,6 +889,7 @@ def _handle_scenario_tab(
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_speed_summary_markdown([]),
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
@@ -866,6 +978,7 @@ def build_token_tax_ui() -> gr.Blocks:
                     "Why these controls matter: Strict Evidence is the stable headline lane, while Streaming Exploration trades reproducibility for more naturalistic text. "
                     "The diagnostics pane can stream progress while each tokenizer-language pair is processed."
                 )
+                benchmark_summary_md = gr.Markdown(value="### Benchmark Summary\n- Run the benchmark to populate the overview.")
 
                 with gr.Tabs():
                     with gr.TabItem("Overview"):
@@ -900,6 +1013,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_live_updates,
                     ],
                     outputs=[
+                        benchmark_summary_md,
                         benchmark_table,
                         benchmark_heatmap,
                         benchmark_distribution,
@@ -971,7 +1085,7 @@ def build_token_tax_ui() -> gr.Blocks:
                     )
                     slice_size = gr.Dropdown(
                         choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
-                        value="monthly_input_tokens",
+                        value="none",
                         label="Bubble Size",
                     )
                 with gr.Row():
@@ -991,6 +1105,9 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Context Loss"):
                         scenario_context_plot = gr.Plot(label="Context Loss")
                     with gr.TabItem("Speed Metadata"):
+                        scenario_speed_summary_md = gr.Markdown(
+                            value="### Speed Coverage\n- Run Scenario Lab to inspect benchmark-only speed coverage."
+                        )
                         scenario_speed_plot = gr.Plot(label="Speed Metadata")
                     with gr.TabItem("Scale"):
                         scenario_scale_plot = gr.Plot(label="Scale")
@@ -1022,6 +1139,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_table,
                         scenario_cost_plot,
                         scenario_context_plot,
+                        scenario_speed_summary_md,
                         scenario_speed_plot,
                         scenario_scale_plot,
                         scenario_custom_plot,

@@ -148,6 +148,33 @@ class TestComparisonUiLabels:
         assert 'api_key = gr.State("")' in src
         assert "value=SERVER_KEY" not in src
 
+    def test_comparison_status_wrapper_reports_progress_and_completion(self):
+        from app import render_comparison_with_status
+
+        with patch("app.run_comparison", return_value=(
+            {"reasoning": "step", "answer": "A", "usage": {"prompt_tokens": 1, "completion_tokens": 2, "reasoning_tokens": 1}},
+            {"answer": "B", "usage": {"prompt_tokens": 1, "completion_tokens": 1, "reasoning_tokens": 0}},
+        )):
+            outputs = list(render_comparison_with_status(
+                "sk-or-test",
+                "Qwen 2.5 7B Instruct (Free)",
+                "Llama 3.2 3B Instruct (Free)",
+                1.0,
+                1.0,
+                None,
+                None,
+                "How many r's are in strawberry?",
+                "",
+                [],
+                {
+                    "Qwen 2.5 7B Instruct (Free)": "qwen/qwen-2.5-7b-instruct:free",
+                    "Llama 3.2 3B Instruct (Free)": "meta-llama/llama-3.2-3b-instruct:free",
+                },
+            ))
+
+        assert "Running comparison" in outputs[0][2]
+        assert "completed" in outputs[-1][2].lower()
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — extract_usage

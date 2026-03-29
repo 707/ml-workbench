@@ -48,3 +48,17 @@ def test_runtime_tabs_can_be_opted_in():
 
     assert "model-comparison-defaults" in keys
     assert "tokenizer-inspector-defaults" in keys
+
+
+def test_runtime_scenarios_execute_real_inputs_when_opted_in():
+    from review_harness import default_workbench_review_scenarios
+
+    scenarios = {scenario.key: scenario for scenario in default_workbench_review_scenarios(include_runtime_tabs=True)}
+
+    tokenizer_actions = [action.kind for action in scenarios["tokenizer-inspector-defaults"].actions]
+    model_actions = [action.kind for action in scenarios["model-comparison-defaults"].actions]
+
+    assert "fill_text" in tokenizer_actions
+    assert "wait_for_text_gone" in tokenizer_actions
+    assert "click_button" in model_actions
+    assert "wait_for_text_gone" in model_actions
