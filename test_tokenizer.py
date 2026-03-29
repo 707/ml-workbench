@@ -1591,19 +1591,19 @@ class TestBuildTokenizerUi:
         from tokenizer import _handle_single_with_status
 
         with patch("tokenizer._handle_single", return_value=("<p>tokens</p>", "**Tokens:** 3")):
-            outputs = list(_handle_single_with_status("gpt2", "hello", 3, False, ""))
+            outputs = _handle_single_with_status("gpt2", "hello", 3, False, "")
 
-        assert "Preparing tokenization" in outputs[0][2]
-        assert "completed" in outputs[-1][2].lower()
+        assert "completed" in outputs[2].lower()
+        assert "gpt2" in outputs[2]
 
     def test_compare_status_wrapper_reports_progress_and_completion(self):
         from tokenizer import _handle_compare_with_status
 
         with patch("tokenizer._handle_compare", return_value=("<p>a</p>", "<p>b</p>", "**gpt2:** 2 tokens")):
-            outputs = list(_handle_compare_with_status("hello", "gpt2", "mistral", False, ""))
+            outputs = _handle_compare_with_status("hello", "gpt2", "mistral", False, "")
 
-        assert "Comparing tokenizers" in outputs[0][3]
-        assert "completed" in outputs[-1][3].lower()
+        assert "completed" in outputs[3].lower()
+        assert "gpt2" in outputs[3]
 
 
 # ---------------------------------------------------------------------------

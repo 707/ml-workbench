@@ -613,18 +613,14 @@ def _handle_single_with_status(
     threshold: int,
     decoded_view: bool,
     english_text: str = "",
+    progress=gr.Progress(),
 ):
-    """Yield live status updates for the single-tokenizer flow."""
-    yield "", "", _runtime_status_markdown(
-        "Runtime Status",
-        [
-            f"Preparing tokenization for **{model_name}**.",
-            "Results will appear below once tokenization completes.",
-        ],
-    )
+    """Return tokenization results with a stable runtime status summary."""
+    progress(0.15, desc=f"Loading {model_name}")
     start = perf_counter()
     token_html, stats = _handle_single(model_name, text, threshold, decoded_view, english_text)
     duration = perf_counter() - start
+    progress(1.0, desc="Tokenization complete")
     if stats.startswith("Error:"):
         status = _runtime_status_markdown(
             "Runtime Status",
@@ -642,7 +638,7 @@ def _handle_single_with_status(
                 f"Input length: **{len(text)}** characters.",
             ],
         )
-    yield token_html, stats, status
+    return token_html, stats, status
 
 
 def _handle_compare_with_status(
@@ -651,18 +647,14 @@ def _handle_compare_with_status(
     name_b: str,
     decoded_view: bool,
     english_text: str = "",
+    progress=gr.Progress(),
 ):
-    """Yield live status updates for the tokenizer compare flow."""
-    yield "", "", "", _runtime_status_markdown(
-        "Runtime Status",
-        [
-            f"Comparing tokenizers **{name_a}** and **{name_b}**.",
-            "Side-by-side token views will appear once comparison completes.",
-        ],
-    )
+    """Return tokenizer comparison results with a stable runtime status summary."""
+    progress(0.15, desc=f"Comparing {name_a} vs {name_b}")
     start = perf_counter()
     html_a, html_b, ratio_md = _handle_compare(text, name_a, name_b, decoded_view, english_text)
     duration = perf_counter() - start
+    progress(1.0, desc="Comparison complete")
     if ratio_md.startswith("Error:"):
         status = _runtime_status_markdown(
             "Runtime Status",
@@ -680,7 +672,7 @@ def _handle_compare_with_status(
                 f"Input length: **{len(text)}** characters.",
             ],
         )
-    yield html_a, html_b, ratio_md, status
+    return html_a, html_b, ratio_md, status
 
 
 def build_tokenizer_ui() -> gr.Blocks:

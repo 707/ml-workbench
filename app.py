@@ -272,26 +272,18 @@ def render_comparison_with_status(
     custom_val: str,
     history: list,
     model_ids: dict[str, str],
+    progress=gr.Progress(),
 ):
-    """Yield live status updates for the comparison runtime tab."""
+    """Return comparison history with a stable runtime status summary."""
     effective_key = SERVER_KEY if SERVER_KEY else api_key_val
     question = custom_val.strip() if custom_val.strip() else preset_val
 
     if not effective_key.strip():
         msg = "<p style='color:red'>No API key provided.</p>"
-        yield history, "".join(history) + msg, _comparison_status_markdown(["No API key provided."])
-        return
+        return history, "".join(history) + msg, _comparison_status_markdown(["No API key provided."])
     if not question:
         msg = "<p style='color:red'>No question provided.</p>"
-        yield history, "".join(history) + msg, _comparison_status_markdown(["No question provided."])
-        return
-
-    yield history, "".join(history), _comparison_status_markdown(
-        [
-            f"Running comparison for **{model_a_label}** vs **{model_b_label}**.",
-            "The comparison card will appear below once both model calls complete.",
-        ],
-    )
+        return history, "".join(history) + msg, _comparison_status_markdown(["No question provided."])
 
     m_a_id = model_ids[model_a_label]
     m_b_id = model_ids[model_b_label]
@@ -300,9 +292,11 @@ def render_comparison_with_status(
     params_a = {k: v for k, v in params_a.items() if v is not None}
     params_b = {k: v for k, v in params_b.items() if v is not None}
 
+    progress(0.15, desc=f"Comparing {model_a_label} vs {model_b_label}")
     start = perf_counter()
     result_a, result_b = run_comparison(effective_key, question, m_a_id, m_b_id, params_a, params_b)
     duration = perf_counter() - start
+    progress(1.0, desc="Comparison complete")
 
     if "error" in result_a:
         a_reasoning, a_answer, a_stats = "", f"Error: {result_a['error']}", ""
@@ -328,7 +322,7 @@ def render_comparison_with_status(
     ]
     if "error" in result_a or "error" in result_b:
         status_lines.append("At least one model returned an error; review the comparison card for details.")
-    yield new_history, "".join(new_history), _comparison_status_markdown(status_lines)
+    return new_history, "".join(new_history), _comparison_status_markdown(status_lines)
 
 
 def _build_comparison_blocks() -> gr.Blocks:
