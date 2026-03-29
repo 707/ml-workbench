@@ -11,7 +11,10 @@
 GITHUB_REMOTE ?= github
 HF_SPACE ?= nad707/wb
 
-.PHONY: install run test deploy deploy-render deploy-hf verify-hf-space
+.PHONY: install run test deploy deploy-render deploy-hf verify-hf-space review-screenshots
+
+REVIEW_BASE_URL ?= http://127.0.0.1:7860
+REVIEW_OUTPUT_DIR ?=
 
 install:
 	uv sync --all-groups
@@ -47,3 +50,7 @@ verify-hf-space:
 		echo "HF_TOKEN not set; cannot verify runtime."; \
 		exit 1; \
 	fi
+
+review-screenshots:
+	@echo "Capturing screenshot review bundle from $(REVIEW_BASE_URL)..."
+	@UV_CACHE_DIR=$(pwd)/.uv-cache uv run python scripts/capture_review_bundle.py --base-url "$(REVIEW_BASE_URL)" $(if $(REVIEW_OUTPUT_DIR),--output-dir "$(REVIEW_OUTPUT_DIR)",)

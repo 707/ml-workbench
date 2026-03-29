@@ -21,6 +21,7 @@ __pycache__/
 
 # Keep research notes local-only
 learning.md
+artifacts/review/
 
 # OS
 .DS_Store

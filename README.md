@@ -151,6 +151,24 @@ make test
 
 Runs the workbench test suite with coverage.
 
+### Capture review screenshots
+
+Use the screenshot review harness to capture consistent visual states across the workbench tabs:
+
+```bash
+uv run playwright install chromium
+make review-screenshots REVIEW_BASE_URL=http://127.0.0.1:7860
+```
+
+Artifacts are written to `artifacts/review/<date>/<time>Z/` with a `manifest.json` describing the captured scenarios.
+To include runtime tabs such as Model Comparison, run:
+
+```bash
+uv run python scripts/capture_review_bundle.py --base-url https://ml-workbench.onrender.com --include-runtime-tabs
+```
+
+If Chromium is flaky in your environment, the harness also supports `--browser firefox` or `--browser webkit`.
+
 ---
 
 ## Deploy to Render
