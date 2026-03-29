@@ -381,6 +381,8 @@ def _build_benchmark_outputs(
     preview_language: str,
     preview_tokenizer: str,
     preview_sample_index: int,
+    *,
+    skip_plot_updates: bool = False,
 ):
     corpus_key = "strict_parallel"
     if rows:
@@ -397,11 +399,11 @@ def _build_benchmark_outputs(
     return (
         build_benchmark_summary_markdown(rows, metric_key),
         serialize_table(rows, _benchmark_columns_for(corpus_key)),
-        build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key),
-        build_distribution_chart(rows, metric_key),
+        gr.skip() if skip_plot_updates else build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key),
+        gr.skip() if skip_plot_updates else build_distribution_chart(rows, metric_key),
         build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
         serialize_table(raw_rows, _raw_benchmark_columns_for(corpus_key)),
-        build_metric_scatter(
+        gr.skip() if skip_plot_updates else build_metric_scatter(
             coverage_rows,
             x_key="unique_tokens",
             y_key="continued_word_rate",
@@ -409,7 +411,7 @@ def _build_benchmark_outputs(
             x_title="Unique observed tokens",
             y_title="Continued-word rate",
         ),
-        build_category_bar(
+        gr.skip() if skip_plot_updates else build_category_bar(
             composition_rows,
             category_key="script",
             value_key="token_count",
@@ -498,7 +500,9 @@ def _build_scenario_outputs(
     x_key: str,
     y_key: str,
     size_key: str,
-) -> tuple[dict, object, object, object, object, object, str, str]:
+    *,
+    skip_plot_updates: bool = False,
+) -> tuple[dict, object, object, object, object, object, object, str, str]:
     table_rows = sorted(
         rows,
         key=lambda row: (float(row.get("monthly_cost") or 0.0), str(row.get("label", "")), str(row.get("language", ""))),
@@ -550,12 +554,12 @@ def _build_scenario_outputs(
     )
     return (
         table,
-        cost_plot,
-        context_plot,
+        gr.skip() if skip_plot_updates else cost_plot,
+        gr.skip() if skip_plot_updates else context_plot,
         build_scenario_speed_summary_markdown(chart_rows),
-        speed_plot,
-        scale_plot,
-        custom_plot,
+        gr.skip() if skip_plot_updates else speed_plot,
+        gr.skip() if skip_plot_updates else scale_plot,
+        gr.skip() if skip_plot_updates else custom_plot,
         scenario_appendix(),
         render_markdown(),
     )
@@ -733,13 +737,13 @@ def _handle_benchmark_tab(
     if not tokenizer_keys:
         yield (
             "### Benchmark Summary\n- Select at least one tokenizer family to populate the overview.",
-            {"headers": benchmark_columns, "data": []},
-            build_heatmap({}, [], []),
-            build_distribution_chart([], metric_key),
-            "### Preview\n- Select at least one tokenizer family.",
-            serialize_table([], raw_benchmark_columns),
-            build_metric_scatter([], x_key="unique_tokens", y_key="continued_word_rate"),
-            build_category_bar([], category_key="script", value_key="token_count"),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
             "Select at least one tokenizer family.",
             render_markdown(),
         )
@@ -749,19 +753,19 @@ def _handle_benchmark_tab(
         clear_events()
         selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
         appendix = benchmark_appendix(corpus_key)
-        raw_rows: list[dict] = []
         yield (
             build_benchmark_summary_markdown([], metric_key),
-            {"headers": benchmark_columns, "data": []},
-            build_heatmap({}, [], [], metric_key=metric_key),
-            build_distribution_chart([], metric_key),
-            build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
-            serialize_table(raw_rows, raw_benchmark_columns),
-            build_metric_scatter([], x_key="unique_tokens", y_key="continued_word_rate"),
-            build_category_bar([], category_key="script", value_key="token_count"),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
             appendix,
             render_markdown(),
         )
+        raw_rows: list[dict] = []
         rows: list[dict] = []
         for row, current_raw_rows in _iter_benchmark_payload(
             corpus_key,
@@ -783,6 +787,7 @@ def _handle_benchmark_tab(
                     preview_language,
                     preview_tokenizer,
                     preview_sample_index,
+                    skip_plot_updates=True,
                 )
         if not rows:
             raise RuntimeError(
@@ -858,13 +863,13 @@ def _handle_scenario_tab(
     try:
         clear_events()
         yield (
-            serialize_table([], SCENARIO_COLUMNS),
-            build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
-            build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
             build_scenario_speed_summary_markdown([]),
-            build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
-            build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
-            build_metric_scatter([], x_key=x_key, y_key=y_key),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
             scenario_appendix(),
             render_markdown(),
         )

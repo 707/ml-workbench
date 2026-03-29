@@ -28,6 +28,8 @@ def test_default_workbench_review_scenarios_have_unique_keys():
     assert "benchmark-strict-defaults" in keys
     assert "scenario-defaults-cost" in keys
     assert "scenario-defaults-speed" in keys
+    benchmark_actions = [action.kind for action in scenarios[0].actions]
+    assert "wait_for_visible_table_rows" in benchmark_actions
 
 
 def test_default_workbench_review_scenarios_skip_runtime_tabs_by_default():
@@ -59,6 +61,6 @@ def test_runtime_scenarios_execute_real_inputs_when_opted_in():
     model_actions = [action.kind for action in scenarios["model-comparison-defaults"].actions]
 
     assert "fill_text" in tokenizer_actions
-    assert "wait_for_text_cycle" in tokenizer_actions
+    assert "wait_for_text_present" in tokenizer_actions
     assert "click_button" in model_actions
-    assert "wait_for_text_cycle" in model_actions
+    assert "wait_for_text_present" in model_actions
