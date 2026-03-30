@@ -1,43 +1,26 @@
----
-title: ML Workbench
-emoji: 🧠
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
+# ml-workbench
 
-# ML Workbench
+Tokeniser evidence for llm models, languages cost trade-offs which tries to answer:
 
-Tokenizer evidence for real models, real languages, and real cost trade-offs.
-
-ML Workbench is a portfolio-grade Gradio app for answering one practical question:
 
 > If the same meaning is written in English, Arabic, Hindi, Japanese, or Chinese, how much extra cost and context do different tokenizer families impose?
 
-It combines strict multilingual benchmark evidence, a tokenizer-to-model catalog, scenario modelling, a token inspector, and a plain-language explainer in one app.
+Serves strict multilingual benchmark evidence and scenario modelling, token inspector.
 
-![Scenario Lab](docs/assets/scenario-default.png)
+## Why
 
-## Why This Exists
+Most model comparisons incorrectly treat tokenisation as invisible plumbing.
 
-Most model comparisons treat tokenization as invisible plumbing. It is not.
-
-The same idea can consume very different token counts depending on:
+The same model can consume very different token counts depending on:
 - the language
-- the tokenizer family
+- the tokeniser family
 - the deployable model sitting on top of that tokenizer
 
-That changes three things immediately:
+Which can affect:
 - API cost
 - usable context window
 - how multilingual traffic scales in production
 
-This repo makes those trade-offs visible instead of assuming one model behaves equally across all languages.
-
-## What The App Does
 
 ### Token Tax Workbench
 - **Benchmark** compares tokenizer families across languages
@@ -52,9 +35,6 @@ This repo makes those trade-offs visible instead of assuming one model behaves e
 ### Model Comparison
 - compare two free OpenRouter models side by side
 - inspect answer quality, reasoning traces, and token usage
-
-### Why Tokenizers Matter
-- a non-technical explainer for product, ops, and leadership audiences
 
 ## Evidence Model
 
@@ -74,7 +54,7 @@ The app uses two benchmark lanes on purpose.
 
 Only **Strict Evidence** feeds Scenario Lab cost and context projections.
 
-## What We Measure
+## What is measured
 
 - **Relative Token Cost (vs English)**: how many more tokens a language needs than aligned English for the same meaning
 - **Text packed into each token**: UTF-8 bytes per token; higher means a tokenizer packs more raw text into each token
@@ -82,7 +62,7 @@ Only **Strict Evidence** feeds Scenario Lab cost and context projections.
 - **Tokens per word / character**: a practical proxy for tokenizer fragmentation pressure
 - **Unique tokens used**: how broad the observed token coverage is on the selected benchmark rows
 
-## How To Use It
+## Guide
 
 1. Start in **Benchmark**
    - compare tokenizer families across your target languages
@@ -150,7 +130,7 @@ The app is intentionally split into a few clear layers so the data flow stays ex
 ### Docker strategy
 - the Docker image warms the default tokenizer set during build so the first request is faster and less memory-spiky on low-resource hosting
 
-## Code Structure
+## App Structure
 
 ### Core app
 - [`app.py`](app.py): Gradio shell and comparison tab
@@ -190,20 +170,6 @@ make typecheck
 make test
 uv run python -c "from app import build_ui; ui = build_ui(); print(type(ui).__name__)"
 ```
-
-## Screenshots
-
-### Strict benchmark
-![Strict benchmark](docs/assets/benchmark-strict-default.png)
-
-### Streaming benchmark
-![Streaming benchmark](docs/assets/benchmark-streaming-default.png)
-
-### Scenario Lab
-![Scenario Lab](docs/assets/scenario-default.png)
-
-### Explainer
-![Why Tokenizers Matter](docs/assets/why-tokenizers-matter.png)
 
 ## Run Locally
 

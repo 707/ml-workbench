@@ -16,6 +16,9 @@ __pycache__/
 .uv-cache/
 .mypy_cache/
 .ruff_cache/
+.env
+.env.*
+!.env.example
 .env.local
 
 # Local history / archived git state
