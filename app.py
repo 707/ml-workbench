@@ -47,7 +47,7 @@ PRESET_QUESTIONS = [
 ]
 
 APP_CSS = """
-body.mlwb-dark {
+body {
   --wb-bg: #0f1116;
   --wb-panel: #171b24;
   --wb-panel-soft: #1d2330;
@@ -56,41 +56,14 @@ body.mlwb-dark {
   --wb-muted: #94a3b8;
   --wb-accent: #f97316;
   --wb-accent-soft: rgba(249, 115, 22, 0.16);
-}
-
-body.mlwb-light {
-  --wb-bg: #f4f6fb;
-  --wb-panel: #ffffff;
-  --wb-panel-soft: #eef2f9;
-  --wb-border: #d7dee9;
-  --wb-text: #18212f;
-  --wb-muted: #5b6b82;
-  --wb-accent: #ea580c;
-  --wb-accent-soft: rgba(234, 88, 12, 0.10);
-}
-
-body.mlwb-dark { color-scheme: dark; }
-body.mlwb-light { color-scheme: light; }
-
-body.mlwb-dark,
-body.mlwb-light {
+  color-scheme: dark;
   background: var(--wb-bg) !important;
   color: var(--wb-text) !important;
 }
 
-body.mlwb-dark .gradio-container,
-body.mlwb-light .gradio-container {
+.gradio-container {
   background: var(--wb-bg) !important;
   color: var(--wb-text) !important;
-}
-
-body.mlwb-light .gradio-container input,
-body.mlwb-light .gradio-container textarea,
-body.mlwb-light .gradio-container select,
-body.mlwb-light .gradio-container button,
-body.mlwb-light .gradio-container .wrap,
-body.mlwb-light .gradio-container .block {
-  color: var(--wb-text);
 }
 
 .gradio-container h1,
@@ -112,15 +85,10 @@ body.mlwb-light .gradio-container .block {
 
 .app-shell-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.9rem;
-  padding: 0.8rem 1rem;
-  margin-bottom: 0.7rem;
-  position: sticky;
-  top: 0.5rem;
-  z-index: 20;
-  backdrop-filter: blur(14px);
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.45rem;
 }
 
 .app-shell-copy h1 {
@@ -132,75 +100,22 @@ body.mlwb-light .gradio-container .block {
 .app-shell-copy p {
   margin: 0.18rem 0 0 0;
   color: var(--wb-muted);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.theme-toggle-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.2rem;
-  border: 1px solid var(--wb-border);
-  border-radius: 999px;
-  background: var(--wb-panel-soft);
-}
-
-.theme-choice {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--wb-muted);
-  min-width: 4.7rem;
-  height: 2rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.theme-choice:hover {
-  color: var(--wb-text);
-  background: rgba(148, 163, 184, 0.10);
-}
-
-.theme-choice:focus-visible,
 .gradio-container button:focus-visible,
 .gradio-container [role="tab"]:focus-visible {
   outline: 2px solid var(--wb-accent);
   outline-offset: 2px;
 }
 
-.theme-choice.is-active {
-  color: var(--wb-text);
-  background: var(--wb-panel);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
 .filter-grid {
   align-items: start;
-  gap: 0.7rem;
+  gap: 0.55rem;
 }
 
 .filter-rail {
-  padding: 0.15rem 0;
+  padding: 0.08rem 0;
   background: transparent;
   border: none;
   box-shadow: none;
@@ -208,30 +123,45 @@ body.mlwb-light .gradio-container .block {
 }
 
 .filter-rail .wrap {
-  gap: 0.38rem;
+  gap: 0.22rem;
 }
 
 .filter-rail--compact {
-  max-width: 300px;
+  max-width: 280px;
 }
 
 .filter-rail--wide {
   max-width: none;
 }
 
+.filter-rail--scenario-inputs {
+  max-width: 360px;
+}
+
+.catalog-utility-row {
+  align-items: end;
+  gap: 0.7rem;
+  margin-bottom: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.checkbox-stack {
+  gap: 0.25rem;
+}
+
 .section-header {
-  margin: 0.1rem 0 0.75rem 0;
+  margin: 0.05rem 0 0.45rem 0;
 }
 
 .section-header h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
 }
 
 .section-header p {
-  margin: 0.2rem 0 0 0;
+  margin: 0.14rem 0 0 0;
   color: var(--wb-muted);
-  font-size: 0.94rem;
+  font-size: 0.88rem;
 }
 
 .chart-help {
@@ -256,41 +186,48 @@ body.mlwb-light .gradio-container .block {
 }
 
 .benchmark-summary-box {
-  padding: 0.8rem 0.9rem;
+  padding: 0.55rem 0.65rem;
 }
 
 .benchmark-summary-box h3,
 .preview-card h3,
 .explainer-card h3 {
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 0.18rem 0;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.55rem;
-  margin-top: 0.55rem;
+.summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
 }
 
-.summary-metric {
+.summary-pill {
   background: var(--wb-panel-soft);
   border: 1px solid var(--wb-border);
-  border-radius: 12px;
-  padding: 0.65rem 0.75rem;
+  border-radius: 999px;
+  padding: 0.42rem 0.58rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
 }
 
-.summary-metric-label {
+.summary-pill-label {
   color: var(--wb-muted);
-  font-size: 0.74rem;
-  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
-.summary-metric-value {
+.summary-pill-value {
   color: var(--wb-text);
-  font-size: 0.93rem;
-  line-height: 1.35;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .preview-card {
@@ -359,12 +296,18 @@ body.mlwb-light .gradio-container .block {
   align-self: flex-start;
 }
 
-.compact-action button {
+.compact-action button,
+.compact-action {
   width: auto !important;
-  min-width: 9.25rem;
-  min-height: 2.35rem !important;
-  padding-inline: 0.85rem !important;
-  font-size: 0.92rem !important;
+  min-width: 7.5rem;
+  min-height: 2.2rem !important;
+  padding-inline: 0.7rem !important;
+  font-size: 0.88rem !important;
+}
+
+.raw-export-row {
+  align-items: center;
+  margin-bottom: 0.35rem;
 }
 
 .preview-token {
@@ -440,16 +383,8 @@ body.mlwb-light .gradio-container .block {
 }
 
 @media (max-width: 900px) {
-  .app-shell-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .theme-toggle-group {
-    align-self: flex-end;
-  }
-
-  .summary-grid {
+  .summary-strip {
+    display: grid;
     grid-template-columns: 1fr;
   }
 }
@@ -457,50 +392,7 @@ body.mlwb-light .gradio-container .block {
 
 APP_JS = """
 async () => {
-  const storageKey = "mlwb-theme";
-
-  const applyTheme = (theme) => {
-    const body = document.body;
-    body.classList.remove("mlwb-dark", "mlwb-light");
-    body.classList.add(theme === "light" ? "mlwb-light" : "mlwb-dark");
-    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
-      const isActive = button.getAttribute("data-theme-choice") === theme;
-      button.classList.toggle("is-active", isActive);
-      button.setAttribute("aria-pressed", isActive ? "true" : "false");
-    });
-    if (window.Plotly) {
-      requestAnimationFrame(() => {
-        document.querySelectorAll(".js-plotly-plot").forEach((plot) => {
-          window.Plotly.relayout(plot, {
-            paper_bgcolor: "rgba(0,0,0,0)",
-            plot_bgcolor: "rgba(0,0,0,0)",
-            font: { color: "var(--wb-text)" },
-          });
-        });
-      });
-    }
-  };
-
-  const attachToggle = () => {
-    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
-      if (button.dataset.bound === "true") {
-        return;
-      }
-      button.dataset.bound = "true";
-      button.addEventListener("click", () => {
-        const nextTheme = button.getAttribute("data-theme-choice") || "dark";
-        localStorage.setItem(storageKey, nextTheme);
-        applyTheme(nextTheme);
-      });
-    });
-  };
-
-  const systemPrefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
-  applyTheme(localStorage.getItem(storageKey) || (systemPrefersLight ? "light" : "dark"));
-  attachToggle();
-  const observer = new MutationObserver(() => attachToggle());
-  observer.observe(document.body, { childList: true, subtree: true });
-  setTimeout(() => observer.disconnect(), 8000);
+  document.body.classList.add("mlwb-app");
 }
 """
 
@@ -924,31 +816,6 @@ def build_ui() -> gr.Blocks:
               <div class="app-shell-copy">
                 <h1>ML Workbench</h1>
                 <p>Tokenizer evidence, scenario modelling, and free-model comparisons in one place.</p>
-              </div>
-              <div class="theme-toggle theme-toggle-group" role="group" aria-label="Theme toggle">
-                <span class="sr-only">Theme</span>
-                <button
-                  id="theme-choice-light"
-                  type="button"
-                  class="theme-choice"
-                  data-theme-choice="light"
-                  aria-label="Switch to light mode"
-                  title="Light theme"
-                >
-                  <span aria-hidden="true">☀</span>
-                  <span>Light</span>
-                </button>
-                <button
-                  id="theme-choice-dark"
-                  type="button"
-                  class="theme-choice"
-                  data-theme-choice="dark"
-                  aria-label="Switch to dark mode"
-                  title="Dark theme"
-                >
-                  <span aria-hidden="true">☾</span>
-                  <span>Dark</span>
-                </button>
               </div>
             </div>
             """

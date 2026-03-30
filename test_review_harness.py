@@ -72,8 +72,8 @@ def test_default_scenarios_include_explainer_and_theme_reviews():
     scenarios = default_workbench_review_scenarios()
     keys = {scenario.key for scenario in scenarios}
 
-    assert "benchmark-strict-defaults-light" in keys
-    assert "benchmark-strict-defaults-dark" in keys
+    assert "benchmark-strict-defaults" in keys
     assert "benchmark-coverage-defaults" in keys
     assert "benchmark-observed-composition-defaults" in keys
+    assert "benchmark-raw-data-defaults" in keys
     assert "why-tokenizers-matter" in keys

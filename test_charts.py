@@ -106,9 +106,9 @@ class TestBuildBubbleChart:
         from charts import build_bubble_chart
 
         fig = build_bubble_chart(SAMPLE_RESULTS)
-        assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)"
-        assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
-        assert fig.layout.font.color == "var(--wb-text)"
+        assert fig.layout.paper_bgcolor == "#ffffff"
+        assert fig.layout.plot_bgcolor == "#ffffff"
+        assert fig.layout.font.color == "#111111"
 
 
 # ---------------------------------------------------------------------------
@@ -192,9 +192,18 @@ class TestBuildHeatmap:
         from charts import build_heatmap
 
         fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
-        assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)"
-        assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
-        assert fig.layout.font.color == "var(--wb-text)"
+        assert fig.layout.paper_bgcolor == "#ffffff"
+        assert fig.layout.plot_bgcolor == "#ffffff"
+        assert fig.layout.font.color == "#111111"
+
+    def test_heatmap_uses_intuitive_green_to_red_scale(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
+        colorscale = list(fig.data[0].colorscale)
+
+        assert colorscale[0][1] == "#22c55e"
+        assert colorscale[-1][1] == "#ef4444"
 
 
 class TestBuildMetricScatter:

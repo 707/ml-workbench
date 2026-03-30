@@ -180,18 +180,16 @@ class TestComparisonUiLabels:
 
         src = inspect.getsource(app.build_ui)
         assert "with gr.Blocks(" in src
-        assert "theme-toggle" in src
         assert ".render()" in src
         assert "demo.load(" in src
 
-    def test_build_ui_uses_segmented_theme_toggle_markup(self):
+    def test_build_ui_removes_theme_toggle_markup(self):
         import app
 
         src = inspect.getsource(app.build_ui)
-        assert 'role="group"' in src
-        assert "Theme" in src
-        assert "theme-choice-light" in src
-        assert "theme-choice-dark" in src
+        assert "theme-toggle" not in src
+        assert "theme-choice-light" not in src
+        assert "theme-choice-dark" not in src
 
     def test_build_ui_includes_explainer_tab(self):
         import app

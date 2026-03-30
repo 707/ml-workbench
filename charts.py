@@ -47,25 +47,25 @@ def _value(row: dict, key: str):
 def _apply_theme(fig):
     fig.update_layout(
         template="plotly",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "var(--wb-text)"},
-        title={"font": {"color": "var(--wb-text)"}},
-        legend={"font": {"color": "var(--wb-text)"}},
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font={"color": "#111111"},
+        title={"font": {"color": "#111111"}},
+        legend={"font": {"color": "#111111"}},
     )
     fig.update_xaxes(
-        gridcolor="rgba(148, 163, 184, 0.16)",
-        zerolinecolor="rgba(148, 163, 184, 0.16)",
-        linecolor="rgba(148, 163, 184, 0.28)",
-        tickfont={"color": "var(--wb-text)"},
-        title_font={"color": "var(--wb-text)"},
+        gridcolor="#e5e7eb",
+        zerolinecolor="#e5e7eb",
+        linecolor="#cbd5e1",
+        tickfont={"color": "#111111"},
+        title_font={"color": "#111111"},
     )
     fig.update_yaxes(
-        gridcolor="rgba(148, 163, 184, 0.16)",
-        zerolinecolor="rgba(148, 163, 184, 0.16)",
-        linecolor="rgba(148, 163, 184, 0.28)",
-        tickfont={"color": "var(--wb-text)"},
-        title_font={"color": "var(--wb-text)"},
+        gridcolor="#e5e7eb",
+        zerolinecolor="#e5e7eb",
+        linecolor="#cbd5e1",
+        tickfont={"color": "#111111"},
+        title_font={"color": "#111111"},
     )
     return fig
 
@@ -233,7 +233,11 @@ def build_heatmap(
         z=z,
         x=models,
         y=languages,
-        colorscale="Viridis",
+        colorscale=[
+            [0.0, "#22c55e"],
+            [0.5, "#f59e0b"],
+            [1.0, "#ef4444"],
+        ],
         colorbar_title=metric_key,
         hovertemplate=f"Language: %{{y}}<br>Tokenizer: %{{x}}<br>{metric_key}: %{{z}}<extra></extra>",
     ))

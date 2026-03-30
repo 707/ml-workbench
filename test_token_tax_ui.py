@@ -3,6 +3,7 @@
 import csv
 import os
 import tempfile
+from pathlib import Path
 
 import plotly.graph_objects as go
 import pytest
@@ -290,7 +291,7 @@ class TestWorkbenchHandlers:
         )
 
         assert "Benchmark Summary" in markdown
-        assert "summary-metric" in markdown
+        assert "summary-pill" in markdown
         assert "Biggest Relative Token Cost jump" in markdown
         assert "Text packed into each token" in markdown
         assert "Word split rate" in markdown
@@ -331,6 +332,14 @@ class TestWorkbenchHandlers:
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
         assert "filter-rail filter-rail--compact" in src
         assert "filter-rail filter-rail--wide" in src
+        assert "filter-rail filter-rail--scenario-inputs" in src
+
+    def test_catalog_filters_use_horizontal_utility_row(self):
+        import inspect
+        import token_tax_ui
+
+        src = inspect.getsource(token_tax_ui.build_token_tax_ui)
+        assert "catalog-utility-row" in src
 
     def test_build_coverage_rows_preserve_fertility_for_bar_charts(self):
         from token_tax_ui import build_coverage_rows
@@ -386,6 +395,7 @@ class TestWorkbenchHandlers:
 
         assert "Relative Token Cost" in markdown
         assert "same meaning" in markdown
+        assert "###" not in markdown
 
     def test_build_benchmark_chart_explainer_for_coverage_mentions_split_rate(self):
         from token_tax_ui import build_benchmark_chart_explainer_markdown
@@ -394,6 +404,28 @@ class TestWorkbenchHandlers:
 
         assert "Word split rate" in markdown
         assert "Tokens per word / character" in markdown
+        assert markdown.lstrip().startswith("<div")
+
+    def test_export_serialized_table_csv_writes_current_rows(self):
+        from token_tax_ui import export_serialized_table_csv
+
+        path = export_serialized_table_csv(
+            {
+                "headers": ["language", "tokenizer_key", "rtc"],
+                "data": [["English", "gpt2", 1.0], ["Arabic", "gpt2", 2.4]],
+            },
+            prefix="benchmark-raw",
+        )
+
+        assert path is not None
+        csv_path = Path(path)
+        assert csv_path.exists()
+        assert csv_path.read_text(encoding="utf-8").splitlines()[0] == "language,tokenizer_key,rtc"
+
+    def test_export_serialized_table_csv_returns_none_for_empty_table(self):
+        from token_tax_ui import export_serialized_table_csv
+
+        assert export_serialized_table_csv({"headers": ["language"], "data": []}) is None
 
     def test_catalog_display_rows_use_review_friendly_column_labels(self):
         from token_tax_ui import CATALOG_COLUMNS, _catalog_display_rows

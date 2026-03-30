@@ -31,9 +31,9 @@ def _empty_figure(message: str):
     fig = go.Figure()
     fig.update_layout(
         template="plotly",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "var(--wb-text)"},
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font={"color": "#111111"},
         annotations=[{
             "text": message,
             "xref": "paper",
@@ -61,9 +61,9 @@ def _single_series_bar(rows: list[dict], *, key: str, title: str, y_title: str):
     ))
     fig.update_layout(
         template="plotly",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "var(--wb-text)"},
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font={"color": "#111111"},
         title=title,
         xaxis_title="Tokenizer family",
         yaxis_title=y_title,
@@ -92,9 +92,9 @@ def _comparison_bar(rows: list[dict]):
     ))
     fig.update_layout(
         template="plotly",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "var(--wb-text)"},
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font={"color": "#111111"},
         title="Same meaning, different token counts",
         xaxis_title="Tokenizer family",
         yaxis_title="Token count",

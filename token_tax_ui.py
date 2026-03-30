@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import html
+import csv
+import tempfile
 import gradio as gr
 
 from charts import (
@@ -163,22 +165,35 @@ def build_chart_help_markdown(title: str, body: str) -> str:
 def build_benchmark_chart_explainer_markdown(metric_key: str, section_name: str) -> str:
     metric_label = metric_display_label(metric_key)
     if section_name == "Coverage":
-        return (
-            "### How to read this chart\n"
-            f"These bars compare **{metric_label}**, **Word split rate**, and **Tokens per word / character** across languages. "
-            "They help answer a simple question: when two languages say the **same meaning**, which tokenizer breaks the text into more pieces?"
+        return build_chart_help_markdown(
+            "How to read this chart",
+            f"These bars compare {metric_label}, Word split rate, and Tokens per word / character across languages. They answer one practical question: when two languages say the same meaning, which tokenizer breaks the text into more pieces?"
         )
     if section_name == "Observed Composition":
-        return (
-            "### How to read this chart\n"
-            "This stacked bar shows which writing systems the tokenizer actually used on the selected benchmark rows. "
-            "It is a quick visual check for whether a tokenizer mostly leans on Latin-style pieces or spreads its vocabulary across Arabic, Cyrillic, CJK, and other scripts."
+        return build_chart_help_markdown(
+            "How to read this chart",
+            "This stacked bar shows which writing systems the tokenizer actually used on the selected benchmark rows. It helps you see whether a tokenizer spreads its pieces across Arabic, Cyrillic, CJK, Latin, and other scripts or leans heavily on one script."
         )
-    return (
-        "### How to read this chart\n"
-        f"This view compares **{metric_label}** across languages and tokenizer families. "
-        "Lower relative token cost usually means the tokenizer needs fewer pieces to express the same meaning."
+    return build_chart_help_markdown(
+        "How to read this chart",
+        f"This view compares {metric_label} across languages and tokenizer families. Lower relative token cost usually means the tokenizer needs fewer pieces to express the same meaning."
     )
+
+
+def export_serialized_table_csv(table: dict | None, prefix: str = "export") -> str | None:
+    """Write a serialized table dict to a temporary CSV file."""
+    if not table:
+        return None
+    headers = list(table.get("headers") or [])
+    rows = list(table.get("data") or [])
+    if not headers or not rows:
+        return None
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", suffix=".csv", prefix=f"{prefix}-", delete=False) as handle:
+        writer = csv.writer(handle)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        return handle.name
 
 
 def _resolve_corpus_key(selection: str) -> str:
@@ -372,9 +387,9 @@ def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
 
     cards_html = "".join(
         (
-            '<div class="summary-metric">'
-            f'<div class="summary-metric-label">{label}</div>'
-            f'<div class="summary-metric-value">{value}</div>'
+            '<div class="summary-pill">'
+            f'<span class="summary-pill-label">{label}</span>'
+            f'<span class="summary-pill-value">{value}</span>'
             "</div>"
         )
         for label, value in summary_cards
@@ -382,7 +397,7 @@ def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
     return (
         '<section class="benchmark-summary-box">'
         "<h3>Benchmark Summary</h3>"
-        f'<div class="summary-grid">{cards_html}</div>'
+        f'<div class="summary-strip">{cards_html}</div>'
         "</section>"
     )
 
@@ -1300,6 +1315,9 @@ def build_token_tax_ui() -> gr.Blocks:
                                 "This is the analyst view. Each row is one sampled text and the exact tokenization metrics used to build the higher-level summaries."
                             )
                         )
+                        with gr.Row(elem_classes="raw-export-row"):
+                            benchmark_raw_export_btn = gr.Button("Download CSV", size="sm", elem_classes="compact-action")
+                            benchmark_raw_export_file = gr.File(label="Raw Data CSV", interactive=False)
                         benchmark_raw_table = gr.DataFrame(label="Raw Benchmark Data", interactive=False)
                 with gr.Accordion("Benchmark Appendix", open=False):
                     benchmark_appendix_md = gr.Markdown(label="Benchmark Appendix")
@@ -1336,26 +1354,31 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_diagnostics_md,
                     ],
                 )
+                benchmark_raw_export_btn.click(
+                    fn=lambda table: export_serialized_table_csv(table, prefix="benchmark-raw"),
+                    inputs=[benchmark_raw_table],
+                    outputs=[benchmark_raw_export_file],
+                    queue=False,
+                )
 
             with gr.TabItem("Catalog"):
-                with gr.Row(equal_height=False, elem_classes="filter-grid"):
-                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=320, scale=0):
-                        catalog_include_proxy = gr.Checkbox(
-                            label="Include proxy mappings",
-                            value=False,
-                            info="Include tokenizer families that rely on documented proxy mappings.",
-                        )
-                        catalog_refresh_live = gr.Checkbox(
-                            label="Refresh live pricing cache",
-                            value=False,
-                            info="Refresh pricing from OpenRouter into the app's in-memory cache for this session.",
-                        )
-                        catalog_live_updates = gr.Checkbox(
-                            label="Live diagnostics",
-                            value=False,
-                            info="Stream catalog refresh progress while loading the table.",
-                        )
-                        catalog_run = gr.Button("Load Catalog", variant="primary", size="sm", elem_classes="compact-action")
+                with gr.Row(equal_height=False, elem_classes="catalog-utility-row"):
+                    catalog_include_proxy = gr.Checkbox(
+                        label="Include proxy mappings",
+                        value=False,
+                        info="Include tokenizer families that rely on documented proxy mappings.",
+                    )
+                    catalog_refresh_live = gr.Checkbox(
+                        label="Refresh live pricing cache",
+                        value=False,
+                        info="Refresh pricing from OpenRouter into the app's in-memory cache for this session.",
+                    )
+                    catalog_live_updates = gr.Checkbox(
+                        label="Live diagnostics",
+                        value=False,
+                        info="Stream catalog refresh progress while loading the table.",
+                    )
+                    catalog_run = gr.Button("Load Catalog", variant="primary", size="sm", elem_classes="compact-action")
                 gr.HTML(
                     build_chart_help_markdown(
                         "How to use this catalog",
@@ -1396,7 +1419,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Attached Free Models",
                             info="Exact free OpenRouter models attached to the selected tokenizer families.",
                         )
-                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=290, scale=0):
+                    with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs filter-rail--compact", min_width=340, scale=0):
                         monthly_requests = gr.Slider(
                             1_000,
                             1_000_000,
@@ -1429,7 +1452,6 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Reasoning Share",
                             info="Extra completion-token multiplier for reasoning-heavy workloads.",
                         )
-                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=290, scale=0):
                         slice_x = gr.Dropdown(
                             choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
                             value="rtc",
@@ -1448,21 +1470,22 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Bubble Size",
                             info="Optional bubble sizing field for the custom slice chart.",
                         )
-                        scenario_include_estimates = gr.Checkbox(
-                            label="Include estimated values",
-                            value=False,
-                            info="Include estimated or non-strict rows in the scenario comparison.",
-                        )
-                        scenario_include_proxy = gr.Checkbox(
-                            label="Include proxy mappings",
-                            value=False,
-                            info="Allow tokenizer families with documented proxy mappings into the scenario.",
-                        )
-                        scenario_live_updates = gr.Checkbox(
-                            label="Live diagnostics",
-                            value=False,
-                            info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
-                        )
+                        with gr.Group(elem_classes="checkbox-stack"):
+                            scenario_include_estimates = gr.Checkbox(
+                                label="Include estimated values",
+                                value=False,
+                                info="Include estimated or non-strict rows in the scenario comparison.",
+                            )
+                            scenario_include_proxy = gr.Checkbox(
+                                label="Include proxy mappings",
+                                value=False,
+                                info="Allow tokenizer families with documented proxy mappings into the scenario.",
+                            )
+                            scenario_live_updates = gr.Checkbox(
+                                label="Live diagnostics",
+                                value=False,
+                                info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
+                            )
                         scenario_run = gr.Button("Run Scenario Lab", variant="primary", size="sm", elem_classes="compact-action")
                 gr.HTML(
                     build_chart_help_markdown(

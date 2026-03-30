@@ -85,34 +85,6 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
     """Return the default screenshot sweep for the workbench."""
     scenarios = [
         ReviewScenario(
-            key="benchmark-strict-defaults-light",
-            title="Benchmark Strict Defaults Light",
-            description="Default strict benchmark run in light theme.",
-            actions=(
-                ReviewAction("click_text", "Light", optional=True),
-                ReviewAction("open_top_tab", "Token Tax Workbench"),
-                ReviewAction("open_inner_tab", "Benchmark"),
-                ReviewAction("click_button", "Run Benchmark"),
-                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
-                ReviewAction("wait_ms", "settle", value=1_000),
-            ),
-            captures=(CaptureRequest("benchmark-strict-defaults-light"),),
-        ),
-        ReviewScenario(
-            key="benchmark-strict-defaults-dark",
-            title="Benchmark Strict Defaults Dark",
-            description="Default strict benchmark run in dark theme.",
-            actions=(
-                ReviewAction("click_text", "Dark", optional=True),
-                ReviewAction("open_top_tab", "Token Tax Workbench"),
-                ReviewAction("open_inner_tab", "Benchmark"),
-                ReviewAction("click_button", "Run Benchmark"),
-                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
-                ReviewAction("wait_ms", "settle", value=1_000),
-            ),
-            captures=(CaptureRequest("benchmark-strict-defaults-dark"),),
-        ),
-        ReviewScenario(
             key="benchmark-strict-defaults",
             title="Benchmark Strict Defaults",
             description="Default strict benchmark run in the Benchmark tab.",
@@ -174,6 +146,20 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_inner_tab", "Observed Composition"),
             ),
             captures=(CaptureRequest("benchmark-observed-composition-defaults"),),
+        ),
+        ReviewScenario(
+            key="benchmark-raw-data-defaults",
+            title="Benchmark Raw Data Defaults",
+            description="Raw Data tab with CSV export control visible.",
+            actions=(
+                ReviewAction("open_top_tab", "Token Tax Workbench"),
+                ReviewAction("open_inner_tab", "Benchmark"),
+                ReviewAction("click_button", "Run Benchmark"),
+                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
+                ReviewAction("wait_ms", "settle", value=1_000),
+                ReviewAction("open_inner_tab", "Raw Data"),
+            ),
+            captures=(CaptureRequest("benchmark-raw-data-defaults"),),
         ),
         ReviewScenario(
             key="catalog-defaults",
