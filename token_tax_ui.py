@@ -15,7 +15,7 @@ from charts import (
     build_metric_scatter,
 )
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, list_corpora
-from diagnostics import clear_events, render_markdown
+from diagnostics import clear_events, log_event, render_markdown
 from model_registry import (
     artificial_analysis_status,
     build_tokenizer_catalog,
@@ -840,6 +840,15 @@ def _handle_benchmark_tab(
 
     try:
         clear_events()
+        log_event(
+            "benchmark.run.start",
+            "Preparing benchmark run",
+            lane=lane_or_corpus,
+            language_count=len(languages or list(DEFAULT_BENCHMARK_LANGUAGES)),
+            tokenizer_count=len(tokenizer_keys),
+            row_limit=int(row_limit),
+            live_updates=bool(live_updates),
+        )
         selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
         appendix = benchmark_appendix(corpus_key)
         yield (
@@ -916,6 +925,13 @@ def _handle_benchmark_tab(
 
 def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: bool):
     clear_events()
+    log_event(
+        "catalog.run.start",
+        "Loading tokenizer catalog",
+        include_proxy=bool(include_proxy),
+        refresh_live=bool(refresh_live),
+        live_updates=bool(live_updates),
+    )
     yield serialize_table([], CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
     if refresh_live:
         refresh_catalog()
@@ -956,6 +972,14 @@ def _handle_scenario_tab(
 
     try:
         clear_events()
+        log_event(
+            "scenario.run.start",
+            "Preparing scenario analysis",
+            language_count=len(languages or []),
+            tokenizer_count=len(tokenizer_keys or []),
+            model_count=len(model_ids or []),
+            live_updates=bool(live_updates),
+        )
         yield (
             gr.skip(),
             gr.skip(),
@@ -1004,14 +1028,14 @@ DEFAULT_BENCHMARK_TOKENIZER_KEYS = [
     "llama-3",
     "qwen-2.5",
     "gpt-oss",
-    "qwen3-next",
+    "trinity-large",
 ]
 
 DEFAULT_SCENARIO_MODEL_IDS = [
     "meta-llama/llama-3.2-3b-instruct:free",
     "qwen/qwen-2.5-7b-instruct:free",
     "openai/gpt-oss-20b:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
+    "arcee-ai/trinity-large-preview:free",
 ]
 
 
@@ -1062,7 +1086,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_limit = gr.Slider(
                             5,
                             50,
-                            value=8,
+                            value=5,
                             step=1,
                             label="Rows per language",
                             info="How many corpus samples to benchmark per language and tokenizer family.",

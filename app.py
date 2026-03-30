@@ -104,6 +104,10 @@ body.mlwb-light .gradio-container .block {
   gap: 1rem;
   padding: 1rem 1.25rem;
   margin-bottom: 1rem;
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+  backdrop-filter: blur(14px);
 }
 
 .app-shell-copy h1 {
@@ -122,9 +126,30 @@ body.mlwb-light .gradio-container .block {
   background: var(--wb-panel-soft);
   color: var(--wb-text);
   border-radius: 999px;
-  padding: 0.65rem 1rem;
-  font-weight: 600;
+  width: 2.8rem;
+  height: 2.8rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+}
+
+#theme-toggle:hover,
+#theme-toggle:focus-visible {
+  border-color: var(--wb-accent);
+  background: var(--wb-accent-soft);
+  outline: none;
+}
+
+.theme-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+body.mlwb-dark .theme-icon-light,
+body.mlwb-light .theme-icon-dark {
+  display: none;
 }
 
 .filter-grid {
@@ -285,7 +310,8 @@ async () => {
     body.classList.add(theme === "light" ? "mlwb-light" : "mlwb-dark");
     const button = document.getElementById("theme-toggle");
     if (button) {
-      button.textContent = theme === "light" ? "Switch to dark mode" : "Switch to light mode";
+      button.setAttribute("aria-label", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
+      button.setAttribute("title", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
     }
   };
 
@@ -302,15 +328,14 @@ async () => {
     });
   };
 
-  applyTheme(localStorage.getItem(storageKey) || "dark");
+  const systemPrefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+  applyTheme(localStorage.getItem(storageKey) || (systemPrefersLight ? "light" : "dark"));
   attachToggle();
   const observer = new MutationObserver(() => attachToggle());
   observer.observe(document.body, { childList: true, subtree: true });
   setTimeout(() => observer.disconnect(), 8000);
 }
 """
-
-APP_HEAD = f"<style>{APP_CSS}</style><script>{APP_JS}</script>"
 
 # ---------------------------------------------------------------------------
 # Phase 1: Core API Layer
@@ -725,13 +750,17 @@ def build_ui() -> gr.Blocks:
 
     with gr.Blocks(title="ML Workbench", fill_width=True) as demo:
         gr.HTML(
-            """
+            f"""
+            <style>{APP_CSS}</style>
             <div class="app-shell-header">
               <div class="app-shell-copy">
                 <h1>ML Workbench</h1>
                 <p>Tokenizer evidence, scenario modelling, and free-model comparisons in one place.</p>
               </div>
-              <button id="theme-toggle" type="button">Switch to light mode</button>
+              <button id="theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">
+                <span class="theme-icon theme-icon-light" aria-hidden="true">☀</span>
+                <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+              </button>
             </div>
             """
         )
@@ -742,6 +771,7 @@ def build_ui() -> gr.Blocks:
                 tokenizer_blocks.render()
             with gr.Tab("Model Comparison"):
                 comparison_blocks.render()
+        demo.load(None, None, None, js=APP_JS, queue=False)
     return demo
 
 
@@ -757,5 +787,4 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         ssr_mode=False,
-        head=APP_HEAD,
     )

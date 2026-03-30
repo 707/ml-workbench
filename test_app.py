@@ -182,6 +182,7 @@ class TestComparisonUiLabels:
         assert "with gr.Blocks(" in src
         assert "theme-toggle" in src
         assert ".render()" in src
+        assert "demo.load(" in src
 
 
 # ---------------------------------------------------------------------------

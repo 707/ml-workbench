@@ -32,9 +32,9 @@ class TestWorkbenchHandlers:
         selected = default_benchmark_tokenizers()
 
         assert "gpt-oss" in selected
-        assert "qwen3-next" in selected
+        assert "trinity-large" in selected
         assert "qwen3-coder" not in selected
-        assert len(selected) <= 6
+        assert len(selected) <= 4
 
     def test_default_scenario_models_use_curated_free_subset(self):
         from token_tax_ui import default_scenario_models
@@ -42,9 +42,8 @@ class TestWorkbenchHandlers:
         selected = default_scenario_models()
 
         assert "openai/gpt-oss-20b:free" in selected
-        assert "nvidia/nemotron-3-super-120b-a12b:free" in selected
-        assert "qwen/qwen-2.5-7b-instruct:free" in selected
-        assert len(selected) <= 6
+        assert "arcee-ai/trinity-large-preview:free" in selected
+        assert len(selected) <= 4
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
@@ -167,6 +166,25 @@ class TestWorkbenchHandlers:
         assert len(outputs[-1]) == 10
         assert "Benchmark Summary" in outputs[-1][0]
         assert "Diagnostics" in outputs[-1][-1]
+
+    def test_handle_benchmark_tab_logs_start_event_before_results(self):
+        from token_tax_ui import _handle_benchmark_tab
+
+        outputs = next(_handle_benchmark_tab(
+            "Strict Evidence",
+            ["en"],
+            ["gpt2"],
+            "rtc",
+            5,
+            False,
+            False,
+            "en",
+            "gpt2",
+            0,
+            False,
+        ))
+
+        assert "benchmark.run.start" in outputs[-1]
 
     def test_language_script_presets_filter_supported_languages(self):
         from token_tax_ui import apply_language_preset
