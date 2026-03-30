@@ -19,4 +19,5 @@
 !token_tax.py
 !token_tax_ui.py
 !tokenizer.py
+!tokenizer_registry.py
 !warm_tokenizers.py
