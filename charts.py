@@ -296,6 +296,69 @@ def build_category_bar(
     return _apply_theme(fig)
 
 
+def build_stacked_category_bar(
+    rows: list[dict],
+    *,
+    category_key: str,
+    value_key: str,
+    stack_key: str,
+    title: str = "",
+    x_title: str | None = None,
+    y_title: str | None = None,
+):
+    """Build a stacked bar chart for categorical composition breakdowns."""
+    import plotly.graph_objects as go
+
+    filtered = [
+        row for row in rows
+        if row.get(category_key) is not None
+        and row.get(stack_key) is not None
+        and isinstance(row.get(value_key), (int, float))
+    ]
+    if not filtered:
+        return _empty_figure("No composition data available")
+
+    categories = list(dict.fromkeys(str(row[category_key]) for row in filtered))
+    stack_names = list(dict.fromkeys(str(row[stack_key]) for row in filtered))
+    palette = [
+        "#2563eb",
+        "#06b6d4",
+        "#f97316",
+        "#22c55e",
+        "#a855f7",
+        "#ef4444",
+        "#14b8a6",
+        "#64748b",
+    ]
+
+    fig = go.Figure()
+    for index, stack_name in enumerate(stack_names):
+        values = []
+        for category in categories:
+            match = next(
+                (
+                    row for row in filtered
+                    if str(row[stack_key]) == stack_name and str(row[category_key]) == category
+                ),
+                None,
+            )
+            values.append(match[value_key] if match else 0)
+        fig.add_trace(go.Bar(
+            x=categories,
+            y=values,
+            name=stack_name,
+            marker_color=palette[index % len(palette)],
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_title or category_key,
+        yaxis_title=y_title or value_key,
+        barmode="stack",
+    )
+    return _apply_theme(fig)
+
+
 def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_word: float = 1.33):
     """Horizontal bar chart showing effective context window in words."""
     import plotly.graph_objects as go

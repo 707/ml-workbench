@@ -9,6 +9,7 @@ from time import perf_counter
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from explainer import build_explainer_ui
 from model_registry import list_free_runtime_choices
 from openrouter import call_openrouter, extract_usage, OPENROUTER_URL  # noqa: F401
 from tokenizer import build_tokenizer_ui
@@ -68,6 +69,9 @@ body.mlwb-light {
   --wb-accent-soft: rgba(234, 88, 12, 0.10);
 }
 
+body.mlwb-dark { color-scheme: dark; }
+body.mlwb-light { color-scheme: light; }
+
 body.mlwb-dark,
 body.mlwb-light {
   background: var(--wb-bg) !important;
@@ -89,175 +93,229 @@ body.mlwb-light .gradio-container .block {
   color: var(--wb-text);
 }
 
+.gradio-container h1,
+.gradio-container h2,
+.gradio-container h3 {
+  text-wrap: balance;
+}
+
 .app-shell-header,
 .workbench-box,
 .benchmark-summary-box,
-.preview-card {
+.preview-card,
+.explainer-card {
   background: var(--wb-panel);
   border: 1px solid var(--wb-border);
-  border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .app-shell-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1rem;
+  gap: 0.9rem;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.7rem;
   position: sticky;
-  top: 0.75rem;
+  top: 0.5rem;
   z-index: 20;
   backdrop-filter: blur(14px);
 }
 
 .app-shell-copy h1 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .app-shell-copy p {
-  margin: 0.35rem 0 0 0;
+  margin: 0.18rem 0 0 0;
   color: var(--wb-muted);
+  font-size: 0.92rem;
 }
 
-#theme-toggle {
-  appearance: none;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.theme-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem;
   border: 1px solid var(--wb-border);
-  background: var(--wb-panel-soft);
-  color: var(--wb-text);
   border-radius: 999px;
-  width: 2.8rem;
-  height: 2.8rem;
+  background: var(--wb-panel-soft);
+}
+
+.theme-choice {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--wb-muted);
+  min-width: 4.7rem;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: 999px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-#theme-toggle:hover,
-#theme-toggle:focus-visible {
-  border-color: var(--wb-accent);
-  background: var(--wb-accent-soft);
-  outline: none;
+.theme-choice:hover {
+  color: var(--wb-text);
+  background: rgba(148, 163, 184, 0.10);
 }
 
-.theme-icon {
-  font-size: 1rem;
-  line-height: 1;
+.theme-choice:focus-visible,
+.gradio-container button:focus-visible,
+.gradio-container [role="tab"]:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: 2px;
 }
 
-body.mlwb-dark .theme-icon-light,
-body.mlwb-light .theme-icon-dark {
-  display: none;
+.theme-choice.is-active {
+  color: var(--wb-text);
+  background: var(--wb-panel);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .filter-grid {
   align-items: start;
-  gap: 0.85rem;
+  gap: 0.7rem;
 }
 
-.filter-panel {
-  padding: 0;
+.filter-rail {
+  padding: 0.15rem 0;
   background: transparent;
   border: none;
   box-shadow: none;
   border-radius: 0;
 }
 
-.filter-panel .wrap {
-  gap: 0.6rem;
+.filter-rail .wrap {
+  gap: 0.38rem;
 }
 
-.filter-panel--narrow {
-  max-width: 420px;
+.filter-rail--compact {
+  max-width: 300px;
 }
 
-.tooltip-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0.2rem 0 0.55rem 0;
-  color: var(--wb-text);
-  font-weight: 600;
+.filter-rail--wide {
+  max-width: none;
 }
 
-.tooltip-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 999px;
-  border: 1px solid var(--wb-border);
-  background: var(--wb-panel-soft);
+.section-header {
+  margin: 0.1rem 0 0.75rem 0;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.section-header p {
+  margin: 0.2rem 0 0 0;
   color: var(--wb-muted);
-  font-size: 0.75rem;
-  cursor: help;
+  font-size: 0.94rem;
+}
+
+.chart-help {
+  margin: 0 0 0.45rem 0;
+  padding: 0;
+}
+
+.chart-help strong {
+  color: var(--wb-text);
+}
+
+.chart-help p {
+  margin: 0.18rem 0 0 0;
+  color: var(--wb-muted);
+  line-height: 1.45;
+}
+
+.compact-helper {
+  margin: 0.15rem 0 0.55rem 0;
+  color: var(--wb-muted);
+  line-height: 1.45;
 }
 
 .benchmark-summary-box {
-  padding: 1rem 1.1rem;
+  padding: 0.8rem 0.9rem;
 }
 
 .benchmark-summary-box h3,
-.preview-card h3 {
-  margin: 0 0 0.4rem 0;
+.preview-card h3,
+.explainer-card h3 {
+  margin: 0 0 0.25rem 0;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.7rem;
-  margin-top: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.55rem;
 }
 
 .summary-metric {
   background: var(--wb-panel-soft);
   border: 1px solid var(--wb-border);
-  border-radius: 14px;
-  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
 }
 
 .summary-metric-label {
   color: var(--wb-muted);
-  font-size: 0.82rem;
-  margin-bottom: 0.35rem;
+  font-size: 0.74rem;
+  margin-bottom: 0.2rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .summary-metric-value {
   color: var(--wb-text);
-  font-size: 0.96rem;
-  line-height: 1.4;
+  font-size: 0.93rem;
+  line-height: 1.35;
 }
 
 .preview-card {
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 0.95rem;
 }
 
 .preview-subtitle,
 .benchmark-summary-empty,
 .preview-empty {
   color: var(--wb-muted);
-  margin: 0.2rem 0 0.9rem 0;
+  margin: 0.1rem 0 0.7rem 0;
 }
 
 .preview-meta-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 0.9rem;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
 }
 
 .preview-meta {
   background: var(--wb-panel-soft);
   border: 1px solid var(--wb-border);
   border-radius: 12px;
-  padding: 0.8rem 0.9rem;
+  padding: 0.7rem 0.8rem;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -279,16 +337,16 @@ body.mlwb-light .theme-icon-dark {
   border: 1px solid var(--wb-border);
   background: var(--wb-panel-soft);
   border-radius: 14px;
-  padding: 0.95rem;
+  padding: 0.8rem;
 }
 
 .preview-text-box {
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.65rem;
 }
 
 .preview-text {
   color: var(--wb-text);
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .preview-token-box {
@@ -303,8 +361,10 @@ body.mlwb-light .theme-icon-dark {
 
 .compact-action button {
   width: auto !important;
-  min-width: 11rem;
-  padding-inline: 1rem !important;
+  min-width: 9.25rem;
+  min-height: 2.35rem !important;
+  padding-inline: 0.85rem !important;
+  font-size: 0.92rem !important;
 }
 
 .preview-token {
@@ -323,6 +383,76 @@ body.mlwb-light .theme-icon-dark {
 .preview-tone-3 { background: rgba(168, 85, 247, 0.16); color: #9333ea; border-color: rgba(168, 85, 247, 0.28); }
 .preview-tone-4 { background: rgba(245, 158, 11, 0.16); color: #d97706; border-color: rgba(245, 158, 11, 0.28); }
 .preview-tone-5 { background: rgba(14, 165, 233, 0.16); color: #0284c7; border-color: rgba(14, 165, 233, 0.28); }
+
+.gradio-container table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  background: var(--wb-panel);
+  color: var(--wb-text);
+}
+
+.gradio-container thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--wb-panel-soft) !important;
+  color: var(--wb-muted) !important;
+  border-bottom: 1px solid var(--wb-border) !important;
+  font-weight: 600 !important;
+}
+
+.gradio-container tbody tr:nth-child(odd) td {
+  background: color-mix(in srgb, var(--wb-panel) 88%, transparent);
+}
+
+.gradio-container tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--wb-panel-soft) 72%, transparent);
+}
+
+.gradio-container td,
+.gradio-container th {
+  border-color: var(--wb-border) !important;
+  padding: 0.55rem 0.65rem !important;
+}
+
+.gradio-container .wrap.svelte-1ipelgc,
+.gradio-container .block {
+  min-width: 0;
+}
+
+.explainer-card {
+  padding: 0.95rem 1rem;
+}
+
+.explainer-callout {
+  background: var(--wb-panel-soft);
+  border: 1px solid var(--wb-border);
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  margin: 0.7rem 0;
+}
+
+.explainer-callout p {
+  margin: 0.2rem 0 0 0;
+  color: var(--wb-muted);
+}
+
+@media (max-width: 900px) {
+  .app-shell-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .theme-toggle-group {
+    align-self: flex-end;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
 """
 
 APP_JS = """
@@ -333,11 +463,11 @@ async () => {
     const body = document.body;
     body.classList.remove("mlwb-dark", "mlwb-light");
     body.classList.add(theme === "light" ? "mlwb-light" : "mlwb-dark");
-    const button = document.getElementById("theme-toggle");
-    if (button) {
-      button.setAttribute("aria-label", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
-      button.setAttribute("title", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
-    }
+    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+      const isActive = button.getAttribute("data-theme-choice") === theme;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
     if (window.Plotly) {
       requestAnimationFrame(() => {
         document.querySelectorAll(".js-plotly-plot").forEach((plot) => {
@@ -352,15 +482,16 @@ async () => {
   };
 
   const attachToggle = () => {
-    const button = document.getElementById("theme-toggle");
-    if (!button || button.dataset.bound === "true") {
-      return;
-    }
-    button.dataset.bound = "true";
-    button.addEventListener("click", () => {
-      const nextTheme = document.body.classList.contains("mlwb-light") ? "dark" : "light";
-      localStorage.setItem(storageKey, nextTheme);
-      applyTheme(nextTheme);
+    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+      if (button.dataset.bound === "true") {
+        return;
+      }
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => {
+        const nextTheme = button.getAttribute("data-theme-choice") || "dark";
+        localStorage.setItem(storageKey, nextTheme);
+        applyTheme(nextTheme);
+      });
     });
   };
 
@@ -781,6 +912,7 @@ def build_ui() -> gr.Blocks:
         gr.Blocks composing the tabbed app shell and child workbench blocks.
     """
     comparison_blocks = _build_comparison_blocks()
+    explainer_blocks = build_explainer_ui()
     tokenizer_blocks = build_tokenizer_ui()
     token_tax_blocks = build_token_tax_ui()
 
@@ -793,10 +925,31 @@ def build_ui() -> gr.Blocks:
                 <h1>ML Workbench</h1>
                 <p>Tokenizer evidence, scenario modelling, and free-model comparisons in one place.</p>
               </div>
-              <button id="theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">
-                <span class="theme-icon theme-icon-light" aria-hidden="true">☀</span>
-                <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
-              </button>
+              <div class="theme-toggle theme-toggle-group" role="group" aria-label="Theme toggle">
+                <span class="sr-only">Theme</span>
+                <button
+                  id="theme-choice-light"
+                  type="button"
+                  class="theme-choice"
+                  data-theme-choice="light"
+                  aria-label="Switch to light mode"
+                  title="Light theme"
+                >
+                  <span aria-hidden="true">☀</span>
+                  <span>Light</span>
+                </button>
+                <button
+                  id="theme-choice-dark"
+                  type="button"
+                  class="theme-choice"
+                  data-theme-choice="dark"
+                  aria-label="Switch to dark mode"
+                  title="Dark theme"
+                >
+                  <span aria-hidden="true">☾</span>
+                  <span>Dark</span>
+                </button>
+              </div>
             </div>
             """
         )
@@ -807,6 +960,8 @@ def build_ui() -> gr.Blocks:
                 tokenizer_blocks.render()
             with gr.Tab("Model Comparison"):
                 comparison_blocks.render()
+            with gr.Tab("Why Tokenizers Matter"):
+                explainer_blocks.render()
         demo.load(None, None, None, js=APP_JS, queue=False)
     return demo
 

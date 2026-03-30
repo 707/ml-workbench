@@ -165,7 +165,7 @@ class TestWorkbenchHandlers:
                 ))
 
         assert len(outputs) >= 2
-        assert len(outputs[-1]) == 10
+        assert len(outputs[-1]) == 12
         assert "Benchmark Summary" in outputs[-1][0]
         assert "Diagnostics" in outputs[-1][-1]
 
@@ -291,9 +291,66 @@ class TestWorkbenchHandlers:
 
         assert "Benchmark Summary" in markdown
         assert "summary-metric" in markdown
-        assert "Worst RTC pressure" in markdown
-        assert "Highest bytes/token" in markdown
-        assert "Highest split pressure" in markdown
+        assert "Biggest Relative Token Cost jump" in markdown
+        assert "Text packed into each token" in markdown
+        assert "Word split rate" in markdown
+
+    def test_build_benchmark_summary_markdown_uses_plain_language_labels(self):
+        from token_tax_ui import build_benchmark_summary_markdown
+
+        markdown = build_benchmark_summary_markdown(
+            [
+                {
+                    "lane": "Strict Evidence",
+                    "language": "ar",
+                    "tokenizer_key": "gpt2",
+                    "rtc": 2.4,
+                    "bytes_per_token": 3.2,
+                    "continued_word_rate": 0.55,
+                },
+            ],
+            metric_key="rtc",
+        )
+
+        assert "Relative Token Cost" in markdown
+        assert "Text packed into each token" in markdown
+        assert "Word split rate" in markdown
+
+    def test_chart_explainer_text_is_visible_copy_not_tooltip_html(self):
+        import inspect
+        import token_tax_ui
+
+        src = inspect.getsource(token_tax_ui.build_token_tax_ui)
+        assert "tooltip_label_html" not in src
+        assert "How to read this chart" in src
+
+    def test_filter_layout_uses_asymmetric_rail_classes(self):
+        import inspect
+        import token_tax_ui
+
+        src = inspect.getsource(token_tax_ui.build_token_tax_ui)
+        assert "filter-rail filter-rail--compact" in src
+        assert "filter-rail filter-rail--wide" in src
+
+    def test_build_coverage_rows_preserve_fertility_for_bar_charts(self):
+        from token_tax_ui import build_coverage_rows
+
+        rows = build_coverage_rows(
+            [
+                {
+                    "language": "fr",
+                    "tokenizer_key": "gpt2",
+                    "label": "GPT-2 legacy",
+                    "unique_tokens": 12,
+                    "continued_word_rate": 0.4,
+                    "bytes_per_token": 2.0,
+                    "token_fertility": 1.9,
+                    "lane": "Streaming Exploration",
+                },
+            ]
+        )
+
+        assert rows[0]["token_fertility"] == 1.9
 
     def test_build_scenario_speed_summary_reports_matches_and_gaps(self):
         from token_tax_ui import build_scenario_speed_summary_markdown
@@ -321,6 +378,22 @@ class TestWorkbenchHandlers:
         assert "matched models: **2 / 3**" in markdown.lower()
         assert "Mistral 7B Instruct (Free)" in markdown
         assert "Llama 3.2 3B Instruct (Free)" in markdown
+
+    def test_build_benchmark_chart_explainer_mentions_plain_language_terms(self):
+        from token_tax_ui import build_benchmark_chart_explainer_markdown
+
+        markdown = build_benchmark_chart_explainer_markdown("rtc", "Coverage")
+
+        assert "Relative Token Cost" in markdown
+        assert "same meaning" in markdown
+
+    def test_build_benchmark_chart_explainer_for_coverage_mentions_split_rate(self):
+        from token_tax_ui import build_benchmark_chart_explainer_markdown
+
+        markdown = build_benchmark_chart_explainer_markdown("token_fertility", "Coverage")
+
+        assert "Word split rate" in markdown
+        assert "Tokens per word / character" in markdown
 
     def test_catalog_display_rows_use_review_friendly_column_labels(self):
         from token_tax_ui import CATALOG_COLUMNS, _catalog_display_rows

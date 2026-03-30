@@ -12,6 +12,7 @@
 !data/telemetry/
 !data/telemetry/artificial_analysis_snapshot.json
 !diagnostics.py
+!explainer.py
 !model_registry.py
 !openrouter.py
 !pricing.py

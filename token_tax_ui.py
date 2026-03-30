@@ -13,6 +13,7 @@ from charts import (
     build_distribution_chart,
     build_heatmap,
     build_metric_scatter,
+    build_stacked_category_bar,
 )
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, list_corpora
 from diagnostics import clear_events, log_event, render_markdown
@@ -68,6 +69,23 @@ LANGUAGE_LABELS = {
     "pt": "Portuguese",
     "ru": "Russian",
     "zh": "Chinese",
+}
+
+PLAIN_LANGUAGE_METRIC_LABELS = {
+    "rtc": "Relative Token Cost (vs English)",
+    "english_baseline_ratio": "Relative Token Cost (streaming baseline)",
+    "token_fertility": "Tokens per word / character",
+    "continued_word_rate": "Word split rate",
+    "bytes_per_token": "Text packed into each token",
+    "token_count": "Token count",
+    "byte_premium": "Byte premium vs English",
+    "unique_tokens": "Unique tokens used",
+    "context_loss_pct": "Context loss",
+    "monthly_cost": "Monthly cost",
+    "monthly_input_tokens": "Monthly input tokens",
+    "monthly_output_tokens": "Monthly output tokens",
+    "ttft_seconds": "Time to first token",
+    "output_tokens_per_second": "Output tokens / second",
 }
 
 
@@ -131,14 +149,35 @@ def language_choice_pairs(codes: list[str] | None = None) -> list[tuple[str, str
     selected = codes or list(DEFAULT_BENCHMARK_LANGUAGES)
     return [(language_label(code), code) for code in selected]
 
+def metric_display_label(metric_key: str) -> str:
+    return PLAIN_LANGUAGE_METRIC_LABELS.get(metric_key, metric_key.replace("_", " ").title())
 
-def tooltip_label_html(label: str, info: str) -> str:
-    """Render a compact label with a hover tooltip for plots and tables."""
+
+def build_chart_help_markdown(title: str, body: str) -> str:
     return (
-        '<div class="tooltip-label">'
-        f"<span>{html.escape(label)}</span>"
-        f'<span class="tooltip-icon" title="{html.escape(info)}">i</span>'
-        "</div>"
+        f'<div class="chart-help"><strong>{html.escape(title)}</strong>'
+        f"<p>{html.escape(body)}</p></div>"
+    )
+
+
+def build_benchmark_chart_explainer_markdown(metric_key: str, section_name: str) -> str:
+    metric_label = metric_display_label(metric_key)
+    if section_name == "Coverage":
+        return (
+            "### How to read this chart\n"
+            f"These bars compare **{metric_label}**, **Word split rate**, and **Tokens per word / character** across languages. "
+            "They help answer a simple question: when two languages say the **same meaning**, which tokenizer breaks the text into more pieces?"
+        )
+    if section_name == "Observed Composition":
+        return (
+            "### How to read this chart\n"
+            "This stacked bar shows which writing systems the tokenizer actually used on the selected benchmark rows. "
+            "It is a quick visual check for whether a tokenizer mostly leans on Latin-style pieces or spreads its vocabulary across Arabic, Cyrillic, CJK, and other scripts."
+        )
+    return (
+        "### How to read this chart\n"
+        f"This view compares **{metric_label}** across languages and tokenizer families. "
+        "Lower relative token cost usually means the tokenizer needs fewer pieces to express the same meaning."
     )
 
 
@@ -260,7 +299,7 @@ def _format_benchmark_value(value: float | int | None) -> str:
 
 
 def _benchmark_row_label(row: dict) -> str:
-    return f"{row.get('language', 'n/a')} / {row.get('tokenizer_key', 'n/a')}"
+    return f"{language_label(str(row.get('language', 'n/a')))} / {row.get('tokenizer_key', 'n/a')}"
 
 
 def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
@@ -277,7 +316,11 @@ def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
     languages = sorted({row.get("language", "n/a") for row in rows})
     tokenizers = sorted({row.get("tokenizer_key", "n/a") for row in rows})
     headline_key = "rtc" if any(isinstance(row.get("rtc"), (int, float)) for row in rows) else "english_baseline_ratio"
-    headline_label = "Worst RTC pressure" if headline_key == "rtc" else "Highest English-baseline ratio"
+    headline_label = (
+        "Biggest Relative Token Cost jump"
+        if headline_key == "rtc"
+        else "Biggest streaming token-cost jump"
+    )
 
     def _best_row(key: str):
         numeric = [row for row in rows if isinstance(row.get(key), (int, float))]
@@ -301,8 +344,8 @@ def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
             f"{lane} across {len(languages)} languages and {len(tokenizers)} tokenizer families",
         ),
         (
-            "Active Metric",
-            f"{metric_key} range: {metric_range}",
+            metric_display_label(metric_key),
+            f"Range: {metric_range}",
         ),
     ]
     if headline_row:
@@ -315,14 +358,14 @@ def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
     if bytes_row:
         summary_cards.append(
             (
-                "Highest bytes/token",
+                "Text packed into each token",
                 f"{_benchmark_row_label(bytes_row)} at {_format_benchmark_value(bytes_row.get('bytes_per_token'))}",
             )
         )
     if split_row:
         summary_cards.append(
             (
-                "Highest split pressure",
+                "Word split rate",
                 f"{_benchmark_row_label(split_row)} at {_format_benchmark_value(split_row.get('continued_word_rate'))}",
             )
         )
@@ -406,11 +449,12 @@ def build_coverage_rows(rows: list[dict]) -> list[dict]:
     return [
         {
             "label": f"{row['language']} / {row['tokenizer_key']}",
-            "language": row["language"],
+            "language": language_label(row["language"]),
             "tokenizer_key": row["tokenizer_key"],
             "unique_tokens": row.get("unique_tokens"),
             "continued_word_rate": row.get("continued_word_rate"),
             "bytes_per_token": row.get("bytes_per_token"),
+            "token_fertility": row.get("token_fertility"),
             "lane": row.get("lane"),
             "provenance": row.get("provenance"),
         }
@@ -492,21 +536,38 @@ def _build_benchmark_outputs(
         gr.skip() if skip_plot_updates else build_distribution_chart(rows, metric_key),
         build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
         serialize_table(raw_rows, _raw_benchmark_columns_for(corpus_key)),
-        gr.skip() if skip_plot_updates else build_metric_scatter(
+        gr.skip() if skip_plot_updates else build_category_bar(
             coverage_rows,
-            x_key="unique_tokens",
-            y_key="continued_word_rate",
-            title="Coverage",
-            x_title="Unique observed tokens",
-            y_title="Continued-word rate",
+            category_key="language",
+            value_key="unique_tokens",
+            title="Vocabulary Coverage",
+            x_title="Language",
+            y_title="Unique tokens used",
         ),
         gr.skip() if skip_plot_updates else build_category_bar(
+            coverage_rows,
+            category_key="language",
+            value_key="continued_word_rate",
+            title="Word Split Rate",
+            x_title="Language",
+            y_title="Word split rate",
+        ),
+        gr.skip() if skip_plot_updates else build_category_bar(
+            coverage_rows,
+            category_key="language",
+            value_key="token_fertility",
+            title="Tokens per Word / Character",
+            x_title="Language",
+            y_title="Tokens per word / character",
+        ),
+        gr.skip() if skip_plot_updates else build_stacked_category_bar(
             composition_rows,
-            category_key="script",
+            category_key="tokenizer_key",
             value_key="token_count",
-            title="Observed Composition",
-            x_title="Observed script",
-            y_title="Unique tokens seen",
+            stack_key="script",
+            title="Observed Script Distribution",
+            x_title="Tokenizer family",
+            y_title="Observed unique tokens",
         ),
         appendix,
         render_markdown(),
@@ -823,17 +884,28 @@ def _handle_benchmark_tab(
     benchmark_columns = _benchmark_columns_for(corpus_key)
     raw_benchmark_columns = _raw_benchmark_columns_for(corpus_key)
     metric_key = metric_key if metric_key in _benchmark_metric_choices_for(corpus_key) else _default_benchmark_metric_for(corpus_key)
+    empty_table = {"headers": benchmark_columns, "data": []}
+    empty_raw_table = serialize_table([], raw_benchmark_columns)
+    empty_heatmap = build_heatmap({}, [], [], metric_key=metric_key)
+    empty_distribution = build_distribution_chart([], metric_key)
+    empty_preview = build_benchmark_preview_markdown([], preview_language, preview_tokenizer, preview_sample_index)
+    empty_coverage = build_category_bar([], category_key="language", value_key="unique_tokens")
+    empty_split = build_category_bar([], category_key="language", value_key="continued_word_rate")
+    empty_fertility = build_category_bar([], category_key="language", value_key="token_fertility")
+    empty_composition = build_stacked_category_bar([], category_key="tokenizer_key", value_key="token_count", stack_key="script")
     if not tokenizer_keys:
         yield (
             build_benchmark_summary_markdown([], metric_key),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            build_benchmark_preview_markdown([], preview_language, preview_tokenizer, preview_sample_index),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            "Select at least one tokenizer family.",
+            empty_table,
+            empty_heatmap,
+            empty_distribution,
+            empty_preview,
+            empty_raw_table,
+            empty_coverage,
+            empty_split,
+            empty_fertility,
+            empty_composition,
+            f"{benchmark_appendix(corpus_key)}\n\n**Select at least one tokenizer family.**",
             render_markdown(),
         )
         return
@@ -853,13 +925,15 @@ def _handle_benchmark_tab(
         appendix = benchmark_appendix(corpus_key)
         yield (
             build_benchmark_summary_markdown([], metric_key),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
+            empty_table,
+            empty_heatmap,
+            empty_distribution,
+            empty_preview,
+            empty_raw_table,
+            empty_coverage,
+            empty_split,
+            empty_fertility,
+            empty_composition,
             appendix,
             render_markdown(),
         )
@@ -894,18 +968,20 @@ def _handle_benchmark_tab(
     except Exception as exc:
         yield (
             build_benchmark_summary_markdown([], metric_key),
-            {"headers": benchmark_columns, "data": []},
-            build_heatmap({}, [], [], metric_key=metric_key),
-            build_distribution_chart([], metric_key),
+            empty_table,
+            empty_heatmap,
+            empty_distribution,
             (
                 '<section class="preview-card">'
                 "<h3>Tokenization Preview</h3>"
                 '<p class="preview-empty">Runtime error before preview generation.</p>'
                 "</section>"
             ),
-            serialize_table([], raw_benchmark_columns),
-            build_metric_scatter([], x_key="unique_tokens", y_key="continued_word_rate"),
-            build_category_bar([], category_key="script", value_key="token_count"),
+            empty_raw_table,
+            empty_coverage,
+            empty_split,
+            empty_fertility,
+            empty_composition,
             f"{benchmark_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
@@ -1073,16 +1149,17 @@ def build_token_tax_ui() -> gr.Blocks:
     model_choices = [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in free_runtime_choices]
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
-        gr.Markdown(
-            "## Token Tax Workbench\n\n"
-            "Strict verified corpus evidence is shown by default. "
-            "Streaming exploration is opt-in and explicitly exploratory."
+        gr.HTML(
+            '<section class="section-header">'
+            "<h2>Token Tax Workbench</h2>"
+            "<p>Compare tokenizer behavior across languages, then translate that into cost, context, and decision-ready model trade-offs.</p>"
+            "</section>"
         )
 
         with gr.Tabs():
             with gr.TabItem("Benchmark"):
                 with gr.Row(equal_height=False, elem_classes="filter-grid"):
-                    with gr.Column(elem_classes="filter-panel"):
+                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=280, scale=0):
                         benchmark_lane = gr.Radio(
                             choices=list(LANE_TO_CORPUS_KEY.keys()),
                             value="Strict Evidence",
@@ -1103,7 +1180,13 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Rows per language",
                             info="How many corpus samples to benchmark per language and tokenizer family.",
                         )
-                    with gr.Column(elem_classes="filter-panel"):
+                        benchmark_live_updates = gr.Checkbox(
+                            label="Live diagnostics",
+                            value=False,
+                            info="Stream progress updates while the benchmark is running. Turning this off is faster.",
+                        )
+                        benchmark_run = gr.Button("Run Benchmark", variant="primary", size="sm", elem_classes="compact-action")
+                    with gr.Column(elem_classes="filter-rail filter-rail--wide", min_width=520, scale=1):
                         benchmark_preset = gr.Dropdown(
                             choices=list(SCRIPT_FAMILY_PRESETS.keys()),
                             value="All",
@@ -1124,7 +1207,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Tokenizer Families",
                             info="Tokenizer families to benchmark against the selected corpus samples.",
                         )
-                    with gr.Column(elem_classes="filter-panel"):
+                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=300, scale=0):
                         preview_language = gr.Dropdown(
                             choices=language_choice_pairs(list(DEFAULT_BENCHMARK_LANGUAGES)),
                             value="en",
@@ -1155,12 +1238,6 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=False,
                             info="Include tokenizer families that use a documented proxy rather than an exact mapping.",
                         )
-                        benchmark_live_updates = gr.Checkbox(
-                            label="Live diagnostics",
-                            value=False,
-                            info="Stream progress updates while the benchmark is running. Turning this off is faster.",
-                        )
-                        benchmark_run = gr.Button("Run Benchmark", variant="primary", elem_classes="compact-action")
                 benchmark_preset.change(
                     fn=apply_language_preset,
                     inputs=[benchmark_preset],
@@ -1173,31 +1250,56 @@ def build_token_tax_ui() -> gr.Blocks:
                     outputs=[benchmark_metric],
                     queue=False,
                 )
-                gr.Markdown(
-                    "Why these controls matter: Strict Evidence is the stable headline lane, while Streaming Exploration trades reproducibility for more naturalistic text. "
-                    "The diagnostics pane can stream progress while each tokenizer-language pair is processed."
+                gr.HTML(
+                    build_chart_help_markdown(
+                        "Why these controls matter",
+                        "Strict Evidence is the stable headline lane, while Streaming Exploration is the exploratory lane. The preview lets you inspect exactly how one tokenizer chopped up one sample before you trust the broader charts."
+                    )
                 )
                 with gr.Group(elem_classes="workbench-box"):
                     benchmark_summary_md = gr.HTML(value=build_benchmark_summary_markdown([], "rtc"))
 
                 with gr.Tabs():
                     with gr.TabItem("Overview"):
-                        gr.HTML(tooltip_label_html("Benchmark Heatmap", "Heatmap of the selected benchmark metric across languages and tokenizer families."))
+                        benchmark_overview_help_md = gr.HTML(
+                            value=build_benchmark_chart_explainer_markdown("rtc", "Overview")
+                        )
                         benchmark_heatmap = gr.Plot(label="Benchmark Heatmap")
-                        gr.HTML(tooltip_label_html("Metric Distribution", "Distribution of the selected metric across benchmark rows."))
+                        gr.HTML(
+                            build_chart_help_markdown(
+                                "How to read this chart",
+                                "The distribution view shows spread, not just averages. Wider boxes mean that tokenizer behaves less consistently across the selected languages."
+                            )
+                        )
                         benchmark_distribution = gr.Plot(label="Metric Distribution")
-                        gr.HTML(tooltip_label_html("Benchmark Table", "Aggregate benchmark rows for each language and tokenizer family."))
+                        gr.HTML(
+                            build_chart_help_markdown(
+                                "How to read this table",
+                                "This is the benchmark in spreadsheet form. Use it to inspect the exact language and tokenizer combinations feeding the overview charts."
+                            )
+                        )
                         benchmark_table = gr.DataFrame(label="Benchmark Table", interactive=False)
                     with gr.TabItem("Preview"):
                         benchmark_preview_md = gr.HTML(label="Preview")
                     with gr.TabItem("Coverage"):
-                        gr.HTML(tooltip_label_html("Coverage", "Observed-token coverage vs split rate for the selected benchmark rows."))
-                        benchmark_coverage_plot = gr.Plot(label="Coverage")
+                        benchmark_coverage_help_md = gr.HTML(
+                            value=build_benchmark_chart_explainer_markdown("token_fertility", "Coverage")
+                        )
+                        benchmark_coverage_plot = gr.Plot(label="Vocabulary Coverage")
+                        benchmark_split_plot = gr.Plot(label="Word Split Rate")
+                        benchmark_fertility_plot = gr.Plot(label="Tokens per Word / Character")
                     with gr.TabItem("Observed Composition"):
-                        gr.HTML(tooltip_label_html("Observed Composition", "Breakdown of unique observed tokens by script family for the selected rows."))
+                        benchmark_composition_help_md = gr.HTML(
+                            value=build_benchmark_chart_explainer_markdown("unique_tokens", "Observed Composition")
+                        )
                         benchmark_composition_plot = gr.Plot(label="Observed Composition")
                     with gr.TabItem("Raw Data"):
-                        gr.HTML(tooltip_label_html("Raw Benchmark Data", "Per-sample benchmark rows used to build the aggregate views."))
+                        gr.HTML(
+                            build_chart_help_markdown(
+                                "How to use this table",
+                                "This is the analyst view. Each row is one sampled text and the exact tokenization metrics used to build the higher-level summaries."
+                            )
+                        )
                         benchmark_raw_table = gr.DataFrame(label="Raw Benchmark Data", interactive=False)
                 with gr.Accordion("Benchmark Appendix", open=False):
                     benchmark_appendix_md = gr.Markdown(label="Benchmark Appendix")
@@ -1227,6 +1329,8 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_preview_md,
                         benchmark_raw_table,
                         benchmark_coverage_plot,
+                        benchmark_split_plot,
+                        benchmark_fertility_plot,
                         benchmark_composition_plot,
                         benchmark_appendix_md,
                         benchmark_diagnostics_md,
@@ -1235,7 +1339,7 @@ def build_token_tax_ui() -> gr.Blocks:
 
             with gr.TabItem("Catalog"):
                 with gr.Row(equal_height=False, elem_classes="filter-grid"):
-                    with gr.Column(elem_classes="filter-panel filter-panel--narrow", min_width=360, scale=0):
+                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=320, scale=0):
                         catalog_include_proxy = gr.Checkbox(
                             label="Include proxy mappings",
                             value=False,
@@ -1251,12 +1355,13 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=False,
                             info="Stream catalog refresh progress while loading the table.",
                         )
-                        catalog_run = gr.Button("Load Catalog", variant="primary", elem_classes="compact-action")
-                gr.Markdown(
-                    "Why these controls matter: this catalog is tokenizer-first, with free runnable models attached as examples. "
-                    "Refreshing live pricing only updates the in-memory OpenRouter cache for this running app instance."
+                        catalog_run = gr.Button("Load Catalog", variant="primary", size="sm", elem_classes="compact-action")
+                gr.HTML(
+                    build_chart_help_markdown(
+                        "How to use this catalog",
+                        "Each row starts with a tokenizer family, then shows which free models are attached to it. Live pricing refresh only updates the in-memory cache for the current app session."
+                    )
                 )
-                gr.HTML(tooltip_label_html("Catalog", "Tokenizer-first catalog with attached free runnable models and any benchmark-only speed matches."))
                 catalog_table = gr.DataFrame(label="Catalog", interactive=False)
                 catalog_appendix_md = gr.Markdown(label="Catalog Appendix")
                 with gr.Accordion("Diagnostics", open=False):
@@ -1269,7 +1374,7 @@ def build_token_tax_ui() -> gr.Blocks:
 
             with gr.TabItem("Scenario Lab"):
                 with gr.Row(equal_height=False, elem_classes="filter-grid"):
-                    with gr.Column(elem_classes="filter-panel"):
+                    with gr.Column(elem_classes="filter-rail filter-rail--wide", min_width=520, scale=1):
                         scenario_languages = gr.Dropdown(
                             choices=language_choice_pairs(list(DEFAULT_BENCHMARK_LANGUAGES)),
                             value=["en", "ar", "hi", "ja"],
@@ -1291,7 +1396,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Attached Free Models",
                             info="Exact free OpenRouter models attached to the selected tokenizer families.",
                         )
-                    with gr.Column(elem_classes="filter-panel"):
+                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=290, scale=0):
                         monthly_requests = gr.Slider(
                             1_000,
                             1_000_000,
@@ -1324,7 +1429,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Reasoning Share",
                             info="Extra completion-token multiplier for reasoning-heavy workloads.",
                         )
-                    with gr.Column(elem_classes="filter-panel"):
+                    with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=290, scale=0):
                         slice_x = gr.Dropdown(
                             choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
                             value="rtc",
@@ -1358,33 +1463,34 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=False,
                             info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
                         )
-                        scenario_run = gr.Button("Run Scenario Lab", variant="primary", elem_classes="compact-action")
-                gr.Markdown(
-                    "Why these controls matter: Scenario Lab is strict-only for deploy-grade cost and context estimates. "
-                    "Streaming Exploration stays in Benchmark as exploratory evidence, while Scenario Lab attaches pricing, context windows, "
-                    "and optional benchmark-only speed metadata to the strict multilingual baseline."
+                        scenario_run = gr.Button("Run Scenario Lab", variant="primary", size="sm", elem_classes="compact-action")
+                gr.HTML(
+                    build_chart_help_markdown(
+                        "How to use Scenario Lab",
+                        "This tab turns tokenizer evidence into business impact. It uses the strict benchmark as the baseline, then asks what those extra tokens mean for monthly cost and usable context window."
+                    )
                 )
 
                 with gr.Tabs():
                     with gr.TabItem("Cost"):
-                        gr.HTML(tooltip_label_html("Cost", "Monthly cost plotted against RTC for the selected free models."))
+                        gr.HTML(build_chart_help_markdown("How to read this chart", "Each point is a model. Farther right means more tokens for the same meaning; higher means more monthly spend."))
                         scenario_cost_plot = gr.Plot(label="Cost")
                     with gr.TabItem("Context Loss"):
-                        gr.HTML(tooltip_label_html("Context Loss", "Estimated context-window erosion caused by multilingual token inflation."))
+                        gr.HTML(build_chart_help_markdown("How to read this chart", "This shows how much usable context window you lose when a tokenizer spends more tokens on the same message. Lower is better."))
                         scenario_context_plot = gr.Plot(label="Context Loss")
                     with gr.TabItem("Speed Metadata"):
                         scenario_speed_summary_md = gr.Markdown(
                             value="### Speed Coverage\n- Run Scenario Lab to inspect benchmark-only speed coverage."
                         )
-                        gr.HTML(tooltip_label_html("Speed Metadata", "Benchmark-only external speed metadata for models that match the local AA snapshot."))
+                        gr.HTML(build_chart_help_markdown("How to read this chart", "This is external benchmark metadata, not the multilingual token tax itself. Use it as supporting context, not the headline decision."))
                         scenario_speed_plot = gr.Plot(label="Speed Metadata")
                     with gr.TabItem("Scale"):
-                        gr.HTML(tooltip_label_html("Scale", "Scale view linking token volume to projected monthly cost."))
+                        gr.HTML(build_chart_help_markdown("How to read this chart", "This view links monthly token volume to projected spend so you can see which models become expensive fastest at scale."))
                         scenario_scale_plot = gr.Plot(label="Scale")
                     with gr.TabItem("Custom Slice"):
-                        gr.HTML(tooltip_label_html("Custom Slice", "Custom scatter view for any two scenario metrics."))
+                        gr.HTML(build_chart_help_markdown("How to read this chart", "Pick any two metrics to compare and use bubble size when you want a third dimension."))
                         scenario_custom_plot = gr.Plot(label="Custom Slice")
-                gr.HTML(tooltip_label_html("Scenario Rows", "Per-language scenario rows that feed the aggregate charts."))
+                gr.HTML(build_chart_help_markdown("How to use this table", "These per-language rows feed the scenario charts above. Use them when you need the detailed assumptions behind a model-level point."))
                 scenario_table = gr.DataFrame(label="Scenario Rows", interactive=False)
                 scenario_appendix_md = gr.Markdown(label="Scenario Appendix")
                 with gr.Accordion("Diagnostics", open=False):

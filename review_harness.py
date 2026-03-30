@@ -85,6 +85,34 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
     """Return the default screenshot sweep for the workbench."""
     scenarios = [
         ReviewScenario(
+            key="benchmark-strict-defaults-light",
+            title="Benchmark Strict Defaults Light",
+            description="Default strict benchmark run in light theme.",
+            actions=(
+                ReviewAction("click_text", "Light", optional=True),
+                ReviewAction("open_top_tab", "Token Tax Workbench"),
+                ReviewAction("open_inner_tab", "Benchmark"),
+                ReviewAction("click_button", "Run Benchmark"),
+                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
+                ReviewAction("wait_ms", "settle", value=1_000),
+            ),
+            captures=(CaptureRequest("benchmark-strict-defaults-light"),),
+        ),
+        ReviewScenario(
+            key="benchmark-strict-defaults-dark",
+            title="Benchmark Strict Defaults Dark",
+            description="Default strict benchmark run in dark theme.",
+            actions=(
+                ReviewAction("click_text", "Dark", optional=True),
+                ReviewAction("open_top_tab", "Token Tax Workbench"),
+                ReviewAction("open_inner_tab", "Benchmark"),
+                ReviewAction("click_button", "Run Benchmark"),
+                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
+                ReviewAction("wait_ms", "settle", value=1_000),
+            ),
+            captures=(CaptureRequest("benchmark-strict-defaults-dark"),),
+        ),
+        ReviewScenario(
             key="benchmark-strict-defaults",
             title="Benchmark Strict Defaults",
             description="Default strict benchmark run in the Benchmark tab.",
@@ -118,6 +146,34 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 "Streaming is exploratory only.",
                 "Check that the copy and charts do not overclaim equivalence with strict RTC.",
             ),
+        ),
+        ReviewScenario(
+            key="benchmark-coverage-defaults",
+            title="Benchmark Coverage Defaults",
+            description="Coverage tab with grouped bars for coverage, split rate, and fertility.",
+            actions=(
+                ReviewAction("open_top_tab", "Token Tax Workbench"),
+                ReviewAction("open_inner_tab", "Benchmark"),
+                ReviewAction("click_button", "Run Benchmark"),
+                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
+                ReviewAction("wait_ms", "settle", value=1_000),
+                ReviewAction("open_inner_tab", "Coverage"),
+            ),
+            captures=(CaptureRequest("benchmark-coverage-defaults"),),
+        ),
+        ReviewScenario(
+            key="benchmark-observed-composition-defaults",
+            title="Benchmark Observed Composition Defaults",
+            description="Observed Composition tab with stacked script-distribution bars.",
+            actions=(
+                ReviewAction("open_top_tab", "Token Tax Workbench"),
+                ReviewAction("open_inner_tab", "Benchmark"),
+                ReviewAction("click_button", "Run Benchmark"),
+                ReviewAction("wait_for_visible_table_rows", "benchmark", value=1),
+                ReviewAction("wait_ms", "settle", value=1_000),
+                ReviewAction("open_inner_tab", "Observed Composition"),
+            ),
+            captures=(CaptureRequest("benchmark-observed-composition-defaults"),),
         ),
         ReviewScenario(
             key="catalog-defaults",
@@ -210,6 +266,19 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 ReviewAction("open_inner_tab", "Custom Slice"),
             ),
             captures=(CaptureRequest("scenario-defaults-custom"),),
+        ),
+        ReviewScenario(
+            key="why-tokenizers-matter",
+            title="Why Tokenizers Matter",
+            description="Plain-language explainer tab for non-technical users.",
+            actions=(
+                ReviewAction("open_top_tab", "Why Tokenizers Matter"),
+                ReviewAction("wait_ms", "settle", value=600),
+            ),
+            captures=(CaptureRequest("why-tokenizers-matter"),),
+            notes=(
+                "Review the explainer as a first-time executive or PM, not a tokenizer specialist.",
+            ),
         ),
     ]
 

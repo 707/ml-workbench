@@ -64,3 +64,16 @@ def test_runtime_scenarios_execute_real_inputs_when_opted_in():
     assert "wait_for_text_present" in tokenizer_actions
     assert "click_button" in model_actions
     assert "wait_for_text_present" in model_actions
+
+
+def test_default_scenarios_include_explainer_and_theme_reviews():
+    from review_harness import default_workbench_review_scenarios
+
+    scenarios = default_workbench_review_scenarios()
+    keys = {scenario.key for scenario in scenarios}
+
+    assert "benchmark-strict-defaults-light" in keys
+    assert "benchmark-strict-defaults-dark" in keys
+    assert "benchmark-coverage-defaults" in keys
+    assert "benchmark-observed-composition-defaults" in keys
+    assert "why-tokenizers-matter" in keys

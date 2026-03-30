@@ -244,6 +244,51 @@ class TestBuildMetricScatter:
         assert sizes[0] == pytest.approx(sizes[1])
 
 
+class TestBenchmarkBarCharts:
+    def test_build_category_bar_returns_grouped_bar_chart(self):
+        from charts import build_category_bar
+
+        fig = build_category_bar(
+            [
+                {"language": "English", "tokenizer_key": "gpt2", "unique_tokens": 12},
+                {"language": "English", "tokenizer_key": "llama-3", "unique_tokens": 10},
+                {"language": "Arabic", "tokenizer_key": "gpt2", "unique_tokens": 16},
+                {"language": "Arabic", "tokenizer_key": "llama-3", "unique_tokens": 14},
+            ],
+            category_key="language",
+            value_key="unique_tokens",
+            title="Vocabulary Coverage",
+            x_title="Language",
+            y_title="Unique Tokens Used",
+        )
+
+        assert fig.__class__.__name__ == "Figure"
+        assert fig.layout.barmode == "group"
+        assert all(trace.type == "bar" for trace in fig.data)
+
+    def test_build_stacked_category_bar_returns_stacked_bars(self):
+        from charts import build_stacked_category_bar
+
+        fig = build_stacked_category_bar(
+            [
+                {"tokenizer_key": "gpt2", "script": "Latin", "token_count": 20},
+                {"tokenizer_key": "gpt2", "script": "Arabic", "token_count": 5},
+                {"tokenizer_key": "llama-3", "script": "Latin", "token_count": 15},
+                {"tokenizer_key": "llama-3", "script": "Arabic", "token_count": 8},
+            ],
+            category_key="tokenizer_key",
+            value_key="token_count",
+            stack_key="script",
+            title="Observed Script Distribution",
+            x_title="Tokenizer Family",
+            y_title="Observed Tokens",
+        )
+
+        assert fig.__class__.__name__ == "Figure"
+        assert fig.layout.barmode == "stack"
+        assert all(trace.type == "bar" for trace in fig.data)
+
+
 # ---------------------------------------------------------------------------
 # build_cost_waterfall (Issue 8)
 # ---------------------------------------------------------------------------

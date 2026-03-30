@@ -184,6 +184,21 @@ class TestComparisonUiLabels:
         assert ".render()" in src
         assert "demo.load(" in src
 
+    def test_build_ui_uses_segmented_theme_toggle_markup(self):
+        import app
+
+        src = inspect.getsource(app.build_ui)
+        assert 'role="group"' in src
+        assert "Theme" in src
+        assert "theme-choice-light" in src
+        assert "theme-choice-dark" in src
+
+    def test_build_ui_includes_explainer_tab(self):
+        import app
+
+        src = inspect.getsource(app.build_ui)
+        assert 'with gr.Tab("Why Tokenizers Matter")' in src
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — extract_usage
