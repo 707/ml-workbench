@@ -175,6 +175,14 @@ class TestComparisonUiLabels:
         assert "completed" in outputs[2].lower()
         assert "Prompt length" in outputs[2]
 
+    def test_build_ui_wraps_tabs_in_custom_app_shell(self):
+        import app
+
+        src = inspect.getsource(app.build_ui)
+        assert "with gr.Blocks(" in src
+        assert "theme-toggle" in src
+        assert ".render()" in src
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — extract_usage

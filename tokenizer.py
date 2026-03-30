@@ -710,26 +710,31 @@ def build_tokenizer_ui() -> gr.Blocks:
                         choices=tokenizer_names,
                         value=tokenizer_names[0],
                         label="Tokenizer",
+                        info="Tokenizer family to inspect on the current input text.",
                     )
                 single_text = gr.Textbox(
                     label="Input Text",
                     placeholder="Type text to tokenize...",
                     lines=3,
                     elem_id="tokenizer-single-text",
+                    info="Text that will be tokenized and visualized.",
                 )
                 oov_threshold = gr.Slider(
                     minimum=1, maximum=10, value=3, step=1,
                     label="OOV threshold (tokens per word)",
+                    info="Words split into at least this many tokens are flagged as highly fragmented.",
                 )
                 single_english_text = gr.Textbox(
                     label="English Equivalent (optional)",
                     placeholder="Paste English translation for RTC comparison...",
                     lines=2,
                     elem_id="tokenizer-single-english-text",
+                    info="Optional English equivalent used to compute RTC against the selected tokenizer.",
                 )
                 single_decoded_view = gr.Checkbox(
                     label="Readable token view (decode tokens, hide special tokens)",
                     value=False,
+                    info="Show decoded token chunks instead of raw token pieces when possible.",
                 )
                 single_btn = gr.Button("Tokenize", variant="primary")
                 single_status = gr.Markdown(
@@ -754,23 +759,27 @@ def build_tokenizer_ui() -> gr.Blocks:
                     placeholder="Type text to compare tokenizers...",
                     lines=3,
                     elem_id="tokenizer-compare-text",
+                    info="Shared text passed to both tokenizers for side-by-side comparison.",
                 )
                 with gr.Row():
                     cmp_model_a = gr.Dropdown(
                         choices=tokenizer_names,
                         value=tokenizer_names[0],
                         label="Tokenizer A",
+                        info="First tokenizer family in the side-by-side comparison.",
                     )
                     cmp_model_b = gr.Dropdown(
                         choices=tokenizer_names,
                         value=tokenizer_names[1] if len(tokenizer_names) > 1 else tokenizer_names[0],
                         label="Tokenizer B",
+                        info="Second tokenizer family in the side-by-side comparison.",
                     )
                 compare_english_text = gr.Textbox(
                     label="English Equivalent (optional)",
                     placeholder="Paste English translation for RTC comparison...",
                     lines=2,
                     elem_id="tokenizer-compare-english-text",
+                    info="Optional English equivalent used for RTC comparison in the compare view.",
                 )
                 compare_btn = gr.Button("Compare", variant="primary")
                 with gr.Row():
@@ -779,6 +788,7 @@ def build_tokenizer_ui() -> gr.Blocks:
                 compare_decoded_view = gr.Checkbox(
                     label="Readable token view (decode tokens, hide special tokens)",
                     value=False,
+                    info="Show readable decoded token chunks when comparing tokenizers.",
                 )
                 cmp_ratio_md = gr.Markdown(label="Comparison")
                 compare_status = gr.Markdown(

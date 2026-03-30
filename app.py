@@ -42,6 +42,276 @@ PRESET_QUESTIONS = [
     "If you fold a paper in half 42 times (paper = 0.1mm), how thick is it?",
 ]
 
+APP_CSS = """
+body.mlwb-dark {
+  --wb-bg: #0f1116;
+  --wb-panel: #171b24;
+  --wb-panel-soft: #1d2330;
+  --wb-border: #2d3748;
+  --wb-text: #e5e7eb;
+  --wb-muted: #94a3b8;
+  --wb-accent: #f97316;
+  --wb-accent-soft: rgba(249, 115, 22, 0.16);
+}
+
+body.mlwb-light {
+  --wb-bg: #f4f6fb;
+  --wb-panel: #ffffff;
+  --wb-panel-soft: #eef2f9;
+  --wb-border: #d7dee9;
+  --wb-text: #18212f;
+  --wb-muted: #5b6b82;
+  --wb-accent: #ea580c;
+  --wb-accent-soft: rgba(234, 88, 12, 0.10);
+}
+
+body.mlwb-dark,
+body.mlwb-light {
+  background: var(--wb-bg) !important;
+  color: var(--wb-text) !important;
+}
+
+body.mlwb-dark .gradio-container,
+body.mlwb-light .gradio-container {
+  background: var(--wb-bg) !important;
+  color: var(--wb-text) !important;
+}
+
+body.mlwb-light .gradio-container input,
+body.mlwb-light .gradio-container textarea,
+body.mlwb-light .gradio-container select,
+body.mlwb-light .gradio-container button,
+body.mlwb-light .gradio-container .wrap,
+body.mlwb-light .gradio-container .block {
+  color: var(--wb-text);
+}
+
+.app-shell-header,
+.filter-panel,
+.workbench-box,
+.benchmark-summary-box,
+.preview-card {
+  background: var(--wb-panel);
+  border: 1px solid var(--wb-border);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.app-shell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.app-shell-copy h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.app-shell-copy p {
+  margin: 0.35rem 0 0 0;
+  color: var(--wb-muted);
+}
+
+#theme-toggle {
+  appearance: none;
+  border: 1px solid var(--wb-border);
+  background: var(--wb-panel-soft);
+  color: var(--wb-text);
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-grid {
+  align-items: stretch;
+}
+
+.filter-panel {
+  padding: 1rem;
+}
+
+.tooltip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.2rem 0 0.55rem 0;
+  color: var(--wb-text);
+  font-weight: 600;
+}
+
+.tooltip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--wb-border);
+  background: var(--wb-panel-soft);
+  color: var(--wb-muted);
+  font-size: 0.75rem;
+  cursor: help;
+}
+
+.benchmark-summary-box {
+  padding: 1rem 1.1rem;
+}
+
+.benchmark-summary-box h3,
+.preview-card h3 {
+  margin: 0 0 0.4rem 0;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.8rem;
+}
+
+.summary-metric {
+  background: var(--wb-panel-soft);
+  border: 1px solid var(--wb-border);
+  border-radius: 14px;
+  padding: 0.9rem;
+}
+
+.summary-metric-label {
+  color: var(--wb-muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-metric-value {
+  color: var(--wb-text);
+  font-size: 0.96rem;
+  line-height: 1.4;
+}
+
+.preview-card {
+  padding: 1rem 1.1rem;
+}
+
+.preview-subtitle,
+.benchmark-summary-empty,
+.preview-empty {
+  color: var(--wb-muted);
+  margin: 0.2rem 0 0.9rem 0;
+}
+
+.preview-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.preview-meta {
+  background: var(--wb-panel-soft);
+  border: 1px solid var(--wb-border);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.preview-meta-label {
+  font-size: 0.8rem;
+  color: var(--wb-muted);
+}
+
+.preview-meta-value {
+  font-size: 0.98rem;
+  color: var(--wb-text);
+  font-weight: 600;
+}
+
+.preview-text-box,
+.preview-token-box {
+  border: 1px solid var(--wb-border);
+  background: var(--wb-panel-soft);
+  border-radius: 14px;
+  padding: 0.95rem;
+}
+
+.preview-text-box {
+  margin-bottom: 0.8rem;
+}
+
+.preview-text {
+  color: var(--wb-text);
+  line-height: 1.7;
+}
+
+.preview-token-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.preview-token {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92rem;
+  border: 1px solid transparent;
+}
+
+.preview-tone-0 { background: rgba(59, 130, 246, 0.16); color: #2563eb; border-color: rgba(59, 130, 246, 0.28); }
+.preview-tone-1 { background: rgba(16, 185, 129, 0.16); color: #059669; border-color: rgba(16, 185, 129, 0.28); }
+.preview-tone-2 { background: rgba(239, 68, 68, 0.16); color: #dc2626; border-color: rgba(239, 68, 68, 0.28); }
+.preview-tone-3 { background: rgba(168, 85, 247, 0.16); color: #9333ea; border-color: rgba(168, 85, 247, 0.28); }
+.preview-tone-4 { background: rgba(245, 158, 11, 0.16); color: #d97706; border-color: rgba(245, 158, 11, 0.28); }
+.preview-tone-5 { background: rgba(14, 165, 233, 0.16); color: #0284c7; border-color: rgba(14, 165, 233, 0.28); }
+"""
+
+APP_JS = """
+async () => {
+  const storageKey = "mlwb-theme";
+
+  const applyTheme = (theme) => {
+    const body = document.body;
+    body.classList.remove("mlwb-dark", "mlwb-light");
+    body.classList.add(theme === "light" ? "mlwb-light" : "mlwb-dark");
+    const button = document.getElementById("theme-toggle");
+    if (button) {
+      button.textContent = theme === "light" ? "Switch to dark mode" : "Switch to light mode";
+    }
+  };
+
+  const attachToggle = () => {
+    const button = document.getElementById("theme-toggle");
+    if (!button || button.dataset.bound === "true") {
+      return;
+    }
+    button.dataset.bound = "true";
+    button.addEventListener("click", () => {
+      const nextTheme = document.body.classList.contains("mlwb-light") ? "dark" : "light";
+      localStorage.setItem(storageKey, nextTheme);
+      applyTheme(nextTheme);
+    });
+  };
+
+  applyTheme(localStorage.getItem(storageKey) || "dark");
+  attachToggle();
+  const observer = new MutationObserver(() => attachToggle());
+  observer.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 8000);
+}
+"""
+
+APP_HEAD = f"<style>{APP_CSS}</style><script>{APP_JS}</script>"
+
 # ---------------------------------------------------------------------------
 # Phase 1: Core API Layer
 # ---------------------------------------------------------------------------
@@ -360,28 +630,34 @@ def _build_comparison_blocks() -> gr.Blocks:
                     choices=model_choices,
                     value=model_choices[0],
                     label="Model A",
+                    info="First free OpenRouter model to compare on the same prompt.",
                 )
                 with gr.Accordion("Model A parameters", open=False):
                     temp_a = gr.Slider(
                         minimum=0.0, maximum=2.0, value=1.0, step=0.05,
                         label="Temperature",
+                        info="Sampling temperature for Model A.",
                     )
                     max_tokens_a = gr.Number(
                         value=None, label="Max tokens (blank = no limit)", precision=0,
+                        info="Optional maximum completion length for Model A.",
                     )
             with gr.Column():
                 model_b_drop = gr.Dropdown(
                     choices=model_choices,
                     value=model_choices[1],
                     label="Model B",
+                    info="Second free OpenRouter model to compare against Model A.",
                 )
                 with gr.Accordion("Model B parameters", open=False):
                     temp_b = gr.Slider(
                         minimum=0.0, maximum=2.0, value=1.0, step=0.05,
                         label="Temperature",
+                        info="Sampling temperature for Model B.",
                     )
                     max_tokens_b = gr.Number(
                         value=None, label="Max tokens (blank = no limit)", precision=0,
+                        info="Optional maximum completion length for Model B.",
                     )
 
         with gr.Accordion("Input Prompt", open=True):
@@ -389,11 +665,13 @@ def _build_comparison_blocks() -> gr.Blocks:
                 choices=PRESET_QUESTIONS,
                 label="Input Prompt",
                 value=PRESET_QUESTIONS[0],
+                info="Preset prompt used for the comparison unless a custom prompt is provided.",
             )
             custom = gr.Textbox(
                 label="Custom Prompt (optional, overrides selected input)",
                 placeholder="Type your own question here...",
                 elem_id="comparison-custom-prompt",
+                info="Custom prompt to send to both models. If filled, this overrides the preset.",
             )
 
         submit_btn = gr.Button("Compare →", variant="primary")
@@ -431,23 +709,40 @@ def _build_comparison_blocks() -> gr.Blocks:
     return demo
 
 
-def build_ui() -> gr.TabbedInterface:
-    """Construct and return the full tabbed Gradio UI.
+def build_ui() -> gr.Blocks:
+    """Construct and return the full tabbed Gradio UI shell.
 
     Tabs:
       - Model Comparison: side-by-side reasoning model comparison.
       - Tokenizer Inspector: tokenization visualisation and analysis.
 
     Returns:
-        gr.TabbedInterface composing both tab blocks.
+        gr.Blocks composing the tabbed app shell and child workbench blocks.
     """
     comparison_blocks = _build_comparison_blocks()
     tokenizer_blocks = build_tokenizer_ui()
     token_tax_blocks = build_token_tax_ui()
-    return gr.TabbedInterface(
-        [token_tax_blocks, tokenizer_blocks, comparison_blocks],
-        ["Token Tax Workbench", "Tokenizer Inspector", "Model Comparison"],
-    )
+
+    with gr.Blocks(title="ML Workbench", fill_width=True) as demo:
+        gr.HTML(
+            """
+            <div class="app-shell-header">
+              <div class="app-shell-copy">
+                <h1>ML Workbench</h1>
+                <p>Tokenizer evidence, scenario modelling, and free-model comparisons in one place.</p>
+              </div>
+              <button id="theme-toggle" type="button">Switch to light mode</button>
+            </div>
+            """
+        )
+        with gr.Tabs():
+            with gr.Tab("Token Tax Workbench"):
+                token_tax_blocks.render()
+            with gr.Tab("Tokenizer Inspector"):
+                tokenizer_blocks.render()
+            with gr.Tab("Model Comparison"):
+                comparison_blocks.render()
+    return demo
 
 
 # ---------------------------------------------------------------------------
@@ -462,4 +757,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         ssr_mode=False,
+        head=APP_HEAD,
     )

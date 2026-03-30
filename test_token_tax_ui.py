@@ -32,10 +32,9 @@ class TestWorkbenchHandlers:
         selected = default_benchmark_tokenizers()
 
         assert "gpt-oss" in selected
-        assert "trinity-large" in selected
         assert "qwen3-next" in selected
         assert "qwen3-coder" not in selected
-        assert len(selected) <= 8
+        assert len(selected) <= 6
 
     def test_default_scenario_models_use_curated_free_subset(self):
         from token_tax_ui import default_scenario_models
@@ -44,8 +43,8 @@ class TestWorkbenchHandlers:
 
         assert "openai/gpt-oss-20b:free" in selected
         assert "nvidia/nemotron-3-super-120b-a12b:free" in selected
-        assert "arcee-ai/trinity-large-preview:free" in selected
-        assert len(selected) <= 8
+        assert "qwen/qwen-2.5-7b-instruct:free" in selected
+        assert len(selected) <= 6
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
@@ -175,6 +174,14 @@ class TestWorkbenchHandlers:
         assert apply_language_preset("Arabic") == ["ar"]
         assert set(apply_language_preset("Latin")) >= {"en", "fr", "de", "es", "pt"}
 
+    def test_language_choice_pairs_use_human_readable_labels(self):
+        from token_tax_ui import language_choice_pairs
+
+        choices = language_choice_pairs(["en", "ar", "hi"])
+        assert ("English", "en") in choices
+        assert ("Arabic", "ar") in choices
+        assert ("Hindi", "hi") in choices
+
     def test_build_benchmark_preview_markdown_uses_selected_row(self):
         from token_tax_ui import build_benchmark_preview_markdown
 
@@ -187,6 +194,7 @@ class TestWorkbenchHandlers:
                     "sample_index": 0,
                     "text": "Bonjour le monde",
                     "token_preview": "Bon | jour | monde",
+                    "token_texts": ["Bon", "jour", "monde"],
                     "token_count": 3,
                 },
             ],
@@ -196,7 +204,9 @@ class TestWorkbenchHandlers:
         )
 
         assert "Strict Evidence" in markdown
-        assert "Bon | jour | monde" in markdown
+        assert "French" in markdown
+        assert "preview-token" in markdown
+        assert "Bonjour le monde" in markdown
 
     def test_build_coverage_rows_extracts_unique_token_metrics(self):
         from token_tax_ui import build_coverage_rows
@@ -260,6 +270,7 @@ class TestWorkbenchHandlers:
         )
 
         assert "Benchmark Summary" in markdown
+        assert "summary-metric" in markdown
         assert "Worst RTC pressure" in markdown
         assert "Highest bytes/token" in markdown
         assert "Highest split pressure" in markdown
