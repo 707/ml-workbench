@@ -6,7 +6,9 @@ different tokenizers handle input text.
 """
 
 import html
+import gc
 import threading
+from collections import OrderedDict
 from time import perf_counter
 import gradio as gr
 from langdetect import detect, LangDetectException
@@ -82,7 +84,8 @@ class TiktokenAdapter:
 
 
 # Module-level cache: name -> tokenizer object
-_tokenizer_cache: dict[str, object] = {}
+_TOKENIZER_CACHE_MAX_SIZE = 2
+_tokenizer_cache: OrderedDict[str, object] = OrderedDict()
 _tokenizer_lock = threading.Lock()
 
 
@@ -102,6 +105,11 @@ def get_tokenizer(name: str):
         raise ValueError(f"unknown tokenizer: '{name}'. Choose from {list(SUPPORTED_TOKENIZERS)}")
 
     with _tokenizer_lock:
+        cached = _tokenizer_cache.get(name)
+        if cached is not None:
+            _tokenizer_cache.move_to_end(name)
+            return cached
+
         if name not in _tokenizer_cache:
             repo_id = SUPPORTED_TOKENIZERS[name]
             if repo_id.startswith("tiktoken:"):
@@ -109,13 +117,23 @@ def get_tokenizer(name: str):
                 _tokenizer_cache[name] = TiktokenAdapter(encoding_name)
             else:
                 try:
-                    _tokenizer_cache[name] = AutoTokenizer.from_pretrained(repo_id)
+                    try:
+                        _tokenizer_cache[name] = AutoTokenizer.from_pretrained(
+                            repo_id,
+                            local_files_only=True,
+                        )
+                    except Exception:
+                        _tokenizer_cache[name] = AutoTokenizer.from_pretrained(repo_id)
                 except Exception as exc:
                     raise RuntimeError(
                         f"Failed to load tokenizer '{name}' from '{repo_id}'. "
                         f"Check your network connection or set TRANSFORMERS_OFFLINE=1 "
                         f"if you have a local cache. Original error: {exc}"
                     ) from exc
+            _tokenizer_cache.move_to_end(name)
+            while len(_tokenizer_cache) > _TOKENIZER_CACHE_MAX_SIZE:
+                _tokenizer_cache.popitem(last=False)
+                gc.collect()
 
         return _tokenizer_cache[name]
 

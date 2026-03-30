@@ -31,9 +31,10 @@ class TestWorkbenchHandlers:
 
         selected = default_benchmark_tokenizers()
 
-        assert "gpt-oss" in selected
-        assert "trinity-large" in selected
+        assert "gpt2" in selected
+        assert "o200k_base" in selected
         assert "qwen3-coder" not in selected
+        assert "trinity-large" not in selected
         assert len(selected) <= 4
 
     def test_default_scenario_models_use_curated_free_subset(self):
@@ -41,8 +42,9 @@ class TestWorkbenchHandlers:
 
         selected = default_scenario_models()
 
-        assert "openai/gpt-oss-20b:free" in selected
-        assert "arcee-ai/trinity-large-preview:free" in selected
+        assert "meta-llama/llama-3.2-3b-instruct:free" in selected
+        assert "mistralai/mistral-7b-instruct:free" in selected
+        assert "openai/gpt-oss-20b:free" not in selected
         assert len(selected) <= 4
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):

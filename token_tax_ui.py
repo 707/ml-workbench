@@ -1025,17 +1025,22 @@ def _handle_scenario_tab(
 
 
 DEFAULT_BENCHMARK_TOKENIZER_KEYS = [
+    "gpt2",
+    "o200k_base",
     "llama-3",
     "qwen-2.5",
-    "gpt-oss",
-    "trinity-large",
+]
+
+DEFAULT_SCENARIO_TOKENIZER_KEYS = [
+    "llama-3",
+    "mistral",
+    "qwen-2.5",
 ]
 
 DEFAULT_SCENARIO_MODEL_IDS = [
     "meta-llama/llama-3.2-3b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
     "qwen/qwen-2.5-7b-instruct:free",
-    "openai/gpt-oss-20b:free",
-    "arcee-ai/trinity-large-preview:free",
 ]
 
 
@@ -1051,12 +1056,19 @@ def default_scenario_models() -> list[str]:
     return [model_id for model_id in DEFAULT_SCENARIO_MODEL_IDS if model_id in available]
 
 
+def default_scenario_tokenizers() -> list[str]:
+    """Return a curated tokenizer subset aligned to the default scenario models."""
+    available = {family["key"] for family in list_tokenizer_families(include_proxy=False)}
+    return [key for key in DEFAULT_SCENARIO_TOKENIZER_KEYS if key in available]
+
+
 def build_token_tax_ui() -> gr.Blocks:
     """Construct the Token Tax Workbench."""
     tokenizer_families = list_tokenizer_families(include_proxy=True)
     exact_tokenizers = [family["key"] for family in tokenizer_families if family["mapping_quality"] != "proxy"]
     free_runtime_choices = list_free_runtime_choices(include_proxy=False)
     benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(6, len(exact_tokenizers))]
+    scenario_default_tokenizers = default_scenario_tokenizers() or benchmark_default_tokenizers
     scenario_default_models = default_scenario_models() or [row["model_id"] for row in free_runtime_choices[:6]]
     model_choices = [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in free_runtime_choices]
 
@@ -1069,7 +1081,7 @@ def build_token_tax_ui() -> gr.Blocks:
 
         with gr.Tabs():
             with gr.TabItem("Benchmark"):
-                with gr.Row(equal_height=True, elem_classes="filter-grid"):
+                with gr.Row(equal_height=False, elem_classes="filter-grid"):
                     with gr.Column(elem_classes="filter-panel"):
                         benchmark_lane = gr.Radio(
                             choices=list(LANE_TO_CORPUS_KEY.keys()),
@@ -1133,7 +1145,6 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Preview Sample Index",
                             info="Sample row from the selected corpus slice to preview.",
                         )
-                    with gr.Column(elem_classes="filter-panel"):
                         benchmark_include_estimates = gr.Checkbox(
                             label="Include estimated values",
                             value=False,
@@ -1149,7 +1160,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=False,
                             info="Stream progress updates while the benchmark is running. Turning this off is faster.",
                         )
-                        benchmark_run = gr.Button("Run Benchmark", variant="primary")
+                        benchmark_run = gr.Button("Run Benchmark", variant="primary", elem_classes="compact-action")
                 benchmark_preset.change(
                     fn=apply_language_preset,
                     inputs=[benchmark_preset],
@@ -1223,8 +1234,8 @@ def build_token_tax_ui() -> gr.Blocks:
                 )
 
             with gr.TabItem("Catalog"):
-                with gr.Row(equal_height=True, elem_classes="filter-grid"):
-                    with gr.Column(elem_classes="filter-panel"):
+                with gr.Row(equal_height=False, elem_classes="filter-grid"):
+                    with gr.Column(elem_classes="filter-panel filter-panel--narrow", min_width=360, scale=0):
                         catalog_include_proxy = gr.Checkbox(
                             label="Include proxy mappings",
                             value=False,
@@ -1240,7 +1251,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=False,
                             info="Stream catalog refresh progress while loading the table.",
                         )
-                        catalog_run = gr.Button("Load Catalog", variant="primary")
+                        catalog_run = gr.Button("Load Catalog", variant="primary", elem_classes="compact-action")
                 gr.Markdown(
                     "Why these controls matter: this catalog is tokenizer-first, with free runnable models attached as examples. "
                     "Refreshing live pricing only updates the in-memory OpenRouter cache for this running app instance."
@@ -1257,7 +1268,7 @@ def build_token_tax_ui() -> gr.Blocks:
                 )
 
             with gr.TabItem("Scenario Lab"):
-                with gr.Row(equal_height=True, elem_classes="filter-grid"):
+                with gr.Row(equal_height=False, elem_classes="filter-grid"):
                     with gr.Column(elem_classes="filter-panel"):
                         scenario_languages = gr.Dropdown(
                             choices=language_choice_pairs(list(DEFAULT_BENCHMARK_LANGUAGES)),
@@ -1268,7 +1279,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         )
                         scenario_tokenizers = gr.Dropdown(
                             choices=[(family["label"], family["key"]) for family in tokenizer_families],
-                            value=benchmark_default_tokenizers,
+                            value=scenario_default_tokenizers,
                             multiselect=True,
                             label="Benchmark Tokenizers",
                             info="Tokenizer families used to supply the strict multilingual benchmark baseline.",
@@ -1347,7 +1358,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=False,
                             info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
                         )
-                        scenario_run = gr.Button("Run Scenario Lab", variant="primary")
+                        scenario_run = gr.Button("Run Scenario Lab", variant="primary", elem_classes="compact-action")
                 gr.Markdown(
                     "Why these controls matter: Scenario Lab is strict-only for deploy-grade cost and context estimates. "
                     "Streaming Exploration stays in Benchmark as exploratory evidence, while Scenario Lab attaches pricing, context windows, "

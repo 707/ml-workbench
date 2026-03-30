@@ -87,7 +87,6 @@ body.mlwb-light .gradio-container .block {
 }
 
 .app-shell-header,
-.filter-panel,
 .workbench-box,
 .benchmark-summary-box,
 .preview-card {
@@ -153,11 +152,24 @@ body.mlwb-light .theme-icon-dark {
 }
 
 .filter-grid {
-  align-items: stretch;
+  align-items: start;
+  gap: 0.85rem;
 }
 
 .filter-panel {
-  padding: 1rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.filter-panel .wrap {
+  gap: 0.6rem;
+}
+
+.filter-panel--narrow {
+  max-width: 420px;
 }
 
 .tooltip-label {
@@ -194,8 +206,8 @@ body.mlwb-light .theme-icon-dark {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
   margin-top: 0.8rem;
 }
 
@@ -203,7 +215,7 @@ body.mlwb-light .theme-icon-dark {
   background: var(--wb-panel-soft);
   border: 1px solid var(--wb-border);
   border-radius: 14px;
-  padding: 0.9rem;
+  padding: 0.8rem 0.9rem;
 }
 
 .summary-metric-label {
@@ -280,6 +292,16 @@ body.mlwb-light .theme-icon-dark {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.compact-action {
+  align-self: flex-start;
+}
+
+.compact-action button {
+  width: auto !important;
+  min-width: 11rem;
+  padding-inline: 1rem !important;
 }
 
 .preview-token {

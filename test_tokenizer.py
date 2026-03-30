@@ -73,7 +73,7 @@ class TestGetTokenizer:
             with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
                 get_tokenizer("gpt2")
 
-        mock_fp.assert_called_once_with("gpt2")
+        mock_fp.assert_called_once_with("gpt2", local_files_only=True)
 
     def test_calls_from_pretrained_with_correct_repo_id_for_llama3(self):
         """get_tokenizer('llama-3') must use NousResearch/Meta-Llama-3-8B."""
@@ -84,7 +84,7 @@ class TestGetTokenizer:
             with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
                 get_tokenizer("llama-3")
 
-        mock_fp.assert_called_once_with("NousResearch/Meta-Llama-3-8B")
+        mock_fp.assert_called_once_with("NousResearch/Meta-Llama-3-8B", local_files_only=True)
 
     def test_calls_from_pretrained_with_correct_repo_id_for_mistral(self):
         """get_tokenizer('mistral') must use mistralai/Mistral-7B-v0.1."""
@@ -95,7 +95,7 @@ class TestGetTokenizer:
             with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
                 get_tokenizer("mistral")
 
-        mock_fp.assert_called_once_with("mistralai/Mistral-7B-v0.1")
+        mock_fp.assert_called_once_with("mistralai/Mistral-7B-v0.1", local_files_only=True)
 
     def test_caches_tokenizer_on_second_call(self):
         """Second call with same name must not call from_pretrained again."""
@@ -157,6 +157,23 @@ class TestGetTokenizer:
         for key in ("gpt2", "llama-3", "mistral"):
             assert not SUPPORTED_TOKENIZERS[key].startswith("tiktoken:")
 
+    def test_evicts_oldest_cached_tokenizer_when_cache_limit_is_exceeded(self):
+        """Tokenizer cache should stay bounded so free-tier hosts do not retain every HF tokenizer in memory."""
+        import tokenizer as tok_module
+
+        fake_tokenizers = [MagicMock(name=f"tok-{idx}") for idx in range(3)]
+        with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
+            with patch.object(tok_module, "_TOKENIZER_CACHE_MAX_SIZE", 2):
+                with patch("tokenizer.AutoTokenizer.from_pretrained", side_effect=fake_tokenizers):
+                    first = tok_module.get_tokenizer("gpt2")
+                    second = tok_module.get_tokenizer("llama-3")
+                    third = tok_module.get_tokenizer("mistral")
+                    assert list(tok_module._tokenizer_cache.keys()) == ["llama-3", "mistral"]
+
+        assert first is fake_tokenizers[0]
+        assert second is fake_tokenizers[1]
+        assert third is fake_tokenizers[2]
+
 
 class TestGetTokenizerErrorHandling:
     """Error handling when HF download fails."""
@@ -181,6 +198,24 @@ class TestGetTokenizerErrorHandling:
                 with pytest.raises(RuntimeError):
                     tok_module.get_tokenizer("gpt2")
             assert "gpt2" not in tok_module._tokenizer_cache
+
+    def test_falls_back_to_network_load_when_local_cache_misses(self):
+        """Local-files-only should be attempted first, then a normal load as fallback."""
+        import tokenizer as tok_module
+
+        mock_tok = MagicMock()
+        with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
+            with patch(
+                "tokenizer.AutoTokenizer.from_pretrained",
+                side_effect=[OSError("cache miss"), mock_tok],
+            ) as mock_fp:
+                result = tok_module.get_tokenizer("gpt2")
+
+        assert result is mock_tok
+        assert mock_fp.call_args_list[0].args == ("gpt2",)
+        assert mock_fp.call_args_list[0].kwargs == {"local_files_only": True}
+        assert mock_fp.call_args_list[1].args == ("gpt2",)
+        assert mock_fp.call_args_list[1].kwargs == {}
 
 
 class TestTiktokenAdapter:

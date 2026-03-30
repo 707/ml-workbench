@@ -575,6 +575,42 @@ class TestBenchmarkDetails:
 
         assert rows[0]["unique_tokens"] == 3
 
+    def test_iter_benchmark_rows_skips_tokenizers_that_fail_to_load(self):
+        from corpora import CorpusSample
+        from token_tax import iter_benchmark_rows
+
+        samples = {
+            "en": [
+                CorpusSample("en", "Hello world", "Hello world", "strict_parallel", "https://example.com", "strict_verified"),
+            ],
+        }
+
+        class _Tok:
+            def encode(self, text, add_special_tokens=True):
+                return [1, 2]
+
+            def convert_ids_to_tokens(self, token_ids):
+                return ["Hello", "world"]
+
+        def _fake_get_tokenizer(name):
+            if name == "llama-3":
+                raise RuntimeError("download stalled")
+            return _Tok()
+
+        with patch("token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("token_tax.get_tokenizer", side_effect=_fake_get_tokenizer):
+                rows = list(
+                    iter_benchmark_rows(
+                        "strict_parallel",
+                        ["en"],
+                        ["llama-3", "gpt2"],
+                        row_limit=5,
+                    )
+                )
+
+        assert len(rows) == 1
+        assert rows[0]["tokenizer_key"] == "gpt2"
+
 
 # ---------------------------------------------------------------------------
 # SAMPLE_PHRASES (GH-6)

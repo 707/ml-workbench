@@ -429,9 +429,10 @@ def _sample_metrics(
     english_text: str | None,
     tokenizer_key: str,
     *,
+    tokenizer=None,
     english_baseline_token_count: float | None = None,
 ) -> dict:
-    tok = get_tokenizer(tokenizer_key)
+    tok = tokenizer or get_tokenizer(tokenizer_key)
     token_rows = tokenize_text(text, tok)
     token_count = len(token_rows)
     unit_count = _unit_count(text)
@@ -525,7 +526,23 @@ def _iter_benchmark_payload(
     fetch_languages = list(selected_languages)
     if corpus_key == "streaming_exploration" and "en" not in fetch_languages:
         fetch_languages.append("en")
+    log_event(
+        "benchmark.samples.fetch.start",
+        "Loading corpus samples",
+        corpus_key=corpus_key,
+        language_count=len(fetch_languages),
+        row_limit=row_limit,
+        lane=_lane_label(corpus_key),
+    )
     samples = fetch_corpus_samples(corpus_key, fetch_languages, row_limit=row_limit)
+    log_event(
+        "benchmark.samples.fetch.success",
+        "Loaded corpus samples",
+        corpus_key=corpus_key,
+        language_count=len(samples),
+        sample_counts={language: len(rows) for language, rows in samples.items()},
+        lane=_lane_label(corpus_key),
+    )
     lane = _lane_label(corpus_key)
     raw_rows: list[dict] = []
 
@@ -537,6 +554,30 @@ def _iter_benchmark_payload(
             include_proxy=include_proxy,
         ):
             continue
+
+        log_event(
+            "benchmark.tokenizer.load.start",
+            "Loading tokenizer family",
+            tokenizer_key=selection["tokenizer_key"],
+            lane=lane,
+        )
+        try:
+            tok = get_tokenizer(selection["tokenizer_key"])
+        except Exception as exc:
+            log_event(
+                "benchmark.tokenizer.load.error",
+                "Tokenizer family failed to load",
+                tokenizer_key=selection["tokenizer_key"],
+                lane=lane,
+                error=str(exc),
+            )
+            continue
+        log_event(
+            "benchmark.tokenizer.load.success",
+            "Tokenizer family ready",
+            tokenizer_key=selection["tokenizer_key"],
+            lane=lane,
+        )
 
         log_event(
             "benchmark.tokenizer.start",
@@ -551,7 +592,12 @@ def _iter_benchmark_payload(
             english_samples = samples.get("en", [])
             if english_samples:
                 english_metrics = [
-                    _sample_metrics(sample.text, None, selection["tokenizer_key"])
+                    _sample_metrics(
+                        sample.text,
+                        None,
+                        selection["tokenizer_key"],
+                        tokenizer=tok,
+                    )
                     for sample in english_samples
                 ]
                 english_baseline = _safe_median([item["token_count"] for item in english_metrics])
@@ -575,6 +621,7 @@ def _iter_benchmark_payload(
                     sample.text,
                     sample.english_text if corpus_key == "strict_parallel" else None,
                     selection["tokenizer_key"],
+                    tokenizer=tok,
                     english_baseline_token_count=english_baseline if corpus_key == "streaming_exploration" else None,
                 )
                 observed_tokens.update(metrics["token_texts"])
