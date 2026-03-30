@@ -46,6 +46,23 @@ class TestModelTokenizerMap:
 
         assert MODEL_TOKENIZER_MAP["openai/gpt-4o"] == "o200k_base"
 
+    def test_contains_new_exact_free_model_mappings(self):
+        from model_registry import MODEL_TOKENIZER_MAP
+
+        expected = {
+            "arcee-ai/trinity-large-preview:free",
+            "arcee-ai/trinity-mini:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-nano-9b-v2:free",
+            "openai/gpt-oss-20b:free",
+            "openai/gpt-oss-120b:free",
+            "qwen/qwen3-coder:free",
+            "qwen/qwen3-next-80b-a3b-instruct:free",
+            "z-ai/glm-4.5-air:free",
+        }
+        assert expected.issubset(set(MODEL_TOKENIZER_MAP))
+
 
 # ---------------------------------------------------------------------------
 # get_tokenizer_for_model
@@ -193,6 +210,18 @@ class TestTokenizerFirstCatalog:
         assert "free_models" in row
         assert "aa_matches" in row
 
+    def test_gpt_oss_family_attaches_multiple_free_models(self):
+        from model_registry import build_tokenizer_catalog
+
+        rows = build_tokenizer_catalog(include_proxy=False)
+        gpt_oss = next(row for row in rows if row["tokenizer_key"] == "gpt-oss")
+
+        model_ids = {model["model_id"] for model in gpt_oss["free_models"]}
+        assert model_ids == {
+            "openai/gpt-oss-20b:free",
+            "openai/gpt-oss-120b:free",
+        }
+
 
 class TestArtificialAnalysisSnapshot:
     def test_catalog_attaches_aa_matches_from_snapshot(self, tmp_path, monkeypatch):
@@ -269,3 +298,23 @@ class TestFreeRuntimeChoices:
 
         rows = list_free_runtime_choices(include_proxy=False)
         assert all(row["model_id"].endswith(":free") for row in rows)
+
+    def test_free_runtime_choices_include_new_exact_text_only_models(self):
+        from model_registry import list_free_runtime_choices
+
+        rows = list_free_runtime_choices(include_proxy=False)
+        model_ids = {row["model_id"] for row in rows}
+
+        expected = {
+            "arcee-ai/trinity-large-preview:free",
+            "arcee-ai/trinity-mini:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-nano-9b-v2:free",
+            "openai/gpt-oss-20b:free",
+            "openai/gpt-oss-120b:free",
+            "qwen/qwen3-coder:free",
+            "qwen/qwen3-next-80b-a3b-instruct:free",
+            "z-ai/glm-4.5-air:free",
+        }
+        assert expected.issubset(model_ids)

@@ -41,6 +41,34 @@ FREE_OPENROUTER_MODELS: dict[str, tuple[str, ...]] = {
     "qwen-2.5": (
         "qwen/qwen-2.5-7b-instruct:free",
     ),
+    "qwen3-next": (
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+    ),
+    "qwen3-coder": (
+        "qwen/qwen3-coder:free",
+    ),
+    "gpt-oss": (
+        "openai/gpt-oss-20b:free",
+        "openai/gpt-oss-120b:free",
+    ),
+    "glm-4.5-air": (
+        "z-ai/glm-4.5-air:free",
+    ),
+    "nemotron-3-nano-30b": (
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+    ),
+    "nemotron-3-super": (
+        "nvidia/nemotron-3-super-120b-a12b:free",
+    ),
+    "nemotron-nano-9b-v2": (
+        "nvidia/nemotron-nano-9b-v2:free",
+    ),
+    "trinity-large": (
+        "arcee-ai/trinity-large-preview:free",
+    ),
+    "trinity-mini": (
+        "arcee-ai/trinity-mini:free",
+    ),
     "gemma-2": (
         "google/gemma-3-27b-it:free",
     ),
@@ -59,6 +87,15 @@ TOKENIZER_FAMILIES: dict[str, TokenizerFamily] = {
     "llama-3": TokenizerFamily("llama-3", "Llama 3 family", "NousResearch/Meta-Llama-3-8B", "exact", "strict_verified"),
     "mistral": TokenizerFamily("mistral", "Mistral family", "mistralai/Mistral-7B-v0.1", "exact", "strict_verified"),
     "qwen-2.5": TokenizerFamily("qwen-2.5", "Qwen 2.5 family", "Qwen/Qwen2.5-7B", "exact", "strict_verified"),
+    "qwen3-next": TokenizerFamily("qwen3-next", "Qwen3 Next family", "Qwen/Qwen3-Next-80B-A3B-Instruct", "exact", "strict_verified"),
+    "qwen3-coder": TokenizerFamily("qwen3-coder", "Qwen3 Coder family", "Qwen/Qwen3-Coder-480B-A35B-Instruct", "exact", "strict_verified"),
+    "gpt-oss": TokenizerFamily("gpt-oss", "OpenAI gpt-oss family", "openai/gpt-oss-20b", "exact", "strict_verified"),
+    "glm-4.5-air": TokenizerFamily("glm-4.5-air", "GLM 4.5 Air family", "zai-org/GLM-4.5-Air-FP8", "exact", "strict_verified"),
+    "nemotron-3-nano-30b": TokenizerFamily("nemotron-3-nano-30b", "Nemotron 3 Nano family", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8", "exact", "strict_verified"),
+    "nemotron-3-super": TokenizerFamily("nemotron-3-super", "Nemotron 3 Super family", "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8", "exact", "strict_verified"),
+    "nemotron-nano-9b-v2": TokenizerFamily("nemotron-nano-9b-v2", "Nemotron Nano 9B V2 family", "nvidia/NVIDIA-Nemotron-Nano-9B-v2", "exact", "strict_verified"),
+    "trinity-large": TokenizerFamily("trinity-large", "Trinity Large family", "arcee-ai/Trinity-Large-Preview", "exact", "strict_verified"),
+    "trinity-mini": TokenizerFamily("trinity-mini", "Trinity Mini family", "arcee-ai/Trinity-Mini", "exact", "strict_verified"),
     "gemma-2": TokenizerFamily("gemma-2", "Gemma family", "unsloth/gemma-2-2b", "proxy", "proxy"),
     "command-r": TokenizerFamily("command-r", "Command R family (BLOOM proxy)", "bigscience/bloom-560m", "proxy", "proxy"),
     "gpt2": TokenizerFamily("gpt2", "GPT-2 legacy", "gpt2", "exact", "strict_verified"),
@@ -79,6 +116,16 @@ MODEL_MAPPINGS: dict[str, ModelMapping] = {
     "google/gemma-3-27b-it:free": ModelMapping("google/gemma-3-27b-it:free", "gemma-2", "Gemma 3 27B IT (Free)", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer equivalence is documented"),
     "qwen/qwen-2.5-7b-instruct:free": ModelMapping("qwen/qwen-2.5-7b-instruct:free", "qwen-2.5", "Qwen 2.5 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "qwen/qwen-2.5-72b-instruct": ModelMapping("qwen/qwen-2.5-72b-instruct", "qwen-2.5", "Qwen 2.5 72B Instruct", "exact", "strict_verified", "Static exact mapping"),
+    "qwen/qwen3-next-80b-a3b-instruct:free": ModelMapping("qwen/qwen3-next-80b-a3b-instruct:free", "qwen3-next", "Qwen3 Next 80B A3B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "qwen/qwen3-coder:free": ModelMapping("qwen/qwen3-coder:free", "qwen3-coder", "Qwen3 Coder 480B A35B (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "openai/gpt-oss-20b:free": ModelMapping("openai/gpt-oss-20b:free", "gpt-oss", "gpt-oss-20b (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "openai/gpt-oss-120b:free": ModelMapping("openai/gpt-oss-120b:free", "gpt-oss", "gpt-oss-120b (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "z-ai/glm-4.5-air:free": ModelMapping("z-ai/glm-4.5-air:free", "glm-4.5-air", "GLM 4.5 Air (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "nvidia/nemotron-3-nano-30b-a3b:free": ModelMapping("nvidia/nemotron-3-nano-30b-a3b:free", "nemotron-3-nano-30b", "Nemotron 3 Nano 30B A3B (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "nvidia/nemotron-3-super-120b-a12b:free": ModelMapping("nvidia/nemotron-3-super-120b-a12b:free", "nemotron-3-super", "Nemotron 3 Super 120B A12B (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "nvidia/nemotron-nano-9b-v2:free": ModelMapping("nvidia/nemotron-nano-9b-v2:free", "nemotron-nano-9b-v2", "Nemotron Nano 9B V2 (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "arcee-ai/trinity-large-preview:free": ModelMapping("arcee-ai/trinity-large-preview:free", "trinity-large", "Trinity Large Preview (Free)", "exact", "strict_verified", "Static exact mapping"),
+    "arcee-ai/trinity-mini:free": ModelMapping("arcee-ai/trinity-mini:free", "trinity-mini", "Trinity Mini (Free)", "exact", "strict_verified", "Static exact mapping"),
     "cohere/command-r": ModelMapping("cohere/command-r", "command-r", "Command R", "proxy", "proxy", "Tokenizer proxy until exact Command R tokenizer is wired"),
 }
 

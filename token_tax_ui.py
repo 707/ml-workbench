@@ -906,11 +906,44 @@ def _handle_scenario_tab(
     yield _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
 
 
+DEFAULT_BENCHMARK_TOKENIZER_KEYS = [
+    "llama-3",
+    "mistral",
+    "qwen-2.5",
+    "gpt-oss",
+    "qwen3-next",
+    "trinity-large",
+]
+
+DEFAULT_SCENARIO_MODEL_IDS = [
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+    "openai/gpt-oss-20b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "arcee-ai/trinity-large-preview:free",
+]
+
+
+def default_benchmark_tokenizers() -> list[str]:
+    """Return a curated default tokenizer subset for Benchmark and Scenario."""
+    available = {family["key"] for family in list_tokenizer_families(include_proxy=False)}
+    return [key for key in DEFAULT_BENCHMARK_TOKENIZER_KEYS if key in available]
+
+
+def default_scenario_models() -> list[str]:
+    """Return a curated default free-model subset for Scenario Lab."""
+    available = {row["model_id"] for row in list_free_runtime_choices(include_proxy=False)}
+    return [model_id for model_id in DEFAULT_SCENARIO_MODEL_IDS if model_id in available]
+
+
 def build_token_tax_ui() -> gr.Blocks:
     """Construct the Token Tax Workbench."""
     tokenizer_families = list_tokenizer_families(include_proxy=True)
     exact_tokenizers = [family["key"] for family in tokenizer_families if family["mapping_quality"] != "proxy"]
     free_runtime_choices = list_free_runtime_choices(include_proxy=False)
+    benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(6, len(exact_tokenizers))]
+    scenario_default_models = default_scenario_models() or [row["model_id"] for row in free_runtime_choices[:6]]
     model_choices = [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in free_runtime_choices]
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
@@ -948,7 +981,7 @@ def build_token_tax_ui() -> gr.Blocks:
                     )
                     benchmark_tokenizers = gr.Dropdown(
                         choices=[(family["label"], family["key"]) for family in tokenizer_families],
-                        value=exact_tokenizers,
+                        value=benchmark_default_tokenizers,
                         multiselect=True,
                         label="Tokenizer Families",
                     )
@@ -1062,13 +1095,13 @@ def build_token_tax_ui() -> gr.Blocks:
                 with gr.Row():
                     scenario_tokenizers = gr.Dropdown(
                         choices=[(family["label"], family["key"]) for family in tokenizer_families],
-                        value=exact_tokenizers,
+                        value=benchmark_default_tokenizers,
                         multiselect=True,
                         label="Benchmark Tokenizers",
                     )
                     scenario_models = gr.Dropdown(
                         choices=model_choices,
-                        value=[row["model_id"] for row in free_runtime_choices[:4]],
+                        value=scenario_default_models,
                         multiselect=True,
                         label="Attached Free Models",
                     )

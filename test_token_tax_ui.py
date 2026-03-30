@@ -26,6 +26,27 @@ class TestBuildTokenTaxUi:
 
 
 class TestWorkbenchHandlers:
+    def test_default_benchmark_tokenizers_use_curated_subset(self):
+        from token_tax_ui import default_benchmark_tokenizers
+
+        selected = default_benchmark_tokenizers()
+
+        assert "gpt-oss" in selected
+        assert "trinity-large" in selected
+        assert "qwen3-next" in selected
+        assert "qwen3-coder" not in selected
+        assert len(selected) <= 8
+
+    def test_default_scenario_models_use_curated_free_subset(self):
+        from token_tax_ui import default_scenario_models
+
+        selected = default_scenario_models()
+
+        assert "openai/gpt-oss-20b:free" in selected
+        assert "nvidia/nemotron-3-super-120b-a12b:free" in selected
+        assert "arcee-ai/trinity-large-preview:free" in selected
+        assert len(selected) <= 8
+
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
 

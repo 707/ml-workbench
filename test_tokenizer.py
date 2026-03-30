@@ -126,6 +126,23 @@ class TestGetTokenizer:
                     "qwen-2.5", "gemma-2", "command-r"}
         assert expected.issubset(set(SUPPORTED_TOKENIZERS.keys()))
 
+    def test_supported_tokenizers_include_new_exact_free_families(self):
+        """Expanded exact families should be available to benchmark and inspect."""
+        from tokenizer import SUPPORTED_TOKENIZERS
+
+        expected = {
+            "gpt-oss",
+            "glm-4.5-air",
+            "nemotron-3-nano-30b",
+            "nemotron-3-super",
+            "nemotron-nano-9b-v2",
+            "qwen3-coder",
+            "qwen3-next",
+            "trinity-large",
+            "trinity-mini",
+        }
+        assert expected.issubset(set(SUPPORTED_TOKENIZERS.keys()))
+
     def test_tiktoken_entries_have_tiktoken_prefix(self):
         """Tiktoken-backed tokenizers must have 'tiktoken:' prefix in their value."""
         from tokenizer import SUPPORTED_TOKENIZERS
