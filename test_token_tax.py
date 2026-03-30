@@ -3,10 +3,9 @@
 import csv
 import os
 import tempfile
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
-
 
 # ---------------------------------------------------------------------------
 # analyze_text_across_models
@@ -68,8 +67,6 @@ class TestAnalyzeTextAcrossModels:
         from token_tax import analyze_text_across_models
 
         source_tok = self._mock_tokenizer(10)
-        english_tok = self._mock_tokenizer(5)
-
         with patch("token_tax.get_tokenizer", return_value=source_tok) as mock_get:
             # First call for source text returns 10 tokens, second for english returns 5
             mock_get.side_effect = [source_tok, source_tok]
@@ -241,7 +238,7 @@ class TestRunBenchmark:
             assert key in model_entry, f"Missing key: {key}"
 
     def test_none_languages_uses_all_sample_phrases(self):
-        from token_tax import run_benchmark, SAMPLE_PHRASES
+        from token_tax import SAMPLE_PHRASES, run_benchmark
 
         with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
             result = run_benchmark(None, ["gpt2"])
@@ -468,6 +465,7 @@ class TestExportJson:
 
     def test_valid_json(self):
         import json
+
         from token_tax import export_json
 
         result = export_json(self.SAMPLE)
@@ -476,6 +474,7 @@ class TestExportJson:
 
     def test_preserves_data(self):
         import json
+
         from token_tax import export_json
 
         result = export_json(self.SAMPLE)
@@ -485,6 +484,7 @@ class TestExportJson:
 
     def test_empty_returns_empty_list(self):
         import json
+
         from token_tax import export_json
 
         result = export_json([])
@@ -663,6 +663,7 @@ class TestLegacyCharsPerToken:
     def test_portfolio_analysis_uses_named_constant(self):
         """portfolio_analysis source must reference the constant, not a magic 4.0."""
         import inspect
+
         import token_tax
 
         source = inspect.getsource(token_tax.portfolio_analysis)

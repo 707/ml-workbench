@@ -1,8 +1,8 @@
 """Tests for model registry (Issue 3)."""
 
 import json
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # MODEL_TOKENIZER_MAP structure
@@ -90,7 +90,7 @@ class TestGetTokenizerForModel:
             get_tokenizer_for_model("nonexistent/model")
 
     def test_all_mapped_models_resolve(self):
-        from model_registry import get_tokenizer_for_model, MODEL_TOKENIZER_MAP
+        from model_registry import MODEL_TOKENIZER_MAP, get_tokenizer_for_model
 
         for model_id in MODEL_TOKENIZER_MAP:
             result = get_tokenizer_for_model(model_id)
@@ -173,7 +173,7 @@ class TestResolveModel:
             resolve_model("nonexistent/model")
 
     def test_all_mapped_models_resolve(self):
-        from model_registry import resolve_model, MODEL_TOKENIZER_MAP
+        from model_registry import MODEL_TOKENIZER_MAP, resolve_model
 
         for model_id in MODEL_TOKENIZER_MAP:
             result = resolve_model(model_id)

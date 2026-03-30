@@ -4,11 +4,9 @@ import csv
 import os
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import plotly.graph_objects as go
-import pytest
-from unittest.mock import patch, MagicMock
-
 
 # ---------------------------------------------------------------------------
 # build_token_tax_ui smoke test
@@ -20,6 +18,7 @@ class TestBuildTokenTaxUi:
 
     def test_returns_gradio_blocks(self):
         import gradio as gr
+
         from token_tax_ui import build_token_tax_ui
 
         demo = build_token_tax_ui()
@@ -155,8 +154,8 @@ class TestWorkbenchHandlers:
                 "token_preview": "hello | world",
             },
         ]
-        with patch("token_tax_ui.build_benchmark_detail_rows", return_value=raw_rows):
-            with patch("token_tax_ui.iter_benchmark_rows", return_value=iter(benchmark_rows)):
+        payload = iter((row, raw_rows) for row in benchmark_rows)
+        with patch("token_tax_ui._iter_benchmark_payload", return_value=payload):
                 outputs = list(_handle_benchmark_tab(
                     "strict_parallel",
                     ["en"],
@@ -325,6 +324,7 @@ class TestWorkbenchHandlers:
 
     def test_chart_explainer_text_is_visible_copy_not_tooltip_html(self):
         import inspect
+
         import token_tax_ui
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
@@ -333,6 +333,7 @@ class TestWorkbenchHandlers:
 
     def test_filter_layout_uses_asymmetric_rail_classes(self):
         import inspect
+
         import token_tax_ui
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
@@ -344,6 +345,7 @@ class TestWorkbenchHandlers:
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
+
         import token_tax_ui
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
@@ -789,8 +791,6 @@ class TestHandleTraffic:
         try:
             # Mock so Arabic gets many more tokens than English baseline
             source_tok = self._mock_tokenizer(15)  # Arabic: 15 tokens
-            english_tok = self._mock_tokenizer(5)   # English: 5 tokens
-            call_count = [0]
 
             def _side_effect(name):
                 return source_tok  # same tokenizer, tokenize_text will differ

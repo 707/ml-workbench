@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import html
 import csv
+import html
 import tempfile
+
 import gradio as gr
 
 from charts import (
@@ -17,10 +18,9 @@ from charts import (
     build_metric_scatter,
     build_stacked_category_bar,
 )
-from corpora import DEFAULT_BENCHMARK_LANGUAGES, list_corpora
+from corpora import DEFAULT_BENCHMARK_LANGUAGES
 from diagnostics import clear_events, log_event, render_markdown
 from model_registry import (
-    artificial_analysis_status,
     build_tokenizer_catalog,
     list_free_runtime_choices,
     list_tokenizer_families,
@@ -29,11 +29,8 @@ from token_tax import (
     _iter_benchmark_payload,
     analyze_text_across_models,
     audit_markdown,
-    benchmark_appendix,
-    benchmark_corpus,
-    build_benchmark_detail_rows,
-    iter_benchmark_rows,
     benchmark_all,
+    benchmark_appendix,
     catalog_appendix,
     cost_projection,
     export_csv,
@@ -351,7 +348,7 @@ def _default_benchmark_metric_for(corpus_key: str) -> str:
     return "rtc" if corpus_key == "strict_parallel" else "bytes_per_token"
 
 
-def configure_benchmark_metric(lane_or_corpus: str) -> gr.Dropdown:
+def configure_benchmark_metric(lane_or_corpus: str) -> dict[str, object]:
     corpus_key = _resolve_corpus_key(lane_or_corpus)
     return gr.update(
         choices=_benchmark_metric_choices_for(corpus_key),
@@ -1382,7 +1379,7 @@ def build_token_tax_ui() -> gr.Blocks:
 
                 with gr.Tabs():
                     with gr.TabItem("Overview"):
-                        benchmark_overview_help_md = gr.HTML(
+                        gr.HTML(
                             value=build_benchmark_chart_explainer_markdown("rtc", "Overview")
                         )
                         benchmark_heatmap = gr.Plot(label="Benchmark Heatmap")
@@ -1403,14 +1400,14 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Preview"):
                         benchmark_preview_md = gr.HTML(label="Preview")
                     with gr.TabItem("Coverage"):
-                        benchmark_coverage_help_md = gr.HTML(
+                        gr.HTML(
                             value=build_benchmark_chart_explainer_markdown("token_fertility", "Coverage")
                         )
                         benchmark_coverage_plot = gr.Plot(label="Vocabulary Coverage")
                         benchmark_split_plot = gr.Plot(label="Word Split Rate")
                         benchmark_fertility_plot = gr.Plot(label="Tokens per Word / Character")
                     with gr.TabItem("Observed Composition"):
-                        benchmark_composition_help_md = gr.HTML(
+                        gr.HTML(
                             value=build_benchmark_chart_explainer_markdown("unique_tokens", "Observed Composition")
                         )
                         benchmark_composition_plot = gr.Plot(label="Observed Composition")

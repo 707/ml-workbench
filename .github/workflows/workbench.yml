@@ -2,12 +2,12 @@ name: workbench
 
 on:
   push:
-    paths: [workbench/**]
+    branches:
+      - main
   pull_request:
-    paths: [workbench/**]
 
 jobs:
-  test:
+  ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,23 +15,25 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups
-        working-directory: workbench
-      - run: uv run pytest -v --cov --cov-report=term-missing
-        working-directory: workbench
+      - run: uv run ruff check .
 
-  deploy:
-    needs: test
-    if: github.event_name == 'push'
+  mypy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
         with:
-          fetch-depth: 0
-      - name: Push to HuggingFace Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          git remote add hf https://user:${HF_TOKEN}@huggingface.co/spaces/nad707/workbench
-          git subtree push --prefix workbench hf main \
-            || (git subtree split --prefix workbench -b _hf_deploy \
-                && git push hf _hf_deploy:main --force)
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: uv run mypy app.py charts.py token_tax.py token_tax_ui.py model_registry.py tokenizer.py corpora.py
+
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: uv run pytest -q
+      - run: uv run python -c "from app import build_ui; ui = build_ui(); print(type(ui).__name__)"

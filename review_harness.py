@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
 import json
 import re
 import time
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
-
 
 ActionKind = Literal[
     "open_top_tab",
@@ -17,6 +16,7 @@ ActionKind = Literal[
     "click_button",
     "click_text",
     "fill_text",
+    "fill_placeholder",
     "wait_ms",
     "wait_for_visible_table_rows",
     "wait_for_text_present",
@@ -259,6 +259,8 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
             description="Plain-language explainer tab for non-technical users.",
             actions=(
                 ReviewAction("open_top_tab", "Why Tokenizers Matter"),
+                ReviewAction("click_button", "Refresh explainer"),
+                ReviewAction("wait_for_text_present", "One sentence, two token counts", value=30_000),
                 ReviewAction("wait_ms", "settle", value=600),
             ),
             captures=(CaptureRequest("why-tokenizers-matter"),),
@@ -276,7 +278,7 @@ def default_workbench_review_scenarios(*, include_runtime_tabs: bool = False) ->
                 description="Tokenizer Inspector with a representative multilingual input run to completion.",
                 actions=(
                     ReviewAction("open_top_tab", "Tokenizer Inspector"),
-                    ReviewAction("fill_text", "Input Text", value="Hello from London in Arabic العربية and Japanese 日本語"),
+                    ReviewAction("fill_placeholder", "Type text to tokenize...", value="Hello from London in Arabic العربية and Japanese 日本語"),
                     ReviewAction("click_button", "Tokenize"),
                     ReviewAction("wait_for_text_present", "Tokenization completed in", value=30_000),
                     ReviewAction("wait_ms", "settle", value=1_000),
@@ -378,6 +380,11 @@ def _perform_action(page, action: ReviewAction) -> None:
         return
     if action.kind == "fill_text":
         target = _first_visible(page.get_by_label(action.target, exact=True))
+        target.fill(str(action.value or ""))
+        page.wait_for_timeout(250)
+        return
+    if action.kind == "fill_placeholder":
+        target = _first_visible(page.get_by_placeholder(action.target, exact=True))
         target.fill(str(action.value or ""))
         page.wait_for_timeout(250)
         return

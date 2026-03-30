@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 STRICT_REQUIRED_KEYS = {
     "language",
     "text",

@@ -21,7 +21,6 @@ from provenance import (
     provenance_description,
     provenance_visible,
 )
-from tokenizer_registry import continuation_style_map
 from tokenizer import (
     byte_premium,
     context_window_usage,
@@ -31,7 +30,7 @@ from tokenizer import (
     relative_tokenization_cost,
     tokenize_text,
 )
-
+from tokenizer_registry import continuation_style_map
 
 # ---------------------------------------------------------------------------
 # Demo fixtures retained for backwards-compatible examples

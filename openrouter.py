@@ -5,6 +5,8 @@ Extracted from app.py to avoid circular imports when tokenizer.py
 needs to call the OpenRouter API.
 """
 
+from __future__ import annotations
+
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -37,7 +39,7 @@ def call_openrouter(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
+    payload: dict[str, object] = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
     }

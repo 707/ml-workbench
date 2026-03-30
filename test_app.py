@@ -6,11 +6,10 @@ Test order matches implementation phases:
   Phase 2: run_comparison (mocked HTTP)
 """
 
-import json
 import inspect
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Phase 1 — parse_think_block
@@ -383,6 +382,7 @@ class TestCallOpenrouter:
     def test_raises_on_http_error(self):
         """Non-2xx response should propagate as an exception."""
         import requests as req_lib
+
         from app import call_openrouter
 
         with patch("openrouter.requests.post") as mock_post:
@@ -729,6 +729,7 @@ class TestBuildUi:
     def test_build_ui_returns_gradio_blocks(self):
         """build_ui() must return a Gradio Blocks or TabbedInterface without raising."""
         import gradio as gr
+
         from app import build_ui
 
         demo = build_ui()
@@ -884,6 +885,7 @@ class TestFreeModels:
 class TestHostedKeyDisclosure:
     def test_comparison_ui_discloses_hosted_key_usage_when_server_key_is_present(self):
         import inspect
+
         import app
 
         src = inspect.getsource(app._build_comparison_blocks)
@@ -1146,7 +1148,7 @@ class TestRunComparisonWithModels:
 
     def test_defaults_use_model_r1_and_model_llama(self):
         """When model_a/model_b omitted, defaults to MODEL_R1 and MODEL_LLAMA."""
-        from app import run_comparison, MODEL_R1, MODEL_LLAMA
+        from app import MODEL_LLAMA, MODEL_R1, run_comparison
 
         resp = self._make_response("answer")
         with patch("app.call_openrouter", return_value=resp) as mock_call:

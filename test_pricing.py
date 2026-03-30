@@ -1,8 +1,8 @@
 """Tests for the pricing data module (GH-4)."""
 
-import pytest
 import threading
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # MODEL_PRICING structure
@@ -104,7 +104,7 @@ class TestGetPricing:
         assert isinstance(result, dict)
 
     def test_returns_correct_data(self):
-        from pricing import get_pricing, MODEL_PRICING
+        from pricing import MODEL_PRICING, get_pricing
 
         result = get_pricing("llama-3")
         assert result == MODEL_PRICING["llama-3"]
@@ -116,7 +116,7 @@ class TestGetPricing:
             get_pricing("nonexistent-model")
 
     def test_all_models_accessible(self):
-        from pricing import get_pricing, MODEL_PRICING
+        from pricing import MODEL_PRICING, get_pricing
 
         for model in MODEL_PRICING:
             result = get_pricing(model)
@@ -144,7 +144,7 @@ class TestAvailableModels:
         assert result == sorted(result)
 
     def test_contains_all_models(self):
-        from pricing import available_models, MODEL_PRICING
+        from pricing import MODEL_PRICING, available_models
 
         result = available_models()
         assert set(result) == set(MODEL_PRICING.keys())
@@ -196,8 +196,9 @@ class TestRefreshFromOpenrouterThreadSafety:
         thread starts while the refresh is running. The reader must always find
         the pre-populated model OR the new data — never KeyError from empty state.
         """
-        import pricing
         from unittest.mock import patch
+
+        import pricing
 
         # Pre-populate the live cache with a known model so readers have data.
         pricing._clear_cache()
@@ -262,8 +263,9 @@ class TestRefreshFromOpenrouterThreadSafety:
         After a successful refresh, _last_refreshed must not be None.
         This guards against the global assignment racing with a clear.
         """
-        import pricing
         from unittest.mock import patch
+
+        import pricing
 
         pricing._clear_cache()
 
@@ -284,8 +286,9 @@ class TestRefreshFromOpenrouterThreadSafety:
 
     def test_get_pricing_returns_cached_openrouter_model(self):
         """get_pricing must return a cached OpenRouter model correctly under lock."""
-        import pricing
         from unittest.mock import patch
+
+        import pricing
 
         pricing._clear_cache()
 
@@ -309,8 +312,9 @@ class TestRefreshFromOpenrouterThreadSafety:
 
     def test_available_models_includes_cached_models_after_refresh(self):
         """available_models() must include freshly refreshed OpenRouter models."""
-        import pricing
         from unittest.mock import patch
+
+        import pricing
 
         pricing._clear_cache()
 

@@ -6,7 +6,6 @@ import importlib.util
 import os
 import sys
 
-
 REQUIRED_MODULES = [
     "app",
     "charts",

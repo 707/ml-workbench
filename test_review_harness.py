@@ -60,7 +60,7 @@ def test_runtime_scenarios_execute_real_inputs_when_opted_in():
     tokenizer_actions = [action.kind for action in scenarios["tokenizer-inspector-defaults"].actions]
     model_actions = [action.kind for action in scenarios["model-comparison-defaults"].actions]
 
-    assert "fill_text" in tokenizer_actions
+    assert "fill_placeholder" in tokenizer_actions
     assert "wait_for_text_present" in tokenizer_actions
     assert "click_button" in model_actions
     assert "wait_for_text_present" in model_actions

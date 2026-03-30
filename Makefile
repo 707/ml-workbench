@@ -4,14 +4,17 @@
 # Usage:
 #   make install        Install deps (creates .venv)
 #   make run            Launch app locally
+#   make lint           Run ruff checks
+#   make typecheck      Run mypy on the main app modules
 #   make test           Run full test suite with coverage
+#   make check          Run lint + typecheck + tests
 #   make deploy         Push to GitHub main (Render auto-deploys)
 #   make deploy-hf      Push to Hugging Face Space via git
 
 GITHUB_REMOTE ?= github
 HF_SPACE ?= nad707/wb
 
-.PHONY: install run test deploy deploy-render deploy-hf verify-hf-space review-screenshots
+.PHONY: install run lint typecheck test check deploy deploy-render deploy-hf verify-hf-space review-screenshots
 
 REVIEW_BASE_URL ?= http://127.0.0.1:7860
 REVIEW_OUTPUT_DIR ?=
@@ -22,8 +25,16 @@ install:
 run:
 	uv run python app.py
 
+lint:
+	uv run ruff check .
+
+typecheck:
+	uv run mypy app.py charts.py token_tax.py token_tax_ui.py model_registry.py tokenizer.py corpora.py
+
 test:
 	uv run pytest -v --cov --cov-report=term-missing
+
+check: lint typecheck test
 
 deploy: deploy-render
 

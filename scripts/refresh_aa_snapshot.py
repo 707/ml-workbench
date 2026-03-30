@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import requests
 
@@ -14,7 +14,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from snapshot_tools import validate_artificial_analysis_snapshot
-
 
 AA_API_URL = "https://artificialanalysis.ai/api/v2/data/llms/models"
 

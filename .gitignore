@@ -14,6 +14,8 @@ __pycache__/
 .coverage
 .venv/
 .uv-cache/
+.mypy_cache/
+.ruff_cache/
 .env.local
 
 # Local history / archived git state
@@ -22,6 +24,7 @@ __pycache__/
 # Keep research notes local-only
 learning.md
 artifacts/review/
+artifacts/.DS_Store
 
 # OS
 .DS_Store

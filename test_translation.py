@@ -12,8 +12,9 @@ Tests cover:
   - LRU cache miss: different text hits API again
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 def _make_response(translated_text: str) -> dict:

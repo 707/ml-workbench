@@ -11,7 +11,6 @@ from corpora import fetch_corpus_samples
 from model_registry import list_tokenizer_families
 from tokenizer import get_tokenizer, tokenize_text
 
-
 LANGUAGE_LABELS = {
     "ar": "Arabic",
     "hi": "Hindi",

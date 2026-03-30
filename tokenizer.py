@@ -5,13 +5,15 @@ Provides tokenization utilities and a Gradio UI tab for inspecting how
 different tokenizers handle input text.
 """
 
-import html
 import gc
+import html
 import threading
 from collections import OrderedDict
 from time import perf_counter
+
 import gradio as gr
-from langdetect import detect, LangDetectException
+from langdetect import LangDetectException, detect
+
 from tokenizer_registry import supported_tokenizers_map
 
 _AutoTokenizer = None
@@ -255,7 +257,7 @@ def efficiency_score(input_tokens: int, english_tokens: int) -> float:
 # ---------------------------------------------------------------------------
 
 
-def relative_tokenization_cost(source_tokens: int, english_tokens: int) -> float:
+def relative_tokenization_cost(source_tokens: int, english_tokens: int | float) -> float:
     """Relative Tokenization Cost: source_tokens / english_tokens.
 
     Values > 1.0 indicate the source language pays a "token tax" vs English.
@@ -535,8 +537,8 @@ def _handle_single(
 
         if lang == "en":
             stats += (
-                f"  \n**RTC vs English:** 1.0x  \n"
-                f"**Quality risk:** low"
+                "  \n**RTC vs English:** 1.0x  \n"
+                "**Quality risk:** low"
             )
         elif english_text and english_text.strip():
             eng_tokens = tokenize_text(english_text.strip(), tok)

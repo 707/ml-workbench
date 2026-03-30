@@ -6,7 +6,6 @@ import sys
 
 from tokenizer import get_tokenizer
 
-
 DEFAULT_KEYS = [
     "gpt2",
     "o200k_base",

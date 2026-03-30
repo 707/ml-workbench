@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
         default=60_000,
         help="Page load timeout in milliseconds.",
     )
+    parser.add_argument(
+        "--scenario",
+        action="append",
+        default=[],
+        help="Capture only the named scenario key. Repeat to include multiple scenarios.",
+    )
     return parser.parse_args()
 
 
@@ -58,6 +64,16 @@ def main() -> int:
     args = parse_args()
     output_dir = Path(args.output_dir) if args.output_dir else build_run_directory()
     scenarios = default_workbench_review_scenarios(include_runtime_tabs=args.include_runtime_tabs)
+    if args.scenario:
+        wanted = set(args.scenario)
+        scenarios = [scenario for scenario in scenarios if scenario.key in wanted]
+        missing = wanted - {scenario.key for scenario in scenarios}
+        if missing:
+            print(f"Unknown scenario key(s): {', '.join(sorted(missing))}", file=sys.stderr)
+            return 2
+        if not scenarios:
+            print("No matching scenarios selected.", file=sys.stderr)
+            return 2
 
     manifest_path, results = capture_review_bundle(
         base_url=args.base_url,

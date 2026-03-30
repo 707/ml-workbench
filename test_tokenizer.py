@@ -8,10 +8,10 @@ Test order matches implementation phases:
   Phase 3: build_tokenizer_ui (smoke test)
 """
 
-import pytest
 import threading
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Phase 1 — get_tokenizer
@@ -28,7 +28,7 @@ class TestGetTokenizer:
 
         mock_tok = MagicMock()
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
-            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok) as mock_fp:
+            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok):
                 result = get_tokenizer("gpt2")
 
         assert result is mock_tok
@@ -101,6 +101,7 @@ class TestGetTokenizer:
         """Second call with same name must not call from_pretrained again."""
         # Import fresh to reset module-level cache
         import importlib
+
         import tokenizer as tok_module
         importlib.reload(tok_module)
 
@@ -270,8 +271,8 @@ class TestTiktokenAdapter:
 
     def test_get_tokenizer_loads_tiktoken_for_o200k(self):
         """get_tokenizer('o200k_base') must return a TiktokenAdapter."""
-        from tokenizer import get_tokenizer, TiktokenAdapter
         import tokenizer as tok_module
+        from tokenizer import TiktokenAdapter, get_tokenizer
 
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
             tok = get_tokenizer("o200k_base")
@@ -280,8 +281,8 @@ class TestTiktokenAdapter:
 
     def test_get_tokenizer_loads_tiktoken_for_cl100k(self):
         """get_tokenizer('cl100k_base') must return a TiktokenAdapter."""
-        from tokenizer import get_tokenizer, TiktokenAdapter
         import tokenizer as tok_module
+        from tokenizer import TiktokenAdapter, get_tokenizer
 
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
             tok = get_tokenizer("cl100k_base")
@@ -766,8 +767,9 @@ class TestDetectLanguage:
 
     def test_returns_en_on_lang_detect_exception(self):
         """Returns 'en' when LangDetectException is raised."""
-        from tokenizer import detect_language
         from langdetect import LangDetectException
+
+        from tokenizer import detect_language
 
         with patch("tokenizer.detect", side_effect=LangDetectException(0, "error")):
             result = detect_language("???")
@@ -785,8 +787,9 @@ class TestDetectLanguage:
 
     def test_empty_text_returns_en(self):
         """Empty text triggers LangDetectException — falls back to 'en'."""
-        from tokenizer import detect_language
         from langdetect import LangDetectException
+
+        from tokenizer import detect_language
 
         with patch("tokenizer.detect", side_effect=LangDetectException(0, "empty")):
             result = detect_language("")
@@ -1403,8 +1406,9 @@ class TestHandleSingle:
     """Tests for _handle_single extracted handler."""
 
     def test_returns_html_and_stats(self):
+        from unittest.mock import MagicMock, patch
+
         from tokenizer import _handle_single
-        from unittest.mock import patch, MagicMock
 
         mock_tok = MagicMock()
         mock_tok.encode.return_value = [1, 2, 3]
@@ -1420,8 +1424,9 @@ class TestHandleSingle:
         assert "**Detected language:**" in stats
 
     def test_error_returns_empty_html_and_error_message(self):
-        from tokenizer import _handle_single
         from unittest.mock import patch
+
+        from tokenizer import _handle_single
 
         with patch("tokenizer.get_tokenizer", side_effect=ValueError("unknown")):
             html, stats = _handle_single("bad_model", "text", 3, False)
@@ -1430,8 +1435,9 @@ class TestHandleSingle:
         assert "Error:" in stats
 
     def test_decoded_view_passed_through(self):
+        from unittest.mock import MagicMock, patch
+
         from tokenizer import _handle_single
-        from unittest.mock import patch, MagicMock
 
         mock_tok = MagicMock()
         mock_tok.encode.return_value = [1]
@@ -1458,8 +1464,9 @@ class TestHandleSingle:
 
     def test_context_usage_always_shown(self):
         """Stats should always include context usage line."""
-        from tokenizer import _handle_single
         from unittest.mock import patch
+
+        from tokenizer import _handle_single
 
         with patch("tokenizer.get_tokenizer", return_value=self._make_mock_tok(3)):
             _, stats = _handle_single("gpt2", "hello world!", 3, False)
@@ -1468,8 +1475,9 @@ class TestHandleSingle:
 
     def test_english_text_shows_rtc_one(self):
         """When detected language is English, RTC should be 1.0x."""
-        from tokenizer import _handle_single
         from unittest.mock import patch
+
+        from tokenizer import _handle_single
 
         with patch("tokenizer.get_tokenizer", return_value=self._make_mock_tok(3)):
             with patch("tokenizer.detect_language", return_value="en"):
@@ -1481,11 +1489,11 @@ class TestHandleSingle:
 
     def test_non_english_with_english_text_shows_rtc(self):
         """When English equivalent provided, compute and show RTC."""
-        from tokenizer import _handle_single
         from unittest.mock import patch
 
+        from tokenizer import _handle_single
+
         source_tok = self._make_mock_tok(6)
-        eng_tok = self._make_mock_tok(3)
 
         with patch("tokenizer.get_tokenizer", return_value=source_tok):
             with patch("tokenizer.detect_language", return_value="ar"):
@@ -1504,8 +1512,9 @@ class TestHandleSingle:
 
     def test_non_english_no_english_text_shows_placeholder(self):
         """When non-English and no English text, show placeholder."""
-        from tokenizer import _handle_single
         from unittest.mock import patch
+
+        from tokenizer import _handle_single
 
         with patch("tokenizer.get_tokenizer", return_value=self._make_mock_tok(3)):
             with patch("tokenizer.detect_language", return_value="ar"):
@@ -1516,8 +1525,9 @@ class TestHandleSingle:
 
     def test_existing_callers_still_work_without_english_text(self):
         """Backward compat: calling without english_text still works."""
-        from tokenizer import _handle_single
         from unittest.mock import patch
+
+        from tokenizer import _handle_single
 
         with patch("tokenizer.get_tokenizer", return_value=self._make_mock_tok(3)):
             html, stats = _handle_single("gpt2", "hello", 3, False)
@@ -1530,8 +1540,9 @@ class TestHandleCompare:
     """Tests for _handle_compare extracted handler."""
 
     def test_returns_two_html_and_ratio_markdown(self):
+        from unittest.mock import MagicMock, patch
+
         from tokenizer import _handle_compare
-        from unittest.mock import patch, MagicMock
 
         mock_tok_a = MagicMock()
         mock_tok_a.encode.return_value = [1, 2]
@@ -1552,8 +1563,9 @@ class TestHandleCompare:
         assert "**mistral:** 4 tokens" in ratio_md
 
     def test_error_returns_empty_and_error_message(self):
-        from tokenizer import _handle_compare
         from unittest.mock import patch
+
+        from tokenizer import _handle_compare
 
         with patch("tokenizer.get_tokenizer", side_effect=ValueError("bad")):
             html_a, html_b, ratio_md = _handle_compare("text", "bad", "bad2", False)
@@ -1575,8 +1587,9 @@ class TestHandleCompare:
 
     def test_compare_with_english_text_shows_rtc(self):
         """When English text provided, compare should show RTC for each tokenizer."""
-        from tokenizer import _handle_compare
         from unittest.mock import patch
+
+        from tokenizer import _handle_compare
 
         tok_a = self._make_mock_tok(4)
         tok_b = self._make_mock_tok(6)
@@ -1598,8 +1611,9 @@ class TestHandleCompare:
 
     def test_compare_shows_which_is_more_efficient(self):
         """Compare should note which tokenizer has lower RTC."""
-        from tokenizer import _handle_compare
         from unittest.mock import patch
+
+        from tokenizer import _handle_compare
 
         tok_a = self._make_mock_tok(4)
         tok_b = self._make_mock_tok(8)
@@ -1621,8 +1635,9 @@ class TestHandleCompare:
 
     def test_compare_without_english_text_still_works(self):
         """Backward compat: compare without english_text works as before."""
-        from tokenizer import _handle_compare
         from unittest.mock import patch
+
+        from tokenizer import _handle_compare
 
         tok_a = self._make_mock_tok(2)
         tok_b = self._make_mock_tok(4)
@@ -1640,6 +1655,7 @@ class TestBuildTokenizerUi:
     def test_returns_gradio_blocks(self):
         """build_tokenizer_ui() must return a Gradio Blocks instance without raising."""
         import gradio as gr
+
         from tokenizer import build_tokenizer_ui
 
         demo = build_tokenizer_ui()
@@ -1678,8 +1694,9 @@ class TestGetTokenizerThreadSafety:
         call from_pretrained once — the lock prevents redundant loads.
         """
         import importlib
-        import tokenizer as tok_module
         import time
+
+        import tokenizer as tok_module
 
         importlib.reload(tok_module)
 
@@ -1717,6 +1734,7 @@ class TestGetTokenizerThreadSafety:
     def test_cache_populated_correctly_after_concurrent_load(self):
         """After concurrent get_tokenizer calls, cache must hold the tokenizer."""
         import importlib
+
         import tokenizer as tok_module
 
         importlib.reload(tok_module)

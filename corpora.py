@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -117,6 +118,8 @@ DEFAULT_BENCHMARK_LANGUAGES = [
     "ru",
 ]
 
+CorpusRow = dict[str, object]
+
 
 def list_corpora() -> list[dict]:
     """Return corpus definitions as serializable dicts."""
@@ -148,7 +151,7 @@ def _pair_configs(language: str) -> list[str]:
     return [f"{language}-en", f"en-{language}"]
 
 
-def _extract_text_pair(row: dict, language: str) -> tuple[str, str] | None:
+def _extract_text_pair(row: Mapping[str, object], language: str) -> tuple[str, str] | None:
     if language == "en":
         english = row.get("en")
         if isinstance(english, str) and english.strip():
@@ -189,11 +192,11 @@ def load_strict_parallel_snapshot(snapshot_path: str | None = None) -> dict[str,
 
 
 _FETCH_CACHE_MAX_ENTRIES = 32
-_fetch_cache: OrderedDict[tuple, list[dict]] = OrderedDict()
+_fetch_cache: OrderedDict[tuple[str, str, str], list[CorpusRow]] = OrderedDict()
 _fetch_cache_lock = Lock()
 
 
-def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
+def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[CorpusRow]:
     cache_key = (dataset_id, config, split)
     with _fetch_cache_lock:
         cached_rows = _fetch_cache.get(cache_key)
@@ -210,7 +213,7 @@ def _fetch_first_rows(dataset_id: str, config: str, split: str) -> list[dict]:
     response.raise_for_status()
     payload = response.json()
     rows = payload.get("rows", [])
-    parsed_rows = []
+    parsed_rows: list[CorpusRow] = []
     for entry in rows:
         row = entry.get("row", {})
         if isinstance(row, dict):
@@ -240,22 +243,22 @@ def fetch_strict_parallel_samples(
     corpus = get_corpus("strict_parallel")
     snapshot = load_strict_parallel_snapshot(str(STRICT_PARALLEL_SNAPSHOT_PATH))
     if snapshot:
-        result = {
+        snapshot_result = {
             language: snapshot.get(language, [])[:row_limit]
             for language in languages
             if snapshot.get(language)
         }
-        for language, rows in result.items():
+        for language, samples in snapshot_result.items():
             log_event(
                 "benchmark.language.ready",
                 "Prepared benchmark samples from local snapshot",
                 language=language,
-                sample_count=len(rows),
+                sample_count=len(samples),
                 corpus_key=corpus.key,
                 source="local_snapshot",
             )
-        if result:
-            return result
+        if snapshot_result:
+            return snapshot_result
 
     result: dict[str, list[CorpusSample]] = {}
 
@@ -264,7 +267,7 @@ def fetch_strict_parallel_samples(
         errors: list[Exception] = []
         for config in _pair_configs(language):
             try:
-                rows = _fetch_first_rows(corpus.dataset_id, config, corpus.split)
+                fetched_rows = _fetch_first_rows(corpus.dataset_id, config, corpus.split)
             except Exception as exc:  # pragma: no cover - exercised via callers
                 errors.append(exc)
                 log_event(
@@ -276,7 +279,7 @@ def fetch_strict_parallel_samples(
                 )
                 continue
 
-            for row in rows:
+            for row in fetched_rows:
                 text_pair = _extract_text_pair(row, language)
                 if text_pair is None:
                     continue

@@ -1,8 +1,8 @@
 """Tests for OpenRouter model discovery (Issue 2)."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # fetch_models
@@ -91,7 +91,7 @@ class TestFetchModels:
             assert "context_length" in model
 
     def test_calls_correct_url(self):
-        from openrouter import fetch_models, OPENROUTER_MODELS_URL
+        from openrouter import OPENROUTER_MODELS_URL, fetch_models
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = SAMPLE_MODELS_RESPONSE
@@ -132,7 +132,7 @@ class TestRefreshFromOpenrouter:
     """Tests for refresh_from_openrouter() in pricing.py."""
 
     def test_updates_cache_with_live_data(self):
-        from pricing import refresh_from_openrouter, _pricing_cache, _clear_cache
+        from pricing import _clear_cache, _pricing_cache, refresh_from_openrouter
 
         _clear_cache()
         mock_models = [
@@ -149,7 +149,7 @@ class TestRefreshFromOpenrouter:
         assert "openai/gpt-4o" in _pricing_cache
 
     def test_cached_entry_has_required_keys(self):
-        from pricing import refresh_from_openrouter, _pricing_cache, _clear_cache
+        from pricing import _clear_cache, _pricing_cache, refresh_from_openrouter
 
         _clear_cache()
         mock_models = [
@@ -170,7 +170,7 @@ class TestRefreshFromOpenrouter:
         assert "label" in entry
 
     def test_converts_per_token_to_per_million(self):
-        from pricing import refresh_from_openrouter, _pricing_cache, _clear_cache
+        from pricing import _clear_cache, _pricing_cache, refresh_from_openrouter
 
         _clear_cache()
         mock_models = [
@@ -189,7 +189,7 @@ class TestRefreshFromOpenrouter:
         assert entry["output_per_million"] == pytest.approx(10.00)
 
     def test_fallback_on_api_failure(self):
-        from pricing import refresh_from_openrouter, get_pricing, _clear_cache
+        from pricing import _clear_cache, get_pricing, refresh_from_openrouter
 
         _clear_cache()
         with patch("openrouter.fetch_models", side_effect=Exception("network error")):
@@ -200,7 +200,7 @@ class TestRefreshFromOpenrouter:
         assert result["input_per_million"] == 0.0
 
     def test_last_refreshed_updated(self):
-        from pricing import refresh_from_openrouter, get_last_refreshed, _clear_cache
+        from pricing import _clear_cache, get_last_refreshed, refresh_from_openrouter
 
         _clear_cache()
         mock_models = [
@@ -222,14 +222,14 @@ class TestGetPricingWithCache:
     """Tests for get_pricing() with cache layer."""
 
     def test_static_still_works(self):
-        from pricing import get_pricing, _clear_cache
+        from pricing import _clear_cache, get_pricing
 
         _clear_cache()
         result = get_pricing("gpt2")
         assert result["input_per_million"] == 0.0
 
     def test_cached_model_returned(self):
-        from pricing import get_pricing, _pricing_cache, _clear_cache
+        from pricing import _clear_cache, _pricing_cache, get_pricing
 
         _clear_cache()
         _pricing_cache["test/model"] = {
@@ -243,7 +243,7 @@ class TestGetPricingWithCache:
 
     def test_cache_preferred_over_static_for_tokenizer_keys(self):
         """Live cache takes precedence over static MODEL_PRICING entries."""
-        from pricing import get_pricing, _pricing_cache, _clear_cache
+        from pricing import _clear_cache, _pricing_cache, get_pricing
 
         _clear_cache()
         _pricing_cache["gpt2"] = {
@@ -261,14 +261,14 @@ class TestAvailableModelsWithCache:
     """Tests for available_models() with cache layer."""
 
     def test_includes_static_models(self):
-        from pricing import available_models, _clear_cache
+        from pricing import _clear_cache, available_models
 
         _clear_cache()
         result = available_models()
         assert "gpt2" in result
 
     def test_includes_cached_models(self):
-        from pricing import available_models, _pricing_cache, _clear_cache
+        from pricing import _clear_cache, _pricing_cache, available_models
 
         _clear_cache()
         _pricing_cache["test/cached-model"] = {
@@ -281,7 +281,7 @@ class TestAvailableModelsWithCache:
         assert "test/cached-model" in result
 
     def test_no_duplicates(self):
-        from pricing import available_models, _clear_cache
+        from pricing import _clear_cache, available_models
 
         _clear_cache()
         result = available_models()

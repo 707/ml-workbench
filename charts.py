@@ -369,6 +369,7 @@ def build_stacked_category_bar(
 def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_word: float = 1.33):
     """Horizontal bar chart showing effective context window in words."""
     import plotly.graph_objects as go
+
     from pricing import get_pricing
 
     if not analysis_results:

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from datetime import datetime, timezone
-import json
-
 
 _EVENTS: deque[dict] = deque(maxlen=200)
 

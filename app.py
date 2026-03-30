@@ -2,18 +2,22 @@
 ML Workbench — Gradio app for tokenizer analysis and free-model comparisons.
 """
 
+from __future__ import annotations
+
 import html as _html
 import os
 import re
-from time import perf_counter
-import gradio as gr
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from time import perf_counter
+from typing import Any
+
+import gradio as gr
 
 from explainer import build_explainer_ui
 from model_registry import list_free_runtime_choices
-from openrouter import call_openrouter, extract_usage, OPENROUTER_URL  # noqa: F401
-from tokenizer import build_tokenizer_ui
+from openrouter import OPENROUTER_URL, call_openrouter, extract_usage  # noqa: F401
 from token_tax_ui import build_token_tax_ui
+from tokenizer import build_tokenizer_ui
 
 # ---------------------------------------------------------------------------
 # Config
@@ -751,6 +755,7 @@ def _build_comparison_blocks() -> gr.Blocks:
         )
 
         # Never serialize the server-side key into frontend component state.
+        api_key: Any
         if SERVER_KEY:
             api_key = gr.State("")
             gr.Markdown(

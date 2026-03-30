@@ -1,7 +1,8 @@
 """Focused tests for the Token Tax Workbench v2 paths."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestBenchmarkCorpus:

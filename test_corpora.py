@@ -2,10 +2,11 @@
 
 import json
 from pathlib import Path
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from corpora import fetch_strict_parallel_samples, list_corpora, get_corpus
+import pytest
+
+from corpora import fetch_strict_parallel_samples, get_corpus, list_corpora
 
 
 class TestFetchStrictParallelSamplesResilience:
@@ -142,8 +143,9 @@ class TestFetchFirstRowsFailureCache:
         _fetch_cache.clear()
 
     def test_successful_result_is_cached(self):
-        from corpora import _fetch_first_rows, _fetch_cache
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
+
+        from corpora import _fetch_cache, _fetch_first_rows
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
@@ -157,8 +159,9 @@ class TestFetchFirstRowsFailureCache:
         assert ("ds", "cfg", "split") in _fetch_cache
 
     def test_empty_result_is_not_cached(self):
-        from corpora import _fetch_first_rows, _fetch_cache
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
+
+        from corpora import _fetch_cache, _fetch_first_rows
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
@@ -172,8 +175,9 @@ class TestFetchFirstRowsFailureCache:
         assert ("ds2", "cfg2", "split2") not in _fetch_cache
 
     def test_exception_not_cached(self):
-        from corpora import _fetch_first_rows, _fetch_cache
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
+
+        from corpora import _fetch_cache, _fetch_first_rows
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = Exception("500 error")
@@ -185,8 +189,9 @@ class TestFetchFirstRowsFailureCache:
         assert ("ds3", "cfg3", "split3") not in _fetch_cache
 
     def test_second_call_after_failure_retries(self):
-        from corpora import _fetch_first_rows, _fetch_cache
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
+
+        from corpora import _fetch_first_rows
 
         fail_resp = MagicMock()
         fail_resp.raise_for_status.side_effect = Exception("transient error")
@@ -202,8 +207,9 @@ class TestFetchFirstRowsFailureCache:
         assert len(result) == 1
 
     def test_separate_keys_cached_independently(self):
-        from corpora import _fetch_first_rows, _fetch_cache
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
+
+        from corpora import _fetch_cache, _fetch_first_rows
 
         def make_resp(text):
             r = MagicMock()

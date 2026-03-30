@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import requests
 
@@ -13,7 +13,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from snapshot_tools import validate_strict_parallel_snapshot
-
 
 LANGUAGE_CONFIGS = {
     "ar": "ar-en",
