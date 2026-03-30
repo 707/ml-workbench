@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from pricing import get_pricing, refresh_from_openrouter
-from tokenizer import SUPPORTED_TOKENIZERS
+from tokenizer_registry import TOKENIZER_FAMILY_SPECS
 
 
 @dataclass(frozen=True)
@@ -82,23 +82,14 @@ ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH = (
 
 
 TOKENIZER_FAMILIES: dict[str, TokenizerFamily] = {
-    "o200k_base": TokenizerFamily("o200k_base", "OpenAI o200k", "tiktoken:o200k_base", "exact", "strict_verified"),
-    "cl100k_base": TokenizerFamily("cl100k_base", "OpenAI cl100k", "tiktoken:cl100k_base", "exact", "strict_verified"),
-    "llama-3": TokenizerFamily("llama-3", "Llama 3 family", "NousResearch/Meta-Llama-3-8B", "exact", "strict_verified"),
-    "mistral": TokenizerFamily("mistral", "Mistral family", "mistralai/Mistral-7B-v0.1", "exact", "strict_verified"),
-    "qwen-2.5": TokenizerFamily("qwen-2.5", "Qwen 2.5 family", "Qwen/Qwen2.5-7B", "exact", "strict_verified"),
-    "qwen3-next": TokenizerFamily("qwen3-next", "Qwen3 Next family", "Qwen/Qwen3-Next-80B-A3B-Instruct", "exact", "strict_verified"),
-    "qwen3-coder": TokenizerFamily("qwen3-coder", "Qwen3 Coder family", "Qwen/Qwen3-Coder-480B-A35B-Instruct", "exact", "strict_verified"),
-    "gpt-oss": TokenizerFamily("gpt-oss", "OpenAI gpt-oss family", "openai/gpt-oss-20b", "exact", "strict_verified"),
-    "glm-4.5-air": TokenizerFamily("glm-4.5-air", "GLM 4.5 Air family", "zai-org/GLM-4.5-Air-FP8", "exact", "strict_verified"),
-    "nemotron-3-nano-30b": TokenizerFamily("nemotron-3-nano-30b", "Nemotron 3 Nano family", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8", "exact", "strict_verified"),
-    "nemotron-3-super": TokenizerFamily("nemotron-3-super", "Nemotron 3 Super family", "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8", "exact", "strict_verified"),
-    "nemotron-nano-9b-v2": TokenizerFamily("nemotron-nano-9b-v2", "Nemotron Nano 9B V2 family", "nvidia/NVIDIA-Nemotron-Nano-9B-v2", "exact", "strict_verified"),
-    "trinity-large": TokenizerFamily("trinity-large", "Trinity Large family", "arcee-ai/Trinity-Large-Preview", "exact", "strict_verified"),
-    "trinity-mini": TokenizerFamily("trinity-mini", "Trinity Mini family", "arcee-ai/Trinity-Mini", "exact", "strict_verified"),
-    "gemma-2": TokenizerFamily("gemma-2", "Gemma family", "unsloth/gemma-2-2b", "proxy", "proxy"),
-    "command-r": TokenizerFamily("command-r", "Command R family (BLOOM proxy)", "bigscience/bloom-560m", "proxy", "proxy"),
-    "gpt2": TokenizerFamily("gpt2", "GPT-2 legacy", "gpt2", "exact", "strict_verified"),
+    key: TokenizerFamily(
+        key=spec.key,
+        label=spec.label,
+        tokenizer_source=spec.tokenizer_source,
+        mapping_quality=spec.mapping_quality,
+        provenance=spec.provenance,
+    )
+    for key, spec in TOKENIZER_FAMILY_SPECS.items()
 }
 
 

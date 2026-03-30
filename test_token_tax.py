@@ -989,6 +989,14 @@ class TestIsContinuedToken:
                 f"No-prefix token should be continuation for {key}"
             )
 
+    def test_new_exact_family_continuation_rules_come_from_registry_metadata(self):
+        from token_tax import _is_continued_token
+
+        assert _is_continued_token("▁hello", "qwen3-next") is False
+        assert _is_continued_token("ello", "qwen3-next") is True
+        assert _is_continued_token(" Hello", "gpt-oss") is False
+        assert _is_continued_token("ello", "gpt-oss") is True
+
     def test_command_r_uses_gpt2_style_word_starts(self):
         from token_tax import _is_continued_token
 

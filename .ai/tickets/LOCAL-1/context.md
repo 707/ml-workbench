@@ -1,86 +1,110 @@
-# Ticket Context: LOCAL-1 — ML Workbench (Reasoning Comparison + Token Tax Calculator)
+# Ticket Context: LOCAL-1 — ML Workbench
 
 **Issue:** local (no tracker)
-**Status:** implemented
-**Last Updated:** 2026-03-26
-**Last Agent:** claude-code
-**Last Phase:** Token Tax v2 Phase 4 complete
+**Status:** active
+**Last Updated:** 2026-03-30
+**Last Agent:** codex
+**Last Phase:** architecture review + stabilization follow-up
 
 ---
 
 ## Summary
-A Gradio app hosted on HuggingFace Spaces with three tabs:
-1. **Token Tax Calculator** (primary) — multilingual tokenization cost analysis across 8 models
-2. **Tokenizer Inspector** — tokenization visualization
-3. **Model Comparison** — side-by-side reasoning model comparison (DeepSeek-R1 vs Llama)
+The current project is a Gradio-based ML workbench deployed primarily on Render. The app now has four main work areas:
+1. **Token Tax Workbench** — tokenizer-first multilingual benchmarking with dual benchmark lanes:
+   - `Strict Evidence` for reproducible FLORES-backed claims
+   - `Streaming Exploration` for live exploratory benchmarking
+2. **Tokenizer Inspector** — tokenizer visualization and inspection
+3. **Model Comparison** — hosted OpenRouter free-model comparison
+4. **Catalog / Scenario Lab** — tokenizer-family economics and deployable-model comparisons
+
+The current priority is stabilization after expanding the exact tokenizer family registry and free OpenRouter model list.
 
 ## Current State
 
-### Completed
+### Shipping state
+- Render is the primary host.
+- The app is stateless at runtime.
+- `Strict Evidence` is the only deploy-grade basis for Scenario Lab cost/context projections.
+- `Streaming Exploration` remains benchmark-only exploratory analysis.
+- The free OpenRouter model list was recently expanded with additional exact, text-only families.
 
-**Original App (pre-v2):**
-- Reasoning model comparison (app.py) — all 4 phases
-- Tokenizer Inspector (tokenizer.py) — GH-2 through GH-8
-- Deployed to https://huggingface.co/spaces/nad707/workbench
+### Recent implementation milestones
+- Local FLORES strict snapshot added and made the default benchmark source.
+- Dual-lane benchmark flow shipped (`Strict Evidence` + `Streaming Exploration`).
+- Tokenizer-first catalog and scenario views shipped.
+- Artificial Analysis snapshot support added for benchmark-only speed metadata.
+- Benchmark/scenario visual defaults and diagnostics were improved.
+- Tokenizer warmup and bounded tokenizer caching were added to reduce Render cold-start and memory issues.
 
-**Token Tax Calculator v2 (this session):**
-- [x] Phase 1 — Foundation (Issues 1-4): commit `29c8fee`
-  - 8 tokenizers (o200k_base, cl100k_base, Llama-3, Mistral, Qwen-2.5, Phi-2, BLOOM, GPT-2)
-  - TiktokenAdapter bridging tiktoken ↔ HuggingFace interface
-  - OpenRouter live pricing with TTL cache + static fallback
-  - model_registry.py decoupling model IDs from tokenizer keys
-  - Token fertility wired into analysis
-- [x] Phase 2 — Visualization (Issues 5-8): commit `a217bd6`
-  - charts.py extracted (bubble, context bars, heatmap, waterfall)
-  - benchmark_all() for cross-language×model analysis
-- [x] Phase 3 — Intelligence (Issues 9-10): commit `bb371ae`
-  - run_benchmark() for zero-input 20-language analysis
-  - Structured recommendation engine with mitigations by RTC band
-- [x] Phase 4 — Polish (Issues 12-14): commit `26a8137`
-  - CSV/JSON export
-  - Tabbed dashboard layout (Cost Table, Charts, Benchmark, Traffic Analysis)
-  - Token Tax Calculator promoted to first tab
-- [x] Fix gated tokenizers: commits `a567196`, `ecae109`
-  - Replaced gated Gemma-2 → Phi-2, Command-R → BLOOM
+### Important runtime/deploy learnings
+- Render free tier is sensitive to tokenizer memory usage; unbounded tokenizer retention and overly broad default selections caused instability.
+- Default benchmark/scenario selections were intentionally reduced to keep the app responsive.
+- Benchmark/chart bugs have often come from architecture drift rather than pure UI issues.
 
-**Stats:** 363 tests passing, 97% coverage
+## Architecture Findings To Preserve
 
-### In Progress
-None — all phases complete
+### 1. Tokenizer-family metadata drift is the main regression source
+Adding a new tokenizer family currently requires aligned updates in several places:
+- tokenizer loader registry
+- tokenizer-family/model registry
+- continuation heuristic logic
+- chart color configuration
 
-### Not Done (deferred to v3)
-- Issue 11 — Auto-translate (low priority)
-- Stakeholder-specific views, orthographic scoring, monolingual model recs
-- Import tokka-bench 100+ language sentences
+This drift already caused real bugs after the latest family expansion.
 
-## Key Files (Token Tax v2)
+**Recommendation:** make tokenizer family metadata a single source of truth and derive the other registries from it.
 
-| File | Purpose |
-|------|---------|
-| `workbench/token_tax.py` | Core computation: analyze, benchmark, recommend, export |
-| `workbench/token_tax_ui.py` | Gradio UI handlers and layout |
-| `workbench/charts.py` | Plotly chart builders (4 types) |
-| `workbench/pricing.py` | Static MODEL_PRICING + OpenRouter cache |
-| `workbench/model_registry.py` | Model ID ↔ tokenizer key mapping |
-| `workbench/openrouter.py` | OpenRouter API client (chat + model discovery) |
-| `workbench/tokenizer.py` | Tokenizer registry, TiktokenAdapter, metrics |
+### 2. Continuation heuristics are incomplete for new exact families
+The benchmark’s `continued_word_rate` metric only had explicit handling for legacy families. New exact families were falling through to the unknown-family default, so coverage-style metrics were unreliable.
 
-## Files to Read Before Starting
-- `workbench/token_tax.py` — all computation logic
-- `workbench/token_tax_ui.py` — UI layout and handlers
-- `workbench/charts.py` — chart builders
-- `.claude/plans/groovy-mapping-sketch.md` — full 14-issue plan with research
+**Recommendation:** store `continuation_style` on each tokenizer family and drive `_is_continued_token()` from registry metadata rather than ad hoc family sets.
 
-## Implementation Notes
-- **Gated repos:** Google Gemma and Cohere Command-R require HF license acceptance. Use non-gated alternatives (Phi-2, BLOOM).
-- **Platform:** HF Spaces free tier (16GB RAM) is the only viable free option for 8 tokenizers. Streamlit Cloud (~1GB) and Render (512MB) are too constrained.
-- **Architecture:** All computation in UI-free modules (token_tax.py, pricing.py, charts.py). UI layer (token_tax_ui.py) is thin Gradio glue. Extraction-ready for future FastAPI+React.
-- **generate_recommendations()** returns structured dict (not string) — UI formats via _format_recommendations().
-- **Pricing cache:** _pricing_cache + _last_refreshed in pricing.py. Static MODEL_PRICING takes precedence over cached entries for tokenizer keys.
+### 3. Docker tokenizer warmup needs runtime-safe permissions
+The image currently warms tokenizers during build to reduce cold starts, but this is a deploy-sensitive path. Cache ownership must remain safe for the non-root runtime user.
+
+**Recommendation:** ensure warmup runs under the runtime user or the warmed cache is explicitly ownership-corrected afterward.
+
+### 4. Dark/light theming is only partially shipped
+The shell theme can toggle, but Plotly charts were still using hardcoded white templates and not following the active theme.
+
+**Recommendation:** centralize chart theme selection and make chart builders theme-aware.
+
+### 5. Model Comparison has drifted from the shared free-model registry
+The runtime comparison tab still uses a separate hardcoded model list instead of deriving its options from the same free exact registry used elsewhere in the app.
+
+**Recommendation:** derive Model Comparison choices from the tokenizer/model registry so product surfaces stay aligned.
+
+## Recommended Next Implementation Steps
+1. Add failing tests that codify the registry contract:
+   - every exact tokenizer family has continuation metadata
+   - every exact tokenizer family has a chart color
+   - Model Comparison choices derive from the free exact runtime registry
+   - chart builders expose active theme in their layouts
+2. Refactor tokenizer family metadata into a shared registry and derive:
+   - tokenizer loading map
+   - model family metadata
+   - continuation logic
+   - chart colors
+3. Fix Docker warmup ownership/runtime safety.
+4. Make Plotly charts follow the active app theme.
+5. Re-run focused regression suites first, then the broader safety suite.
+
+## Files To Read Before Continuing
+- [/Users/nad/Documents/Tests/workbench-core/tokenizer_registry.py](/Users/nad/Documents/Tests/workbench-core/tokenizer_registry.py)
+- [/Users/nad/Documents/Tests/workbench-core/tokenizer.py](/Users/nad/Documents/Tests/workbench-core/tokenizer.py)
+- [/Users/nad/Documents/Tests/workbench-core/model_registry.py](/Users/nad/Documents/Tests/workbench-core/model_registry.py)
+- [/Users/nad/Documents/Tests/workbench-core/token_tax.py](/Users/nad/Documents/Tests/workbench-core/token_tax.py)
+- [/Users/nad/Documents/Tests/workbench-core/charts.py](/Users/nad/Documents/Tests/workbench-core/charts.py)
+- [/Users/nad/Documents/Tests/workbench-core/app.py](/Users/nad/Documents/Tests/workbench-core/app.py)
+- [/Users/nad/Documents/Tests/workbench-core/Dockerfile](/Users/nad/Documents/Tests/workbench-core/Dockerfile)
+
+## Verification Baseline
+- Full pytest suite last green before this follow-up: `510 passed`
+- Latest shipped Render-facing stabilization commit before this follow-up: `27c0089`
 
 ## Handoff Instructions
-Continue from: **Branch not yet merged or pushed.** Next actions:
-1. Push branch to remote: `git push -u origin feature/LOCAL-1-reasoning-model-comparison`
-2. Test on HF Spaces — verify all 8 tokenizers load, benchmark runs, charts render
-3. If ready, merge to main and deploy
-4. For v3 scope, start with Issue 11 (auto-translate) or tokka-bench language import
+Continue with a TDD-first stabilization pass:
+1. lock in registry/theme/runtime expectations in tests
+2. refactor to a single shared tokenizer-family source of truth
+3. fix deploy/runtime and theme consistency issues
+4. rerun focused + broader regression suites

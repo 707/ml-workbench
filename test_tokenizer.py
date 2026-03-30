@@ -143,6 +143,13 @@ class TestGetTokenizer:
         }
         assert expected.issubset(set(SUPPORTED_TOKENIZERS.keys()))
 
+    def test_supported_tokenizers_come_from_shared_family_registry(self):
+        """Tokenizer loader registry should derive from the shared tokenizer-family spec map."""
+        from tokenizer import SUPPORTED_TOKENIZERS
+        from tokenizer_registry import supported_tokenizers_map
+
+        assert SUPPORTED_TOKENIZERS == supported_tokenizers_map()
+
     def test_tiktoken_entries_have_tiktoken_prefix(self):
         """Tiktoken-backed tokenizers must have 'tiktoken:' prefix in their value."""
         from tokenizer import SUPPORTED_TOKENIZERS

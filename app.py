@@ -9,6 +9,7 @@ from time import perf_counter
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from model_registry import list_free_runtime_choices
 from openrouter import call_openrouter, extract_usage, OPENROUTER_URL  # noqa: F401
 from tokenizer import build_tokenizer_ui
 from token_tax_ui import build_token_tax_ui
@@ -25,11 +26,13 @@ SERVER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 # Model IDs
 # ---------------------------------------------------------------------------
 
-FREE_MODELS: list[tuple[str, str]] = [
-    ("Qwen 2.5 7B Instruct (Free)", "qwen/qwen-2.5-7b-instruct:free"),
-    ("Llama 3.2 3B Instruct (Free)", "meta-llama/llama-3.2-3b-instruct:free"),
-    ("Mistral 7B Instruct (Free)", "mistralai/mistral-7b-instruct:free"),
-]
+
+def _free_model_choices() -> list[tuple[str, str]]:
+    rows = list_free_runtime_choices(include_proxy=False)
+    return [(row["label"], row["model_id"]) for row in rows]
+
+
+FREE_MODELS: list[tuple[str, str]] = _free_model_choices()
 
 MODEL_R1 = "qwen/qwen-2.5-7b-instruct:free"
 MODEL_LLAMA = "meta-llama/llama-3.2-3b-instruct:free"
@@ -334,6 +337,17 @@ async () => {
     if (button) {
       button.setAttribute("aria-label", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
       button.setAttribute("title", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
+    }
+    if (window.Plotly) {
+      requestAnimationFrame(() => {
+        document.querySelectorAll(".js-plotly-plot").forEach((plot) => {
+          window.Plotly.relayout(plot, {
+            paper_bgcolor: "rgba(0,0,0,0)",
+            plot_bgcolor: "rgba(0,0,0,0)",
+            font: { color: "var(--wb-text)" },
+          });
+        });
+      });
     }
   };
 

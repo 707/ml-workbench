@@ -12,6 +12,7 @@ from collections import OrderedDict
 from time import perf_counter
 import gradio as gr
 from langdetect import detect, LangDetectException
+from tokenizer_registry import supported_tokenizers_map
 
 _AutoTokenizer = None
 
@@ -33,29 +34,7 @@ class _LazyAutoTokenizer:
 
 AutoTokenizer = _LazyAutoTokenizer()
 
-# ---------------------------------------------------------------------------
-# Tokenizer registry
-# ---------------------------------------------------------------------------
-
-SUPPORTED_TOKENIZERS: dict[str, str] = {
-    "o200k_base": "tiktoken:o200k_base",
-    "cl100k_base": "tiktoken:cl100k_base",
-    "llama-3": "NousResearch/Meta-Llama-3-8B",
-    "mistral": "mistralai/Mistral-7B-v0.1",
-    "qwen-2.5": "Qwen/Qwen2.5-7B",
-    "qwen3-next": "Qwen/Qwen3-Next-80B-A3B-Instruct",
-    "qwen3-coder": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-    "gpt-oss": "openai/gpt-oss-20b",
-    "glm-4.5-air": "zai-org/GLM-4.5-Air-FP8",
-    "nemotron-3-nano-30b": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
-    "nemotron-3-super": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8",
-    "nemotron-nano-9b-v2": "nvidia/NVIDIA-Nemotron-Nano-9B-v2",
-    "trinity-large": "arcee-ai/Trinity-Large-Preview",
-    "trinity-mini": "arcee-ai/Trinity-Mini",
-    "gemma-2": "unsloth/gemma-2-2b",
-    "command-r": "bigscience/bloom-560m",
-    "gpt2": "gpt2",
-}
+SUPPORTED_TOKENIZERS: dict[str, str] = supported_tokenizers_map()
 
 
 class TiktokenAdapter:

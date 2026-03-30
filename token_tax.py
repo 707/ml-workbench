@@ -21,6 +21,7 @@ from provenance import (
     provenance_description,
     provenance_visible,
 )
+from tokenizer_registry import continuation_style_map
 from tokenizer import (
     byte_premium,
     context_window_usage,
@@ -466,12 +467,8 @@ def _sample_metrics(
     return result
 
 
-_TIKTOKEN_KEYS = frozenset({"o200k_base", "cl100k_base"})
-_GPT2_KEYS = frozenset({"gpt2", "command-r"})
-_SENTENCEPIECE_KEYS = frozenset({"llama-3", "mistral", "qwen-2.5", "gemma-2"})
-_BERT_KEYS = frozenset()  # none of the 8 active families; kept for external callers
-
 _PUNCTUATION = frozenset(".,;:!?()" + "[]{}\"'")
+_CONTINUATION_STYLES = continuation_style_map()
 
 
 def _is_continued_token(token_text: str, tokenizer_key: str) -> bool:
@@ -491,18 +488,26 @@ def _is_continued_token(token_text: str, tokenizer_key: str) -> bool:
     if stripped[0] in _PUNCTUATION:
         return False
 
-    # Family-specific logic
-    if tokenizer_key in _TIKTOKEN_KEYS:
+    if token_text.startswith("##"):
+        return True
+
+    continuation_style = _CONTINUATION_STYLES.get(tokenizer_key)
+
+    if continuation_style == "space_prefix":
         return not token_text.startswith(" ")
 
-    if tokenizer_key in _GPT2_KEYS:
+    if continuation_style == "gpt2_prefix":
         return not token_text.startswith("Ġ")
 
-    if tokenizer_key in _SENTENCEPIECE_KEYS:
+    if continuation_style == "sentencepiece":
         return not token_text.startswith("▁")
 
-    # BERT-style: ## prefix is the continuation marker
-    if token_text.startswith("##"):
+    if continuation_style == "bert_hash":
+        return token_text.startswith("##")
+
+    if continuation_style == "auto":
+        if token_text.startswith((" ", "Ġ", "▁")):
+            return False
         return True
 
     # Unknown family — safe default: assume word-start, not continuation

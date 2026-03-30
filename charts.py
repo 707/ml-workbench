@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from tokenizer_registry import tokenizer_color_map
 
 RISK_COLORS = {
     "low": "#4CAF50",
@@ -13,16 +14,7 @@ RISK_COLORS = {
 }
 
 
-TOKENIZER_COLORS = {
-    "o200k_base": "#1f77b4",
-    "cl100k_base": "#2ca02c",
-    "llama-3": "#d62728",
-    "mistral": "#9467bd",
-    "qwen-2.5": "#8c564b",
-    "gemma-2": "#e377c2",
-    "command-r": "#7f7f7f",
-    "gpt2": "#bcbd22",
-}
+TOKENIZER_COLORS = tokenizer_color_map()
 
 _MIN_BUBBLE_SIZE = 14
 _MAX_BUBBLE_SIZE = 34
@@ -43,13 +35,39 @@ def _empty_figure(message: str = "No data available for this view"):
             "showarrow": False,
             "font": {"size": 16},
         }],
-        template="plotly_white",
     )
+    _apply_theme(fig)
     return fig
 
 
 def _value(row: dict, key: str):
     return row.get(key)
+
+
+def _apply_theme(fig):
+    fig.update_layout(
+        template="plotly",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": "var(--wb-text)"},
+        title={"font": {"color": "var(--wb-text)"}},
+        legend={"font": {"color": "var(--wb-text)"}},
+    )
+    fig.update_xaxes(
+        gridcolor="rgba(148, 163, 184, 0.16)",
+        zerolinecolor="rgba(148, 163, 184, 0.16)",
+        linecolor="rgba(148, 163, 184, 0.28)",
+        tickfont={"color": "var(--wb-text)"},
+        title_font={"color": "var(--wb-text)"},
+    )
+    fig.update_yaxes(
+        gridcolor="rgba(148, 163, 184, 0.16)",
+        zerolinecolor="rgba(148, 163, 184, 0.16)",
+        linecolor="rgba(148, 163, 184, 0.28)",
+        tickfont={"color": "var(--wb-text)"},
+        title_font={"color": "var(--wb-text)"},
+    )
+    return fig
 
 
 def _normalize_bubble_sizes(values: list[float]) -> list[float]:
@@ -153,10 +171,9 @@ def build_metric_scatter(
         title=title,
         xaxis_title=x_title or x_key,
         yaxis_title=y_title or y_key,
-        template="plotly_white",
         showlegend=False,
     )
-    return fig
+    return _apply_theme(fig)
 
 
 def build_distribution_chart(rows: list[dict], metric_key: str, group_key: str = "tokenizer_key"):
@@ -187,9 +204,8 @@ def build_distribution_chart(rows: list[dict], metric_key: str, group_key: str =
         title=f"{metric_key} distribution",
         yaxis_title=metric_key,
         xaxis_title=group_key,
-        template="plotly_white",
     )
-    return fig
+    return _apply_theme(fig)
 
 
 def build_heatmap(
@@ -225,9 +241,8 @@ def build_heatmap(
         title=f"{metric_key} by language and tokenizer",
         xaxis_title="Tokenizer family",
         yaxis_title="Language",
-        template="plotly_white",
     )
-    return fig
+    return _apply_theme(fig)
 
 
 def build_category_bar(
@@ -276,10 +291,9 @@ def build_category_bar(
         title=title,
         xaxis_title=x_title or category_key,
         yaxis_title=y_title or value_key,
-        template="plotly_white",
         barmode="group",
     )
-    return fig
+    return _apply_theme(fig)
 
 
 def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_word: float = 1.33):
@@ -320,9 +334,8 @@ def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_wor
         title="Effective Context Window (words)",
         xaxis_title="Approximate words",
         yaxis_title="Model",
-        template="plotly_white",
     )
-    return fig
+    return _apply_theme(fig)
 
 
 def build_cost_waterfall(portfolio_result: dict):
@@ -364,9 +377,8 @@ def build_cost_waterfall(portfolio_result: dict):
         title="Monthly Cost Breakdown: Base vs Token Tax",
         xaxis_title="Estimated monthly cost ($)",
         yaxis_title="Language",
-        template="plotly_white",
     )
-    return fig
+    return _apply_theme(fig)
 
 
 def build_bubble_chart(analysis_results: list[dict]):

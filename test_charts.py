@@ -102,6 +102,14 @@ class TestBuildBubbleChart:
         for trace in fig.data:
             assert "text" in trace.mode
 
+    def test_uses_theme_aware_layout_colors(self):
+        from charts import build_bubble_chart
+
+        fig = build_bubble_chart(SAMPLE_RESULTS)
+        assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)"
+        assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
+        assert fig.layout.font.color == "var(--wb-text)"
+
 
 # ---------------------------------------------------------------------------
 # build_context_chart (Issue 6)
@@ -179,6 +187,14 @@ class TestBuildHeatmap:
         z = fig.data[0].z
         assert len(z) == 2  # 2 languages
         assert len(z[0]) == 2  # 2 models
+
+    def test_heatmap_uses_theme_aware_layout_colors(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
+        assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)"
+        assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
+        assert fig.layout.font.color == "var(--wb-text)"
 
 
 class TestBuildMetricScatter:

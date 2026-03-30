@@ -850,6 +850,16 @@ class TestFreeModels:
         model_ids = [m_id for _, m_id in FREE_MODELS]
         assert MODEL_LLAMA in model_ids
 
+    def test_free_models_are_derived_from_shared_runtime_registry(self):
+        from app import FREE_MODELS
+        from model_registry import list_free_runtime_choices
+
+        expected = sorted(
+            (row["label"], row["model_id"])
+            for row in list_free_runtime_choices(include_proxy=False)
+        )
+        assert sorted(FREE_MODELS) == expected
+
 
 class TestHostedKeyDisclosure:
     def test_comparison_ui_discloses_hosted_key_usage_when_server_key_is_present(self):

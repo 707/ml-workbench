@@ -182,6 +182,17 @@ class TestResolveModel:
 
 
 class TestTokenizerFirstCatalog:
+    def test_tokenizer_families_derive_from_shared_registry(self):
+        from model_registry import TOKENIZER_FAMILIES
+        from tokenizer_registry import TOKENIZER_FAMILY_SPECS
+
+        assert set(TOKENIZER_FAMILIES) == set(TOKENIZER_FAMILY_SPECS)
+        for key, family in TOKENIZER_FAMILIES.items():
+            spec = TOKENIZER_FAMILY_SPECS[key]
+            assert family.tokenizer_source == spec.tokenizer_source
+            assert family.mapping_quality == spec.mapping_quality
+            assert family.provenance == spec.provenance
+
     def test_tokenizer_families_include_free_model_attachments(self):
         from model_registry import build_tokenizer_catalog
 
@@ -221,6 +232,19 @@ class TestTokenizerFirstCatalog:
             "openai/gpt-oss-20b:free",
             "openai/gpt-oss-120b:free",
         }
+
+    def test_every_exact_family_has_continuation_style_metadata(self):
+        from tokenizer_registry import TOKENIZER_FAMILY_SPECS
+
+        exact_specs = [spec for spec in TOKENIZER_FAMILY_SPECS.values() if spec.mapping_quality == "exact"]
+        assert exact_specs
+        assert all(spec.continuation_style for spec in exact_specs)
+
+    def test_every_exact_family_has_chart_color_metadata(self):
+        from tokenizer_registry import TOKENIZER_FAMILY_SPECS
+
+        exact_specs = [spec for spec in TOKENIZER_FAMILY_SPECS.values() if spec.mapping_quality == "exact"]
+        assert all(spec.chart_color.startswith("#") for spec in exact_specs)
 
 
 class TestArtificialAnalysisSnapshot:
@@ -318,3 +342,13 @@ class TestFreeRuntimeChoices:
             "z-ai/glm-4.5-air:free",
         }
         assert expected.issubset(model_ids)
+
+    def test_free_runtime_choices_cover_app_comparison_models(self):
+        from app import FREE_MODELS
+        from model_registry import list_free_runtime_choices
+
+        expected = {
+            (row["label"], row["model_id"])
+            for row in list_free_runtime_choices(include_proxy=False)
+        }
+        assert set(FREE_MODELS) == expected

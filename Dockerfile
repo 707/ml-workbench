@@ -22,16 +22,16 @@ COPY provenance.py ./
 COPY token_tax.py ./
 COPY token_tax_ui.py ./
 COPY tokenizer.py ./
+COPY tokenizer_registry.py ./
 COPY warm_tokenizers.py ./
 
 RUN mkdir -p /home/user/.cache/huggingface && chown -R user:user /home/user
-RUN python warm_tokenizers.py
-
 ENV GRADIO_SERVER_NAME=0.0.0.0
 ENV GRADIO_SERVER_PORT=7860
 ENV PYTHONUNBUFFERED=1
 
 USER user
+RUN python warm_tokenizers.py
 EXPOSE 7860
 
 CMD ["python", "-u", "bootstrap.py"]
