@@ -15,6 +15,7 @@ COPY charts.py ./
 COPY corpora.py ./
 COPY data ./data
 COPY diagnostics.py ./
+COPY explainer.py ./
 COPY model_registry.py ./
 COPY openrouter.py ./
 COPY pricing.py ./
