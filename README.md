@@ -1,3 +1,14 @@
+---
+title: ML Workbench
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # ml-workbench
 
 Tokeniser evidence for llm models, languages cost trade-offs which tries to answer:
