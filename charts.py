@@ -145,13 +145,15 @@ def build_metric_scatter(
     for row, bubble_size in zip(filtered, bubble_sizes):
         color_name = row.get(color_key, "")
         color = TOKENIZER_COLORS.get(color_name, "#4C78A8")
+        full_label = row.get(label_key, row.get("model", "item"))
+        visible_label = row.get("display_label", full_label)
 
         fig.add_trace(go.Scatter(
             x=[row[x_key]],
             y=[row[y_key]],
             mode="markers+text" if show_text else "markers",
-            name=row.get(label_key, row.get("model", "item")),
-            text=[row.get(label_key, row.get("model", "item"))] if show_text else None,
+            name=full_label,
+            text=[visible_label] if show_text else None,
             textposition="top center",
             textfont={"size": 10},
             marker={
@@ -225,7 +227,8 @@ def build_heatmap(
         row = []
         for model in models:
             entry = benchmark_results.get((lang, model), {})
-            row.append(entry.get(metric_key, 0.0))
+            value = entry.get(metric_key)
+            row.append(value if isinstance(value, (int, float)) else None)
         z.append(row)
 
     fig = go.Figure()

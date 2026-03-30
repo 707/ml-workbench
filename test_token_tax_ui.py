@@ -27,6 +27,12 @@ class TestBuildTokenTaxUi:
 
 
 class TestWorkbenchHandlers:
+    def test_default_benchmark_metric_uses_dense_streaming_metric(self):
+        from token_tax_ui import _default_benchmark_metric_for
+
+        assert _default_benchmark_metric_for("strict_parallel") == "rtc"
+        assert _default_benchmark_metric_for("streaming_exploration") == "bytes_per_token"
+
     def test_default_benchmark_tokenizers_use_curated_subset(self):
         from token_tax_ui import default_benchmark_tokenizers
 
@@ -333,6 +339,8 @@ class TestWorkbenchHandlers:
         assert "filter-rail filter-rail--compact" in src
         assert "filter-rail filter-rail--wide" in src
         assert "filter-rail filter-rail--scenario-inputs" in src
+        assert "scenario-control-grid" in src
+        assert "scenario-control-cluster" in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
@@ -405,6 +413,115 @@ class TestWorkbenchHandlers:
         assert "Word split rate" in markdown
         assert "Tokens per word / character" in markdown
         assert markdown.lstrip().startswith("<div")
+
+    def test_build_benchmark_chart_explainer_for_streaming_baseline_mentions_caveat(self):
+        from token_tax_ui import build_benchmark_chart_explainer_markdown
+
+        markdown = build_benchmark_chart_explainer_markdown("english_baseline_ratio", "Overview")
+
+        assert "exploratory" in markdown.lower()
+        assert "english baseline" in markdown.lower()
+        assert "not aligned" in markdown.lower()
+        assert "metric-badge" in markdown
+
+    def test_sparse_streaming_baseline_metric_shows_explanatory_empty_state(self):
+        from token_tax_ui import _build_benchmark_outputs
+
+        rows = [
+            {
+                "lane": "Streaming Exploration",
+                "language": "en",
+                "tokenizer_key": "gpt2",
+                "bytes_per_token": 2.0,
+                "token_fertility": 1.5,
+                "continued_word_rate": 0.2,
+                "unique_tokens": 12,
+                "english_baseline_ratio": 1.0,
+                "sample_count": 3,
+                "provenance": "strict_verified",
+                "corpus_key": "streaming_exploration",
+            },
+            {
+                "lane": "Streaming Exploration",
+                "language": "ar",
+                "tokenizer_key": "gpt2",
+                "bytes_per_token": 1.8,
+                "token_fertility": 5.2,
+                "continued_word_rate": 0.7,
+                "unique_tokens": 34,
+                "english_baseline_ratio": None,
+                "sample_count": 3,
+                "provenance": "strict_verified",
+                "corpus_key": "streaming_exploration",
+            },
+            {
+                "lane": "Streaming Exploration",
+                "language": "hi",
+                "tokenizer_key": "gpt2",
+                "bytes_per_token": 1.7,
+                "token_fertility": 6.0,
+                "continued_word_rate": 0.8,
+                "unique_tokens": 31,
+                "english_baseline_ratio": None,
+                "sample_count": 3,
+                "provenance": "strict_verified",
+                "corpus_key": "streaming_exploration",
+            },
+        ]
+
+        outputs = _build_benchmark_outputs(
+            rows,
+            [],
+            ["en", "ar", "hi"],
+            "english_baseline_ratio",
+            "appendix",
+            "en",
+            "gpt2",
+            0,
+        )
+
+        heatmap = outputs[2]
+        distribution = outputs[3]
+
+        assert "english baseline" in heatmap.layout.annotations[0].text.lower()
+        assert "english baseline" in distribution.layout.annotations[0].text.lower()
+
+    def test_build_benchmark_summary_marks_streaming_baseline_as_exploratory(self):
+        from token_tax_ui import build_benchmark_summary_markdown
+
+        markdown = build_benchmark_summary_markdown(
+            [
+                {
+                    "lane": "Streaming Exploration",
+                    "language": "en",
+                    "tokenizer_key": "gpt2",
+                    "english_baseline_ratio": 1.0,
+                    "bytes_per_token": 2.4,
+                    "continued_word_rate": 0.25,
+                },
+            ],
+            metric_key="english_baseline_ratio",
+        )
+
+        assert "Exploratory only" in markdown
+        assert "metric-badge" in markdown
+
+    def test_build_scenario_appendix_summary_is_compact_plain_language(self):
+        from token_tax_ui import build_scenario_appendix_summary_html
+
+        html = build_scenario_appendix_summary_html()
+
+        assert "Scenario assumptions" in html
+        assert "Strict Evidence" in html
+        assert "business impact" in html
+
+    def test_shorten_model_label_truncates_long_values(self):
+        from token_tax_ui import shorten_model_label
+
+        shortened = shorten_model_label("Qwen 2.5 7B Instruct (Free) with very long suffix")
+
+        assert shortened.endswith("...")
+        assert len(shortened) < len("Qwen 2.5 7B Instruct (Free) with very long suffix")
 
     def test_export_serialized_table_csv_writes_current_rows(self):
         from token_tax_ui import export_serialized_table_csv

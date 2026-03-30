@@ -85,7 +85,8 @@ body {
 
 .app-shell-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.7rem 0.9rem;
   margin-bottom: 0.45rem;
@@ -135,7 +136,21 @@ body {
 }
 
 .filter-rail--scenario-inputs {
-  max-width: 360px;
+  max-width: 440px;
+}
+
+.scenario-control-grid {
+  gap: 0.55rem;
+  margin-bottom: 0.35rem;
+}
+
+.scenario-control-column,
+.scenario-control-cluster {
+  gap: 0.25rem;
+}
+
+.scenario-control-cluster {
+  margin-top: 0.1rem;
 }
 
 .catalog-utility-row {
@@ -171,6 +186,22 @@ body {
 
 .chart-help strong {
   color: var(--wb-text);
+}
+
+.metric-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .chart-help p {
@@ -299,10 +330,39 @@ body {
 .compact-action button,
 .compact-action {
   width: auto !important;
-  min-width: 7.5rem;
-  min-height: 2.2rem !important;
-  padding-inline: 0.7rem !important;
+  min-width: 6.6rem;
+  min-height: 2rem !important;
+  padding-inline: 0.65rem !important;
   font-size: 0.88rem !important;
+}
+
+.app-shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.shell-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--wb-text);
+  text-decoration: none;
+  border: 1px solid var(--wb-border);
+  background: var(--wb-panel-soft);
+  border-radius: 999px;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.84rem;
+}
+
+.shell-link:hover {
+  border-color: var(--wb-accent);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.shell-link svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .raw-export-row {
@@ -816,6 +876,21 @@ def build_ui() -> gr.Blocks:
               <div class="app-shell-copy">
                 <h1>ML Workbench</h1>
                 <p>Tokenizer evidence, scenario modelling, and free-model comparisons in one place.</p>
+              </div>
+              <div class="app-shell-actions">
+                <a
+                  class="shell-link"
+                  href="https://github.com/707/ml-workbench"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open GitHub repo"
+                  title="GitHub repo"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+                    <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.54 7.54 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+                  </svg>
+                  <span>GitHub repo</span>
+                </a>
               </div>
             </div>
             """

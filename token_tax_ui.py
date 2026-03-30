@@ -127,12 +127,12 @@ STRICT_BENCHMARK_METRICS = [
     "continued_word_rate",
 ]
 STREAMING_BENCHMARK_METRICS = [
-    "english_baseline_ratio",
-    "token_count",
     "bytes_per_token",
     "token_fertility",
     "unique_tokens",
     "continued_word_rate",
+    "english_baseline_ratio",
+    "token_count",
 ]
 
 
@@ -162,8 +162,26 @@ def build_chart_help_markdown(title: str, body: str) -> str:
     )
 
 
+def exploratory_metric_badge_html() -> str:
+    return '<span class="metric-badge">Exploratory only</span>'
+
+
+def shorten_model_label(label: str, max_length: int = 30) -> str:
+    if len(label) <= max_length:
+        return label
+    return f"{label[: max_length - 3].rstrip()}..."
+
+
 def build_benchmark_chart_explainer_markdown(metric_key: str, section_name: str) -> str:
     metric_label = metric_display_label(metric_key)
+    if metric_key == "english_baseline_ratio":
+        return (
+            '<div class="chart-help">'
+            "<strong>How to read this chart</strong>"
+            f"{exploratory_metric_badge_html()}"
+            "<p>This is an exploratory metric, not aligned RTC. It compares live streaming samples against a same-tokenizer English baseline when that baseline was successfully captured, so sparse or blank states are expected.</p>"
+            "</div>"
+        )
     if section_name == "Coverage":
         return build_chart_help_markdown(
             "How to read this chart",
@@ -194,6 +212,65 @@ def export_serialized_table_csv(table: dict | None, prefix: str = "export") -> s
         writer.writerow(headers)
         writer.writerows(rows)
         return handle.name
+
+
+def _build_explanatory_empty_plot(message: str):
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+    fig.update_layout(
+        annotations=[{
+            "text": message,
+            "xref": "paper",
+            "yref": "paper",
+            "x": 0.5,
+            "y": 0.5,
+            "showarrow": False,
+            "font": {"size": 15, "color": "#111111"},
+            "align": "center",
+        }],
+        template="plotly",
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font={"color": "#111111"},
+    )
+    fig.update_xaxes(
+        gridcolor="#e5e7eb",
+        zerolinecolor="#e5e7eb",
+        linecolor="#cbd5e1",
+        tickfont={"color": "#111111"},
+        title_font={"color": "#111111"},
+    )
+    fig.update_yaxes(
+        gridcolor="#e5e7eb",
+        zerolinecolor="#e5e7eb",
+        linecolor="#cbd5e1",
+        tickfont={"color": "#111111"},
+        title_font={"color": "#111111"},
+    )
+    return fig
+
+
+def _streaming_baseline_is_sparse(
+    rows: list[dict],
+    selected_languages: list[str],
+    tokenizers: list[str],
+) -> bool:
+    if not rows:
+        return True
+    expected_cells = max(len(selected_languages), 1) * max(len(tokenizers), 1)
+    numeric_cells = sum(
+        1 for row in rows if isinstance(row.get("english_baseline_ratio"), (int, float))
+    )
+    return numeric_cells / expected_cells < 0.5
+
+
+def _streaming_baseline_empty_message() -> str:
+    return (
+        "Relative Token Cost (streaming baseline) only appears when the app captured a "
+        "same-tokenizer English baseline in the live sample. This run is too sparse, so "
+        "use Text packed into each token, Word split rate, or Tokens per word / character instead."
+    )
 
 
 def _resolve_corpus_key(selection: str) -> str:
@@ -271,7 +348,7 @@ def _benchmark_metric_choices_for(corpus_key: str) -> list[str]:
 
 
 def _default_benchmark_metric_for(corpus_key: str) -> str:
-    return "rtc" if corpus_key == "strict_parallel" else "english_baseline_ratio"
+    return "rtc" if corpus_key == "strict_parallel" else "bytes_per_token"
 
 
 def configure_benchmark_metric(lane_or_corpus: str) -> gr.Dropdown:
@@ -317,6 +394,15 @@ def _benchmark_row_label(row: dict) -> str:
     return f"{language_label(str(row.get('language', 'n/a')))} / {row.get('tokenizer_key', 'n/a')}"
 
 
+def build_scenario_appendix_summary_html() -> str:
+    return (
+        '<div class="chart-help">'
+        "<strong>Scenario assumptions</strong>"
+        "<p>Scenario Lab turns Strict Evidence benchmark rows into business impact. It estimates monthly spend and context loss from the selected languages, tokenizer families, and attached free models.</p>"
+        "</div>"
+    )
+
+
 def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
     """Render a formatted benchmark summary box above the chart stack."""
     if not rows:
@@ -359,7 +445,7 @@ def build_benchmark_summary_markdown(rows: list[dict], metric_key: str) -> str:
             f"{lane} across {len(languages)} languages and {len(tokenizers)} tokenizer families",
         ),
         (
-            metric_display_label(metric_key),
+            f"{metric_display_label(metric_key)} {exploratory_metric_badge_html()}" if metric_key == "english_baseline_ratio" else metric_display_label(metric_key),
             f"Range: {metric_range}",
         ),
     ]
@@ -544,11 +630,26 @@ def _build_benchmark_outputs(
     tokenizers = list(dict.fromkeys(row["tokenizer_key"] for row in rows))
     coverage_rows = build_coverage_rows(rows)
     composition_rows = build_observed_composition_rows(raw_rows)
+    sparse_streaming_baseline = (
+        corpus_key == "streaming_exploration"
+        and metric_key == "english_baseline_ratio"
+        and _streaming_baseline_is_sparse(rows, selected_languages, tokenizers)
+    )
+    overview_heatmap = (
+        _build_explanatory_empty_plot(_streaming_baseline_empty_message())
+        if sparse_streaming_baseline
+        else build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key)
+    )
+    overview_distribution = (
+        _build_explanatory_empty_plot(_streaming_baseline_empty_message())
+        if sparse_streaming_baseline
+        else build_distribution_chart(rows, metric_key)
+    )
     return (
         build_benchmark_summary_markdown(rows, metric_key),
         serialize_table(rows, _benchmark_columns_for(corpus_key)),
-        gr.skip() if skip_plot_updates else build_heatmap(matrix, selected_languages, tokenizers, metric_key=metric_key),
-        gr.skip() if skip_plot_updates else build_distribution_chart(rows, metric_key),
+        gr.skip() if skip_plot_updates else overview_heatmap,
+        gr.skip() if skip_plot_updates else overview_distribution,
         build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
         serialize_table(raw_rows, _raw_benchmark_columns_for(corpus_key)),
         gr.skip() if skip_plot_updates else build_category_bar(
@@ -596,6 +697,7 @@ def _aggregate_scenario_rows(rows: list[dict]) -> list[dict]:
         weight = float(row.get("monthly_input_tokens") or 0)
         current = grouped.setdefault(key, {
             "label": row["label"],
+            "display_label": shorten_model_label(str(row["label"])),
             "model_id": row["model_id"],
             "tokenizer_key": row["tokenizer_key"],
             "rtc_weighted_sum": 0.0,
@@ -673,6 +775,10 @@ def _build_scenario_outputs(
         key=lambda row: (float(row.get("monthly_cost") or 0.0), str(row.get("label", "")), str(row.get("language", ""))),
         reverse=True,
     )
+    table_rows = [
+        {**row, "label": shorten_model_label(str(row.get("label", "")), max_length=36)}
+        for row in table_rows
+    ]
     table = serialize_table(table_rows, SCENARIO_COLUMNS)
     chart_rows = _aggregate_scenario_rows(rows)
     cost_plot = build_metric_scatter(
@@ -1419,74 +1525,78 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Attached Free Models",
                             info="Exact free OpenRouter models attached to the selected tokenizer families.",
                         )
-                    with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs filter-rail--compact", min_width=340, scale=0):
-                        monthly_requests = gr.Slider(
-                            1_000,
-                            1_000_000,
-                            value=100_000,
-                            step=1_000,
-                            label="Monthly Requests",
-                            info="Projected monthly request volume used to scale the scenario.",
-                        )
-                        avg_input_tokens = gr.Slider(
-                            10,
-                            10_000,
-                            value=600,
-                            step=10,
-                            label="Avg Input Tokens",
-                            info="Average input size before multilingual token inflation is applied.",
-                        )
-                        avg_output_tokens = gr.Slider(
-                            10,
-                            10_000,
-                            value=250,
-                            step=10,
-                            label="Avg Output Tokens",
-                            info="Average completion length used in the monthly cost projection.",
-                        )
-                        reasoning_share = gr.Slider(
-                            0.0,
-                            2.0,
-                            value=0.1,
-                            step=0.05,
-                            label="Reasoning Share",
-                            info="Extra completion-token multiplier for reasoning-heavy workloads.",
-                        )
-                        slice_x = gr.Dropdown(
-                            choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
-                            value="rtc",
-                            label="Custom X",
-                            info="Metric plotted on the x-axis of the custom slice chart.",
-                        )
-                        slice_y = gr.Dropdown(
-                            choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
-                            value="monthly_cost",
-                            label="Custom Y",
-                            info="Metric plotted on the y-axis of the custom slice chart.",
-                        )
-                        slice_size = gr.Dropdown(
-                            choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
-                            value="none",
-                            label="Bubble Size",
-                            info="Optional bubble sizing field for the custom slice chart.",
-                        )
-                        with gr.Group(elem_classes="checkbox-stack"):
-                            scenario_include_estimates = gr.Checkbox(
-                                label="Include estimated values",
-                                value=False,
-                                info="Include estimated or non-strict rows in the scenario comparison.",
+                    with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs", min_width=420, scale=0):
+                        with gr.Row(equal_height=False, elem_classes="scenario-control-grid"):
+                            with gr.Column(elem_classes="scenario-control-column", min_width=180, scale=1):
+                                monthly_requests = gr.Slider(
+                                    1_000,
+                                    1_000_000,
+                                    value=100_000,
+                                    step=1_000,
+                                    label="Monthly Requests",
+                                    info="Projected monthly request volume used to scale the scenario.",
+                                )
+                                avg_input_tokens = gr.Slider(
+                                    10,
+                                    10_000,
+                                    value=600,
+                                    step=10,
+                                    label="Avg Input Tokens",
+                                    info="Average input size before multilingual token inflation is applied.",
+                                )
+                            with gr.Column(elem_classes="scenario-control-column", min_width=180, scale=1):
+                                avg_output_tokens = gr.Slider(
+                                    10,
+                                    10_000,
+                                    value=250,
+                                    step=10,
+                                    label="Avg Output Tokens",
+                                    info="Average completion length used in the monthly cost projection.",
+                                )
+                                reasoning_share = gr.Slider(
+                                    0.0,
+                                    2.0,
+                                    value=0.1,
+                                    step=0.05,
+                                    label="Reasoning Share",
+                                    info="Extra completion-token multiplier for reasoning-heavy workloads.",
+                                )
+                        with gr.Group(elem_classes="scenario-control-cluster"):
+                            slice_x = gr.Dropdown(
+                                choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
+                                value="rtc",
+                                label="Custom X",
+                                info="Metric plotted on the x-axis of the custom slice chart.",
                             )
-                            scenario_include_proxy = gr.Checkbox(
-                                label="Include proxy mappings",
-                                value=False,
-                                info="Allow tokenizer families with documented proxy mappings into the scenario.",
+                            slice_y = gr.Dropdown(
+                                choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
+                                value="monthly_cost",
+                                label="Custom Y",
+                                info="Metric plotted on the y-axis of the custom slice chart.",
                             )
-                            scenario_live_updates = gr.Checkbox(
-                                label="Live diagnostics",
-                                value=False,
-                                info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
+                            slice_size = gr.Dropdown(
+                                choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
+                                value="none",
+                                label="Bubble Size",
+                                info="Optional bubble sizing field for the custom slice chart.",
                             )
-                        scenario_run = gr.Button("Run Scenario Lab", variant="primary", size="sm", elem_classes="compact-action")
+                            with gr.Group(elem_classes="checkbox-stack"):
+                                scenario_include_estimates = gr.Checkbox(
+                                    label="Include estimated values",
+                                    value=False,
+                                    info="Include estimated or non-strict rows in the scenario comparison.",
+                                )
+                                scenario_include_proxy = gr.Checkbox(
+                                    label="Include proxy mappings",
+                                    value=False,
+                                    info="Allow tokenizer families with documented proxy mappings into the scenario.",
+                                )
+                                scenario_live_updates = gr.Checkbox(
+                                    label="Live diagnostics",
+                                    value=False,
+                                    info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
+                                )
+                            scenario_run = gr.Button("Run Scenario Lab", variant="primary", size="sm", elem_classes="compact-action")
                 gr.HTML(
                     build_chart_help_markdown(
                         "How to use Scenario Lab",
@@ -1515,7 +1625,9 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_custom_plot = gr.Plot(label="Custom Slice")
                 gr.HTML(build_chart_help_markdown("How to use this table", "These per-language rows feed the scenario charts above. Use them when you need the detailed assumptions behind a model-level point."))
                 scenario_table = gr.DataFrame(label="Scenario Rows", interactive=False)
-                scenario_appendix_md = gr.Markdown(label="Scenario Appendix")
+                gr.HTML(build_scenario_appendix_summary_html())
+                with gr.Accordion("Scenario Appendix", open=False):
+                    scenario_appendix_md = gr.Markdown(label="Scenario Appendix")
                 with gr.Accordion("Diagnostics", open=False):
                     scenario_diagnostics_md = gr.Markdown()
 

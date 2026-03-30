@@ -205,8 +205,42 @@ class TestBuildHeatmap:
         assert colorscale[0][1] == "#22c55e"
         assert colorscale[-1][1] == "#ef4444"
 
+    def test_heatmap_preserves_missing_cells_as_none(self):
+        from charts import build_heatmap
+
+        fig = build_heatmap(
+            {("en", "gpt2"): {"rtc": 1.0}},
+            ["en", "ar"],
+            ["gpt2", "llama-3"],
+        )
+
+        z = fig.data[0].z
+        assert z[0][0] == 1.0
+        assert z[0][1] is None
+        assert z[1][0] is None
+
 
 class TestBuildMetricScatter:
+    def test_metric_scatter_truncates_visible_labels_but_keeps_full_hover_name(self):
+        from charts import build_metric_scatter
+
+        fig = build_metric_scatter(
+            [
+                {
+                    "label": "Qwen 2.5 7B Instruct (Free) with a much longer display label",
+                    "display_label": "Qwen 2.5 7B Instruct...",
+                    "rtc": 3.0,
+                    "monthly_cost": 92.0,
+                    "tokenizer_key": "qwen-2.5",
+                },
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+        )
+
+        assert fig.data[0].text[0] == "Qwen 2.5 7B Instruct..."
+        assert fig.data[0].name == "Qwen 2.5 7B Instruct (Free) with a much longer display label"
+
     def test_speed_metadata_empty_state_mentions_benchmark_match(self):
         from charts import build_metric_scatter
 

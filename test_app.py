@@ -197,6 +197,13 @@ class TestComparisonUiLabels:
         src = inspect.getsource(app.build_ui)
         assert 'with gr.Tab("Why Tokenizers Matter")' in src
 
+    def test_build_ui_includes_github_repo_link(self):
+        import app
+
+        src = inspect.getsource(app.build_ui)
+        assert "https://github.com/707/ml-workbench" in src
+        assert "GitHub repo" in src or "Open GitHub repo" in src
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — extract_usage
