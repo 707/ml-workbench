@@ -43,55 +43,30 @@ class TestWorkbenchHandlers:
         assert "trinity-large" not in selected
         assert len(selected) <= 4
 
-    def test_default_scenario_models_use_curated_free_subset(self):
-        from token_tax_ui import default_scenario_models
+    def test_scenario_model_ids_use_all_valid_free_models_for_selected_tokenizers(self):
+        from token_tax_ui import derive_scenario_model_ids
 
-        selected = default_scenario_models()
+        selected = derive_scenario_model_ids(["llama-3", "mistral"], include_proxy=False)
 
         assert "meta-llama/llama-3.2-3b-instruct:free" in selected
         assert "mistralai/mistral-7b-instruct:free" in selected
-        assert "openai/gpt-oss-20b:free" not in selected
-        assert len(selected) <= 4
+        assert "qwen/qwen-2.5-7b-instruct:free" not in selected
 
-    def test_sync_scenario_models_preserves_valid_overlap(self):
-        from token_tax_ui import sync_scenario_models
+    def test_scenario_model_ids_return_empty_when_no_tokenizers_selected(self):
+        from token_tax_ui import derive_scenario_model_ids
 
-        update = sync_scenario_models(
-            ["llama-3", "mistral"],
-            include_proxy=False,
-            current_model_ids=[
-                "mistralai/mistral-7b-instruct:free",
-                "qwen/qwen-2.5-7b-instruct:free",
-            ],
-        )
+        assert derive_scenario_model_ids([], include_proxy=False) == []
 
-        choice_values = [value for _, value in update["choices"]]
-        assert "meta-llama/llama-3.2-3b-instruct:free" in choice_values
-        assert "mistralai/mistral-7b-instruct:free" in choice_values
-        assert "qwen/qwen-2.5-7b-instruct:free" not in choice_values
-        assert update["value"] == ["mistralai/mistral-7b-instruct:free"]
+    def test_scenario_model_ids_respect_proxy_toggle(self):
+        from token_tax_ui import derive_scenario_model_ids
 
-    def test_sync_scenario_models_falls_back_to_all_valid_models(self):
-        from token_tax_ui import sync_scenario_models
+        without_proxy = derive_scenario_model_ids(["gemma-2"], include_proxy=False)
+        with_proxy = derive_scenario_model_ids(["gemma-2"], include_proxy=True)
 
-        update = sync_scenario_models(
-            ["llama-3"],
-            include_proxy=False,
-            current_model_ids=["qwen/qwen-2.5-7b-instruct:free"],
-        )
+        assert without_proxy == []
+        assert with_proxy == ["google/gemma-3-27b-it:free"]
 
-        assert update["value"] == ["meta-llama/llama-3.2-3b-instruct:free"]
-
-    def test_sync_scenario_models_respects_proxy_toggle(self):
-        from token_tax_ui import sync_scenario_models
-
-        without_proxy = sync_scenario_models(["gemma-2"], include_proxy=False, current_model_ids=[])
-        with_proxy = sync_scenario_models(["gemma-2"], include_proxy=True, current_model_ids=[])
-
-        assert without_proxy["choices"] == []
-        assert with_proxy["choices"] == [("Gemma 3 27B IT (Free) (gemma-2)", "google/gemma-3-27b-it:free")]
-
-    def test_handle_scenario_tab_uses_current_model_selection(self):
+    def test_handle_scenario_tab_derives_current_model_selection(self):
         from token_tax_ui import _handle_scenario_tab
 
         captured: dict[str, object] = {}
@@ -121,7 +96,6 @@ class TestWorkbenchHandlers:
             outputs = list(_handle_scenario_tab(
                 ["en"],
                 ["gpt-oss"],
-                ["openai/gpt-oss-20b:free"],
                 100000,
                 1000,
                 250,
@@ -134,8 +108,29 @@ class TestWorkbenchHandlers:
                 False,
             ))
 
-        assert captured["model_ids"] == ["openai/gpt-oss-20b:free"]
-        assert outputs[-1][0]["data"][0][2] == "openai/gpt-oss-20b:free"
+        assert captured["model_ids"] == ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"]
+        assert outputs[-1][0]["data"][0][2] in {"openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"}
+
+    def test_handle_scenario_tab_returns_empty_state_when_no_tokenizers_selected(self):
+        from token_tax_ui import _handle_scenario_tab
+
+        outputs = list(_handle_scenario_tab(
+            ["en"],
+            [],
+            100000,
+            600,
+            250,
+            0.1,
+            "rtc",
+            "monthly_cost",
+            "none",
+            False,
+            False,
+            False,
+        ))
+
+        assert outputs[-1][0]["data"] == []
+        assert "Select at least one benchmark tokenizer family." in outputs[-1][-2]
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
@@ -427,6 +422,7 @@ class TestWorkbenchHandlers:
         assert "scenario-control-grid" in src
         assert "scenario-control-stack" in src
         assert "scenario-checkbox-group" in src
+        assert "scenario-custom-row" in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
@@ -482,6 +478,46 @@ class TestWorkbenchHandlers:
         assert "matched models: **2 / 3**" in markdown.lower()
         assert "Mistral 7B Instruct (Free)" in markdown
         assert "Llama 3.2 3B Instruct (Free)" in markdown
+
+    def test_build_scenario_outputs_includes_language_detail_plots(self):
+        from token_tax_ui import _build_scenario_outputs
+
+        rows = [
+            {
+                "label": "Qwen 2.5 7B Instruct (Free)",
+                "model_id": "qwen/qwen-2.5-7b-instruct:free",
+                "language": "en",
+                "tokenizer_key": "qwen-2.5",
+                "rtc": 1.0,
+                "context_loss_pct": 0.0,
+                "monthly_input_tokens": 100000,
+                "monthly_output_tokens": 25000,
+                "monthly_cost": 10.0,
+                "ttft_seconds": None,
+                "output_tokens_per_second": None,
+                "provenance": "strict_verified",
+            },
+            {
+                "label": "Qwen 2.5 7B Instruct (Free)",
+                "model_id": "qwen/qwen-2.5-7b-instruct:free",
+                "language": "ar",
+                "tokenizer_key": "qwen-2.5",
+                "rtc": 1.6,
+                "context_loss_pct": 37.5,
+                "monthly_input_tokens": 160000,
+                "monthly_output_tokens": 25000,
+                "monthly_cost": 12.0,
+                "ttft_seconds": None,
+                "output_tokens_per_second": None,
+                "provenance": "strict_verified",
+            },
+        ]
+
+        outputs = _build_scenario_outputs(rows, "strict_parallel", "rtc", "monthly_cost", "none")
+
+        assert outputs[2].data
+        assert outputs[4].data
+        assert outputs[9].data
 
     def test_build_benchmark_chart_explainer_mentions_plain_language_terms(self):
         from token_tax_ui import build_benchmark_chart_explainer_markdown

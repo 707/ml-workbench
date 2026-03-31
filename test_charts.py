@@ -331,6 +331,75 @@ class TestBenchmarkBarCharts:
         assert all(trace.type == "bar" for trace in fig.data)
 
 
+class TestBuildScenarioLanguageDetailScatter:
+    def test_renders_language_points_and_average_points(self):
+        from charts import build_scenario_language_detail_scatter
+
+        fig = build_scenario_language_detail_scatter(
+            [
+                {
+                    "label": "Qwen 2.5 7B Instruct (Free)",
+                    "display_label": "Qwen 2.5 7B...",
+                    "language": "English",
+                    "language_code": "en",
+                    "rtc": 1.0,
+                    "monthly_cost": 10.0,
+                    "tokenizer_key": "qwen-2.5",
+                    "point_kind": "language",
+                },
+                {
+                    "label": "Qwen 2.5 7B Instruct (Free)",
+                    "display_label": "Qwen 2.5 7B...",
+                    "language": "Arabic",
+                    "language_code": "ar",
+                    "rtc": 1.6,
+                    "monthly_cost": 12.0,
+                    "tokenizer_key": "qwen-2.5",
+                    "point_kind": "language",
+                },
+                {
+                    "label": "Qwen 2.5 7B Instruct (Free)",
+                    "display_label": "Qwen 2.5 7B...",
+                    "language": "Average",
+                    "language_code": "avg",
+                    "rtc": 1.3,
+                    "monthly_cost": 11.0,
+                    "tokenizer_key": "qwen-2.5",
+                    "point_kind": "average",
+                },
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+            title="Cost by language",
+        )
+
+        assert len(fig.data) == 3
+        assert {trace.marker.symbol for trace in fig.data} == {"circle", "diamond"}
+
+    def test_keeps_white_chart_theme(self):
+        from charts import build_scenario_language_detail_scatter
+
+        fig = build_scenario_language_detail_scatter(
+            [
+                {
+                    "label": "Model",
+                    "language": "English",
+                    "language_code": "en",
+                    "rtc": 1.0,
+                    "monthly_cost": 10.0,
+                    "tokenizer_key": "gpt2",
+                    "point_kind": "language",
+                }
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+        )
+
+        assert fig.layout.paper_bgcolor == "#ffffff"
+        assert fig.layout.plot_bgcolor == "#ffffff"
+        assert fig.layout.font.color == "#111111"
+
+
 # ---------------------------------------------------------------------------
 # build_cost_waterfall (Issue 8)
 # ---------------------------------------------------------------------------

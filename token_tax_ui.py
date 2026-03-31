@@ -16,6 +16,7 @@ from charts import (
     build_distribution_chart,
     build_heatmap,
     build_metric_scatter,
+    build_scenario_language_detail_scatter,
     build_stacked_category_bar,
 )
 from corpora import DEFAULT_BENCHMARK_LANGUAGES
@@ -758,6 +759,32 @@ def build_scenario_speed_summary_markdown(chart_rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _build_scenario_language_detail_rows(rows: list[dict]) -> list[dict]:
+    """Return per-language scenario points plus one average point per model."""
+    detail_rows: list[dict] = []
+    for row in rows:
+        detail_rows.append(
+            {
+                **row,
+                "display_label": shorten_model_label(str(row.get("label", ""))),
+                "language": language_label(str(row.get("language", ""))),
+                "language_code": row.get("language"),
+                "point_kind": "language",
+            }
+        )
+
+    for row in _aggregate_scenario_rows(rows):
+        detail_rows.append(
+            {
+                **row,
+                "language": "Average",
+                "language_code": "avg",
+                "point_kind": "average",
+            }
+        )
+    return detail_rows
+
+
 def _build_scenario_outputs(
     rows: list[dict],
     corpus_key: str,
@@ -766,7 +793,7 @@ def _build_scenario_outputs(
     size_key: str,
     *,
     skip_plot_updates: bool = False,
-) -> tuple[dict, object, object, object, object, object, object, str, str]:
+) -> tuple[dict, object, object, object, object, object, object, object, object, object, str, str]:
     table_rows = sorted(
         rows,
         key=lambda row: (float(row.get("monthly_cost") or 0.0), str(row.get("label", "")), str(row.get("language", ""))),
@@ -778,6 +805,7 @@ def _build_scenario_outputs(
     ]
     table = serialize_table(table_rows, SCENARIO_COLUMNS)
     chart_rows = _aggregate_scenario_rows(rows)
+    language_detail_rows = _build_scenario_language_detail_rows(rows)
     cost_plot = build_metric_scatter(
         chart_rows,
         x_key="rtc",
@@ -786,11 +814,27 @@ def _build_scenario_outputs(
         x_title="RTC",
         y_title="Monthly cost ($)",
     )
+    cost_detail_plot = build_scenario_language_detail_scatter(
+        language_detail_rows,
+        x_key="rtc",
+        y_key="monthly_cost",
+        title="Cost by language",
+        x_title="RTC",
+        y_title="Monthly cost ($)",
+    )
     context_plot = build_metric_scatter(
         chart_rows,
         x_key="rtc",
         y_key="context_loss_pct",
         title="Context Loss",
+        x_title="RTC",
+        y_title="Context loss (%)",
+    )
+    context_detail_plot = build_scenario_language_detail_scatter(
+        language_detail_rows,
+        x_key="rtc",
+        y_key="context_loss_pct",
+        title="Context loss by language",
         x_title="RTC",
         y_title="Context loss (%)",
     )
@@ -820,14 +864,25 @@ def _build_scenario_outputs(
         x_title=x_key,
         y_title=y_key,
     )
+    custom_detail_plot = build_scenario_language_detail_scatter(
+        language_detail_rows,
+        x_key=x_key,
+        y_key=y_key,
+        title="Custom slice by language",
+        x_title=x_key,
+        y_title=y_key,
+    )
     return (
         table,
         gr.skip() if skip_plot_updates else cost_plot,
+        gr.skip() if skip_plot_updates else cost_detail_plot,
         gr.skip() if skip_plot_updates else context_plot,
+        gr.skip() if skip_plot_updates else context_detail_plot,
         build_scenario_speed_summary_markdown(chart_rows),
         gr.skip() if skip_plot_updates else speed_plot,
         gr.skip() if skip_plot_updates else scale_plot,
         gr.skip() if skip_plot_updates else custom_plot,
+        gr.skip() if skip_plot_updates else custom_detail_plot,
         scenario_appendix(),
         render_markdown(),
     )
@@ -1136,7 +1191,6 @@ def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: b
 def _handle_scenario_tab(
     languages: list[str],
     tokenizer_keys: list[str],
-    model_ids: list[str],
     monthly_requests: int,
     avg_input_tokens: int,
     avg_output_tokens: int,
@@ -1149,17 +1203,39 @@ def _handle_scenario_tab(
     live_updates: bool,
 ):
     corpus_key = "strict_parallel"
+    if not tokenizer_keys:
+        empty = serialize_table([], SCENARIO_COLUMNS)
+        yield (
+            empty,
+            build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
+            build_scenario_language_detail_scatter([], x_key="rtc", y_key="monthly_cost"),
+            build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_language_detail_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_speed_summary_markdown([]),
+            build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
+            build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
+            build_metric_scatter([], x_key=x_key, y_key=y_key),
+            build_scenario_language_detail_scatter([], x_key=x_key, y_key=y_key),
+            "Select at least one benchmark tokenizer family.",
+            render_markdown(),
+        )
+        return
+
+    model_ids = derive_scenario_model_ids(tokenizer_keys, include_proxy=include_proxy)
     if not model_ids:
         empty = serialize_table([], SCENARIO_COLUMNS)
         yield (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
+            build_scenario_language_detail_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_language_detail_scatter([], x_key="rtc", y_key="context_loss_pct"),
             build_scenario_speed_summary_markdown([]),
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
-            "Select at least one attached free model.",
+            build_scenario_language_detail_scatter([], x_key=x_key, y_key=y_key),
+            "No valid free models match the selected tokenizer families.",
             render_markdown(),
         )
         return
@@ -1178,7 +1254,10 @@ def _handle_scenario_tab(
             gr.skip(),
             gr.skip(),
             gr.skip(),
+            gr.skip(),
+            gr.skip(),
             build_scenario_speed_summary_markdown([]),
+            gr.skip(),
             gr.skip(),
             gr.skip(),
             gr.skip(),
@@ -1205,11 +1284,14 @@ def _handle_scenario_tab(
         yield (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
+            build_scenario_language_detail_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_metric_scatter([], x_key="rtc", y_key="context_loss_pct"),
+            build_scenario_language_detail_scatter([], x_key="rtc", y_key="context_loss_pct"),
             build_scenario_speed_summary_markdown([]),
             build_metric_scatter([], x_key="ttft_seconds", y_key="output_tokens_per_second"),
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
+            build_scenario_language_detail_scatter([], x_key=x_key, y_key=y_key),
             f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
@@ -1231,23 +1313,11 @@ DEFAULT_SCENARIO_TOKENIZER_KEYS = [
     "qwen-2.5",
 ]
 
-DEFAULT_SCENARIO_MODEL_IDS = [
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free",
-]
-
 
 def default_benchmark_tokenizers() -> list[str]:
     """Return a curated default tokenizer subset for Benchmark and Scenario."""
     available = {family["key"] for family in list_tokenizer_families(include_proxy=False)}
     return [key for key in DEFAULT_BENCHMARK_TOKENIZER_KEYS if key in available]
-
-
-def default_scenario_models() -> list[str]:
-    """Return a curated default free-model subset for Scenario Lab."""
-    available = {row["model_id"] for row in list_free_runtime_choices(include_proxy=False)}
-    return [model_id for model_id in DEFAULT_SCENARIO_MODEL_IDS if model_id in available]
 
 
 def default_scenario_tokenizers() -> list[str]:
@@ -1256,41 +1326,27 @@ def default_scenario_tokenizers() -> list[str]:
     return [key for key in DEFAULT_SCENARIO_TOKENIZER_KEYS if key in available]
 
 
-def scenario_model_choices(
+def derive_scenario_model_ids(
     tokenizer_keys: list[str] | None,
     *,
     include_proxy: bool,
-) -> list[tuple[str, str]]:
-    """Return attached free-model choices filtered by the selected tokenizer families."""
+) -> list[str]:
+    """Return free runtime model IDs filtered by the selected tokenizer families."""
+    selected_tokenizers = list(tokenizer_keys or [])
+    if not selected_tokenizers:
+        return []
     rows = list_free_runtime_choices(include_proxy=include_proxy)
-    selected_tokenizers = set(tokenizer_keys or [])
-    if selected_tokenizers:
-        rows = [row for row in rows if row["tokenizer_key"] in selected_tokenizers]
-    return [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in rows]
-
-
-def sync_scenario_models(
-    tokenizer_keys: list[str] | None,
-    include_proxy: bool,
-    current_model_ids: list[str] | None,
-) -> dict[str, object]:
-    """Recompute attached free-model choices and preserve valid selections when possible."""
-    choices = scenario_model_choices(tokenizer_keys, include_proxy=include_proxy)
-    valid_ids = [model_id for _, model_id in choices]
-    overlap = [model_id for model_id in (current_model_ids or []) if model_id in valid_ids]
-    value = overlap or valid_ids
-    return gr.update(choices=choices, value=value)
+    selected = set(selected_tokenizers)
+    rows = [row for row in rows if row["tokenizer_key"] in selected]
+    return [row["model_id"] for row in rows]
 
 
 def build_token_tax_ui() -> gr.Blocks:
     """Construct the Token Tax Workbench."""
     tokenizer_families = list_tokenizer_families(include_proxy=True)
     exact_tokenizers = [family["key"] for family in tokenizer_families if family["mapping_quality"] != "proxy"]
-    free_runtime_choices = list_free_runtime_choices(include_proxy=False)
     benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(6, len(exact_tokenizers))]
     scenario_default_tokenizers = default_scenario_tokenizers() or benchmark_default_tokenizers
-    scenario_default_models = default_scenario_models() or [row["model_id"] for row in free_runtime_choices[:6]]
-    model_choices = scenario_model_choices(scenario_default_tokenizers, include_proxy=False)
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
         gr.HTML(
@@ -1541,13 +1597,21 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Benchmark Tokenizers",
                             info="Tokenizer families used to supply the strict multilingual benchmark baseline.",
                         )
-                        scenario_models = gr.Dropdown(
-                            choices=model_choices,
-                            value=scenario_default_models,
-                            multiselect=True,
-                            label="Attached Free Models",
-                            info="Exact free OpenRouter models attached to the selected tokenizer families.",
-                        )
+                        with gr.Row(elem_classes="scenario-custom-row"):
+                            slice_x = gr.Dropdown(
+                                choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
+                                value="rtc",
+                                label="Custom X",
+                                info="Metric plotted on the x-axis of the custom slice chart.",
+                                scale=1,
+                            )
+                            slice_y = gr.Dropdown(
+                                choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
+                                value="monthly_cost",
+                                label="Custom Y",
+                                info="Metric plotted on the y-axis of the custom slice chart.",
+                                scale=1,
+                            )
                     with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs", min_width=360, scale=0):
                         with gr.Group(elem_classes="scenario-control-grid"):
                             with gr.Column(elem_classes="scenario-control-block", min_width=160, scale=1):
@@ -1585,18 +1649,6 @@ def build_token_tax_ui() -> gr.Blocks:
                                     info="Extra completion-token multiplier for reasoning-heavy workloads.",
                                 )
                         with gr.Group(elem_classes="scenario-control-stack"):
-                            slice_x = gr.Dropdown(
-                                choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
-                                value="rtc",
-                                label="Custom X",
-                                info="Metric plotted on the x-axis of the custom slice chart.",
-                            )
-                            slice_y = gr.Dropdown(
-                                choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
-                                value="monthly_cost",
-                                label="Custom Y",
-                                info="Metric plotted on the y-axis of the custom slice chart.",
-                            )
                             slice_size = gr.Dropdown(
                                 choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
                                 value="none",
@@ -1631,9 +1683,13 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Cost"):
                         gr.HTML(build_chart_help_markdown("How to read this chart", "Each point is a model. Farther right means more tokens for the same meaning; higher means more monthly spend."))
                         scenario_cost_plot = gr.Plot(label="Cost")
+                        gr.HTML(build_chart_help_markdown("Language detail", "Each smaller point is one language for that model. Diamonds show the model-average point used in the headline chart above."))
+                        scenario_cost_detail_plot = gr.Plot(label="Cost by language")
                     with gr.TabItem("Context Loss"):
                         gr.HTML(build_chart_help_markdown("How to read this chart", "This shows how much usable context window you lose when a tokenizer spends more tokens on the same message. Lower is better."))
                         scenario_context_plot = gr.Plot(label="Context Loss")
+                        gr.HTML(build_chart_help_markdown("Language detail", "This lower chart shows how context loss changes by language. Diamonds mark the model-average summary point."))
+                        scenario_context_detail_plot = gr.Plot(label="Context loss by language")
                     with gr.TabItem("Speed Metadata"):
                         scenario_speed_summary_md = gr.Markdown(
                             value="### Speed Coverage\n- Run Scenario Lab to inspect benchmark-only speed coverage."
@@ -1646,6 +1702,8 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Custom Slice"):
                         gr.HTML(build_chart_help_markdown("How to read this chart", "Pick any two metrics to compare and use bubble size when you want a third dimension."))
                         scenario_custom_plot = gr.Plot(label="Custom Slice")
+                        gr.HTML(build_chart_help_markdown("Language detail", "This lower chart keeps the same custom axes but breaks the model down by language. Diamonds show the model-average point."))
+                        scenario_custom_detail_plot = gr.Plot(label="Custom Slice by language")
                 gr.HTML(build_chart_help_markdown("How to use this table", "These per-language rows feed the scenario charts above. Use them when you need the detailed assumptions behind a model-level point."))
                 scenario_table = gr.DataFrame(label="Scenario Rows", interactive=False)
                 gr.HTML(build_scenario_appendix_summary_html())
@@ -1659,7 +1717,6 @@ def build_token_tax_ui() -> gr.Blocks:
                     inputs=[
                         scenario_languages,
                         scenario_tokenizers,
-                        scenario_models,
                         monthly_requests,
                         avg_input_tokens,
                         avg_output_tokens,
@@ -1674,26 +1731,18 @@ def build_token_tax_ui() -> gr.Blocks:
                     outputs=[
                         scenario_table,
                         scenario_cost_plot,
+                        scenario_cost_detail_plot,
                         scenario_context_plot,
+                        scenario_context_detail_plot,
                         scenario_speed_summary_md,
                         scenario_speed_plot,
                         scenario_scale_plot,
                         scenario_custom_plot,
+                        scenario_custom_detail_plot,
                         scenario_appendix_md,
                         scenario_diagnostics_md,
                     ],
-                )
-                scenario_tokenizers.change(
-                    fn=sync_scenario_models,
-                    inputs=[scenario_tokenizers, scenario_include_proxy, scenario_models],
-                    outputs=[scenario_models],
-                    queue=False,
-                )
-                scenario_include_proxy.change(
-                    fn=sync_scenario_models,
-                    inputs=[scenario_tokenizers, scenario_include_proxy, scenario_models],
-                    outputs=[scenario_models],
-                    queue=False,
+                    show_progress="minimal",
                 )
 
             with gr.TabItem("Audit"):

@@ -229,6 +229,11 @@ body {
   margin-bottom: 0.35rem;
 }
 
+.scenario-custom-row {
+  gap: 0.55rem;
+  margin-top: 0.2rem;
+}
+
 .scenario-control-block,
 .scenario-control-stack,
 .scenario-checkbox-group {

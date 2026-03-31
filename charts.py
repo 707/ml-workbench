@@ -178,6 +178,72 @@ def build_metric_scatter(
     return _apply_theme(fig)
 
 
+def build_scenario_language_detail_scatter(
+    rows: list[dict],
+    *,
+    x_key: str,
+    y_key: str,
+    title: str = "",
+    x_title: str | None = None,
+    y_title: str | None = None,
+):
+    """Build a scatter chart with per-language points plus distinct model-average points."""
+    import plotly.graph_objects as go
+
+    if not rows:
+        return _empty_figure("No language-detail scenario data available.")
+
+    filtered = [
+        row for row in rows
+        if isinstance(_value(row, x_key), (int, float))
+        and isinstance(_value(row, y_key), (int, float))
+    ]
+    if not filtered:
+        return _empty_figure(
+            f"No numeric language-detail data is available for {x_key} vs {y_key}."
+        )
+
+    fig = go.Figure()
+    for row in filtered:
+        color_name = row.get("tokenizer_key", "")
+        color = TOKENIZER_COLORS.get(color_name, "#4C78A8")
+        point_kind = row.get("point_kind", "language")
+        symbol = "diamond" if point_kind == "average" else "circle"
+        size = 14 if point_kind == "average" else 10
+        line_width = 2 if point_kind == "average" else 1
+        label = row.get("display_label", row.get("label", "model"))
+        language = row.get("language", row.get("language_code", ""))
+        hover_title = f"{label} — {language}"
+
+        fig.add_trace(go.Scatter(
+            x=[row[x_key]],
+            y=[row[y_key]],
+            mode="markers",
+            name=hover_title,
+            marker={
+                "size": size,
+                "symbol": symbol,
+                "color": color,
+                "opacity": 0.88 if point_kind == "average" else 0.68,
+                "line": {"width": line_width, "color": "#111111"},
+            },
+            hovertemplate="<b>%{customdata[0]}</b><br>"
+            + f"{x_key}: %{{x}}<br>"
+            + f"{y_key}: %{{y}}<br>"
+            + f"kind: {point_kind}<extra></extra>",
+            customdata=[[hover_title]],
+            showlegend=False,
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_title or x_key,
+        yaxis_title=y_title or y_key,
+        showlegend=False,
+    )
+    return _apply_theme(fig)
+
+
 def build_distribution_chart(rows: list[dict], metric_key: str, group_key: str = "tokenizer_key"):
     """Build a box plot for benchmark distributions."""
     import plotly.graph_objects as go
