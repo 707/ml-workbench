@@ -287,6 +287,69 @@ class TestScenarioAnalysis:
                 reasoning_share=0.1,
             )
 
+    def test_scenario_analysis_raises_when_selected_tokenizer_family_is_missing(self):
+        from token_tax import scenario_analysis
+
+        benchmark_rows = [
+            {
+                "language": "en",
+                "tokenizer_key": "llama-3",
+                "rtc": 1.0,
+                "lane": "Strict Evidence",
+                "provenance": "strict_verified",
+                "mapping_quality": "exact",
+            },
+        ]
+        catalog_rows = [
+            {
+                "model_id": "meta-llama/llama-3.2-3b-instruct:free",
+                "label": "Llama 3.2 3B Instruct (Free)",
+                "tokenizer_key": "llama-3",
+                "mapping_quality": "exact",
+                "provenance": "strict_verified",
+                "input_per_million": 0.03,
+                "output_per_million": 0.05,
+                "context_window": 128000,
+                "latency_ms": None,
+                "throughput_tps": None,
+                "source": "test",
+            },
+            {
+                "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+                "label": "Nemotron 3 Super 120B A12B (Free)",
+                "tokenizer_key": "nemotron-3-super",
+                "mapping_quality": "exact",
+                "provenance": "strict_verified",
+                "input_per_million": 0.03,
+                "output_per_million": 0.05,
+                "context_window": 128000,
+                "latency_ms": None,
+                "throughput_tps": None,
+                "source": "test",
+            },
+        ]
+
+        with patch(
+            "token_tax.benchmark_corpus",
+            return_value={"rows": benchmark_rows, "languages": ["en"], "tokenizers": ["llama-3"]},
+        ):
+            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+                with pytest.raises(RuntimeError, match="missing tokenizer families"):
+                    scenario_analysis(
+                        corpus_key="strict_parallel",
+                        languages=["en"],
+                        tokenizer_keys=["llama-3", "nemotron-3-super"],
+                        model_ids=[
+                            "meta-llama/llama-3.2-3b-instruct:free",
+                            "nvidia/nemotron-3-super-120b-a12b:free",
+                        ],
+                        row_limit=25,
+                        monthly_requests=1000,
+                        avg_input_tokens=100,
+                        avg_output_tokens=50,
+                        reasoning_share=0.1,
+                    )
+
 
 class TestWarmTokenizerDefaults:
     def test_default_warm_keys_cover_exact_free_runtime_families(self):

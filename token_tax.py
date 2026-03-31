@@ -868,6 +868,22 @@ def scenario_analysis(
         (row["language"], row["tokenizer_key"]): row
         for row in benchmark["rows"]
     }
+    benchmark_tokenizers = set(
+        benchmark.get("tokenizers")
+        or [row["tokenizer_key"] for row in benchmark["rows"]]
+    )
+    missing_tokenizers = [
+        selection["label"]
+        for key in tokenizer_keys
+        if key not in benchmark_tokenizers
+        for selection in [resolve_selection(key)]
+    ]
+    if benchmark_tokenizers and missing_tokenizers:
+        raise RuntimeError(
+            "Scenario benchmark is missing tokenizer families: "
+            + ", ".join(missing_tokenizers)
+            + ". This usually means their local tokenizer files were unavailable at runtime."
+        )
 
     catalog = build_catalog_entries(include_proxy=include_proxy, refresh_live=False)
     selected_models = {row["model_id"]: row for row in catalog if row["model_id"] in model_ids}

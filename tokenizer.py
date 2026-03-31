@@ -7,8 +7,10 @@ different tokenizers handle input text.
 
 import gc
 import html
+import json
 import threading
 from collections import OrderedDict
+from pathlib import Path
 from time import perf_counter
 
 import gradio as gr
@@ -18,6 +20,7 @@ from tokenizer_registry import supported_tokenizers_map
 
 _AutoTokenizer = None
 _snapshot_download = None
+_snapshot_manifest_cache = None
 
 
 def _get_auto_tokenizer():
@@ -46,6 +49,7 @@ class _LazyAutoTokenizer:
 AutoTokenizer = _LazyAutoTokenizer()
 
 SUPPORTED_TOKENIZERS: dict[str, str] = supported_tokenizers_map()
+SNAPSHOT_MANIFEST_PATH = Path(__file__).resolve().parent / "data" / "tokenizer_snapshots.json"
 
 
 class TiktokenAdapter:
@@ -81,6 +85,15 @@ _tokenizer_lock = threading.Lock()
 
 def _local_snapshot_path(repo_id: str) -> str | None:
     """Return a cached local snapshot path when available, else None."""
+    global _snapshot_manifest_cache
+    if _snapshot_manifest_cache is None:
+        try:
+            _snapshot_manifest_cache = json.loads(SNAPSHOT_MANIFEST_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _snapshot_manifest_cache = {}
+    manifest_path = _snapshot_manifest_cache.get(repo_id)
+    if manifest_path and Path(manifest_path).exists():
+        return manifest_path
     try:
         return _get_snapshot_download()(repo_id, local_files_only=True)
     except Exception:

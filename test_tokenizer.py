@@ -114,6 +114,17 @@ class TestGetTokenizer:
         assert result is mock_tok
         mock_fp.assert_called_once_with("/tmp/qwen-local", local_files_only=True)
 
+    def test_local_snapshot_path_prefers_manifest_entry(self):
+        import tokenizer as tok_module
+
+        with patch.object(tok_module, "_snapshot_manifest_cache", {"example/repo": "/tmp/example-snapshot"}):
+            with patch("tokenizer.Path.exists", return_value=True):
+                with patch("tokenizer._get_snapshot_download") as mock_snapshot_download:
+                    result = tok_module._local_snapshot_path("example/repo")
+
+        assert result == "/tmp/example-snapshot"
+        mock_snapshot_download.assert_not_called()
+
     def test_caches_tokenizer_on_second_call(self):
         """Second call with same name must not call from_pretrained again."""
         # Import fresh to reset module-level cache
