@@ -203,6 +203,14 @@ class TestComparisonUiLabels:
         assert "https://github.com/707/ml-workbench" in src
         assert "GitHub repo" in src or "Open GitHub repo" in src
 
+    def test_app_css_uses_system_color_scheme_media_query(self):
+        import app
+
+        assert "@media (prefers-color-scheme: dark)" in app.APP_CSS
+        assert ":root {" in app.APP_CSS
+        assert "body {" in app.APP_CSS
+        assert "color-scheme: light" in app.APP_CSS
+
 
 # ---------------------------------------------------------------------------
 # Phase 1 — extract_usage

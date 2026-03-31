@@ -70,8 +70,9 @@ class TestGetTokenizer:
         from tokenizer import get_tokenizer
 
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
-            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
-                get_tokenizer("gpt2")
+            with patch("tokenizer._local_snapshot_path", return_value=None):
+                with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
+                    get_tokenizer("gpt2")
 
         mock_fp.assert_called_once_with("gpt2", local_files_only=True)
 
@@ -81,8 +82,9 @@ class TestGetTokenizer:
         from tokenizer import get_tokenizer
 
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
-            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
-                get_tokenizer("llama-3")
+            with patch("tokenizer._local_snapshot_path", return_value=None):
+                with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
+                    get_tokenizer("llama-3")
 
         mock_fp.assert_called_once_with("NousResearch/Meta-Llama-3-8B", local_files_only=True)
 
@@ -92,10 +94,25 @@ class TestGetTokenizer:
         from tokenizer import get_tokenizer
 
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
-            with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
-                get_tokenizer("mistral")
+            with patch("tokenizer._local_snapshot_path", return_value=None):
+                with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
+                    get_tokenizer("mistral")
 
         mock_fp.assert_called_once_with("mistralai/Mistral-7B-v0.1", local_files_only=True)
+
+    def test_prefers_local_snapshot_path_for_hf_tokenizers(self):
+        """When a local HF snapshot exists, load from the local path to avoid online metadata calls."""
+        import tokenizer as tok_module
+        from tokenizer import get_tokenizer
+
+        mock_tok = MagicMock()
+        with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
+            with patch("tokenizer._local_snapshot_path", return_value="/tmp/qwen-local"):
+                with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=mock_tok) as mock_fp:
+                    result = get_tokenizer("qwen-2.5")
+
+        assert result is mock_tok
+        mock_fp.assert_called_once_with("/tmp/qwen-local", local_files_only=True)
 
     def test_caches_tokenizer_on_second_call(self):
         """Second call with same name must not call from_pretrained again."""
@@ -213,11 +230,12 @@ class TestGetTokenizerErrorHandling:
 
         mock_tok = MagicMock()
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
-            with patch(
-                "tokenizer.AutoTokenizer.from_pretrained",
-                side_effect=[OSError("cache miss"), mock_tok],
-            ) as mock_fp:
-                result = tok_module.get_tokenizer("gpt2")
+            with patch("tokenizer._local_snapshot_path", return_value=None):
+                with patch(
+                    "tokenizer.AutoTokenizer.from_pretrained",
+                    side_effect=[OSError("cache miss"), mock_tok],
+                ) as mock_fp:
+                    result = tok_module.get_tokenizer("gpt2")
 
         assert result is mock_tok
         assert mock_fp.call_args_list[0].args == ("gpt2",)

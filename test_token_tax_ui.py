@@ -53,6 +53,90 @@ class TestWorkbenchHandlers:
         assert "openai/gpt-oss-20b:free" not in selected
         assert len(selected) <= 4
 
+    def test_sync_scenario_models_preserves_valid_overlap(self):
+        from token_tax_ui import sync_scenario_models
+
+        update = sync_scenario_models(
+            ["llama-3", "mistral"],
+            include_proxy=False,
+            current_model_ids=[
+                "mistralai/mistral-7b-instruct:free",
+                "qwen/qwen-2.5-7b-instruct:free",
+            ],
+        )
+
+        choice_values = [value for _, value in update["choices"]]
+        assert "meta-llama/llama-3.2-3b-instruct:free" in choice_values
+        assert "mistralai/mistral-7b-instruct:free" in choice_values
+        assert "qwen/qwen-2.5-7b-instruct:free" not in choice_values
+        assert update["value"] == ["mistralai/mistral-7b-instruct:free"]
+
+    def test_sync_scenario_models_falls_back_to_all_valid_models(self):
+        from token_tax_ui import sync_scenario_models
+
+        update = sync_scenario_models(
+            ["llama-3"],
+            include_proxy=False,
+            current_model_ids=["qwen/qwen-2.5-7b-instruct:free"],
+        )
+
+        assert update["value"] == ["meta-llama/llama-3.2-3b-instruct:free"]
+
+    def test_sync_scenario_models_respects_proxy_toggle(self):
+        from token_tax_ui import sync_scenario_models
+
+        without_proxy = sync_scenario_models(["gemma-2"], include_proxy=False, current_model_ids=[])
+        with_proxy = sync_scenario_models(["gemma-2"], include_proxy=True, current_model_ids=[])
+
+        assert without_proxy["choices"] == []
+        assert with_proxy["choices"] == [("Gemma 3 27B IT (Free) (gemma-2)", "google/gemma-3-27b-it:free")]
+
+    def test_handle_scenario_tab_uses_current_model_selection(self):
+        from token_tax_ui import _handle_scenario_tab
+
+        captured: dict[str, object] = {}
+
+        def _fake_scenario_analysis(**kwargs):
+            captured.update(kwargs)
+            return [
+                {
+                    "label": "gpt-oss-20b (Free)",
+                    "model_id": "openai/gpt-oss-20b:free",
+                    "language": "en",
+                    "tokenizer_key": "gpt-oss",
+                    "rtc": 1.4,
+                    "context_loss_pct": 28.57,
+                    "monthly_input_tokens": 140000,
+                    "monthly_output_tokens": 25000,
+                    "monthly_cost": 12.5,
+                    "ttft_seconds": None,
+                    "output_tokens_per_second": None,
+                    "provenance": "strict_verified",
+                    "mapping_quality": "exact",
+                    "lane": "Strict Evidence",
+                }
+            ]
+
+        with patch("token_tax_ui.scenario_analysis", side_effect=_fake_scenario_analysis):
+            outputs = list(_handle_scenario_tab(
+                ["en"],
+                ["gpt-oss"],
+                ["openai/gpt-oss-20b:free"],
+                100000,
+                1000,
+                250,
+                0.1,
+                "rtc",
+                "monthly_cost",
+                "none",
+                False,
+                False,
+                False,
+            ))
+
+        assert captured["model_ids"] == ["openai/gpt-oss-20b:free"]
+        assert outputs[-1][0]["data"][0][2] == "openai/gpt-oss-20b:free"
+
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
 
@@ -341,7 +425,8 @@ class TestWorkbenchHandlers:
         assert "filter-rail filter-rail--wide" in src
         assert "filter-rail filter-rail--scenario-inputs" in src
         assert "scenario-control-grid" in src
-        assert "scenario-control-cluster" in src
+        assert "scenario-control-stack" in src
+        assert "scenario-checkbox-group" in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect

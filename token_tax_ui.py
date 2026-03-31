@@ -1256,6 +1256,32 @@ def default_scenario_tokenizers() -> list[str]:
     return [key for key in DEFAULT_SCENARIO_TOKENIZER_KEYS if key in available]
 
 
+def scenario_model_choices(
+    tokenizer_keys: list[str] | None,
+    *,
+    include_proxy: bool,
+) -> list[tuple[str, str]]:
+    """Return attached free-model choices filtered by the selected tokenizer families."""
+    rows = list_free_runtime_choices(include_proxy=include_proxy)
+    selected_tokenizers = set(tokenizer_keys or [])
+    if selected_tokenizers:
+        rows = [row for row in rows if row["tokenizer_key"] in selected_tokenizers]
+    return [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in rows]
+
+
+def sync_scenario_models(
+    tokenizer_keys: list[str] | None,
+    include_proxy: bool,
+    current_model_ids: list[str] | None,
+) -> dict[str, object]:
+    """Recompute attached free-model choices and preserve valid selections when possible."""
+    choices = scenario_model_choices(tokenizer_keys, include_proxy=include_proxy)
+    valid_ids = [model_id for _, model_id in choices]
+    overlap = [model_id for model_id in (current_model_ids or []) if model_id in valid_ids]
+    value = overlap or valid_ids
+    return gr.update(choices=choices, value=value)
+
+
 def build_token_tax_ui() -> gr.Blocks:
     """Construct the Token Tax Workbench."""
     tokenizer_families = list_tokenizer_families(include_proxy=True)
@@ -1264,7 +1290,7 @@ def build_token_tax_ui() -> gr.Blocks:
     benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(6, len(exact_tokenizers))]
     scenario_default_tokenizers = default_scenario_tokenizers() or benchmark_default_tokenizers
     scenario_default_models = default_scenario_models() or [row["model_id"] for row in free_runtime_choices[:6]]
-    model_choices = [(f"{row['label']} ({row['tokenizer_key']})", row["model_id"]) for row in free_runtime_choices]
+    model_choices = scenario_model_choices(scenario_default_tokenizers, include_proxy=False)
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
         gr.HTML(
@@ -1522,9 +1548,9 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Attached Free Models",
                             info="Exact free OpenRouter models attached to the selected tokenizer families.",
                         )
-                    with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs", min_width=420, scale=0):
-                        with gr.Row(equal_height=False, elem_classes="scenario-control-grid"):
-                            with gr.Column(elem_classes="scenario-control-column", min_width=180, scale=1):
+                    with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs", min_width=360, scale=0):
+                        with gr.Group(elem_classes="scenario-control-grid"):
+                            with gr.Column(elem_classes="scenario-control-block", min_width=160, scale=1):
                                 monthly_requests = gr.Slider(
                                     1_000,
                                     1_000_000,
@@ -1541,7 +1567,7 @@ def build_token_tax_ui() -> gr.Blocks:
                                     label="Avg Input Tokens",
                                     info="Average input size before multilingual token inflation is applied.",
                                 )
-                            with gr.Column(elem_classes="scenario-control-column", min_width=180, scale=1):
+                            with gr.Column(elem_classes="scenario-control-block", min_width=160, scale=1):
                                 avg_output_tokens = gr.Slider(
                                     10,
                                     10_000,
@@ -1558,7 +1584,7 @@ def build_token_tax_ui() -> gr.Blocks:
                                     label="Reasoning Share",
                                     info="Extra completion-token multiplier for reasoning-heavy workloads.",
                                 )
-                        with gr.Group(elem_classes="scenario-control-cluster"):
+                        with gr.Group(elem_classes="scenario-control-stack"):
                             slice_x = gr.Dropdown(
                                 choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
                                 value="rtc",
@@ -1577,7 +1603,7 @@ def build_token_tax_ui() -> gr.Blocks:
                                 label="Bubble Size",
                                 info="Optional bubble sizing field for the custom slice chart.",
                             )
-                            with gr.Group(elem_classes="checkbox-stack"):
+                            with gr.Group(elem_classes="scenario-checkbox-group checkbox-stack"):
                                 scenario_include_estimates = gr.Checkbox(
                                     label="Include estimated values",
                                     value=False,
@@ -1656,6 +1682,18 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_appendix_md,
                         scenario_diagnostics_md,
                     ],
+                )
+                scenario_tokenizers.change(
+                    fn=sync_scenario_models,
+                    inputs=[scenario_tokenizers, scenario_include_proxy, scenario_models],
+                    outputs=[scenario_models],
+                    queue=False,
+                )
+                scenario_include_proxy.change(
+                    fn=sync_scenario_models,
+                    inputs=[scenario_tokenizers, scenario_include_proxy, scenario_models],
+                    outputs=[scenario_models],
+                    queue=False,
                 )
 
             with gr.TabItem("Audit"):

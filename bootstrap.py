@@ -37,13 +37,14 @@ def _check_required_modules() -> None:
 def main() -> None:
     _check_required_modules()
 
-    from app import build_ui
+    from app import APP_THEME, build_ui
 
     app = build_ui()
     app.launch(
         server_name=os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0"),
         server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7860")),
         ssr_mode=False,
+        theme=APP_THEME,
     )
 
 

@@ -50,17 +50,40 @@ PRESET_QUESTIONS = [
     "If you fold a paper in half 42 times (paper = 0.1mm), how thick is it?",
 ]
 
+APP_THEME = gr.themes.Default(
+    primary_hue="orange",
+    secondary_hue="slate",
+    neutral_hue="slate",
+)
+
 APP_CSS = """
+:root {
+  --wb-bg: #f3f5fb;
+  --wb-panel: #ffffff;
+  --wb-panel-soft: #eef2f9;
+  --wb-border: #d7dee9;
+  --wb-text: #18212f;
+  --wb-muted: #5b6b82;
+  --wb-accent: #ea580c;
+  --wb-accent-soft: rgba(234, 88, 12, 0.1);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wb-bg: #0f1116;
+    --wb-panel: #171b24;
+    --wb-panel-soft: #1d2330;
+    --wb-border: #2d3748;
+    --wb-text: #e5e7eb;
+    --wb-muted: #94a3b8;
+    --wb-accent: #f97316;
+    --wb-accent-soft: rgba(249, 115, 22, 0.16);
+    color-scheme: dark;
+  }
+}
+
 body {
-  --wb-bg: #0f1116;
-  --wb-panel: #171b24;
-  --wb-panel-soft: #1d2330;
-  --wb-border: #2d3748;
-  --wb-text: #e5e7eb;
-  --wb-muted: #94a3b8;
-  --wb-accent: #f97316;
-  --wb-accent-soft: rgba(249, 115, 22, 0.16);
-  color-scheme: dark;
   background: var(--wb-bg) !important;
   color: var(--wb-text) !important;
 }
@@ -70,10 +93,66 @@ body {
   color: var(--wb-text) !important;
 }
 
+.gradio-container .prose,
+.gradio-container .prose *,
+.gradio-container label,
 .gradio-container h1,
 .gradio-container h2,
-.gradio-container h3 {
+.gradio-container h3,
+.gradio-container h4,
+.gradio-container p,
+.gradio-container li,
+.gradio-container small,
+.gradio-container legend,
+.gradio-container summary {
+  color: var(--wb-text) !important;
   text-wrap: balance;
+}
+
+.gradio-container .prose p,
+.gradio-container .prose li,
+.gradio-container .hint,
+.gradio-container .description,
+.gradio-container .gradio-markdown p,
+.app-shell-copy p,
+.section-header p,
+.chart-help p,
+.compact-helper,
+.preview-subtitle,
+.benchmark-summary-empty,
+.preview-empty {
+  color: var(--wb-muted) !important;
+}
+
+.gradio-container input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container button,
+.gradio-container [role="tab"] {
+  color: var(--wb-text) !important;
+}
+
+.gradio-container input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container .form,
+.gradio-container .block,
+.gradio-container .wrap,
+.gradio-container details,
+.gradio-container summary {
+  border-color: var(--wb-border) !important;
+}
+
+.gradio-container input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container details,
+.gradio-container summary {
+  background: var(--wb-panel-soft) !important;
+}
+
+.gradio-container [role="tab"][aria-selected="true"] {
+  color: var(--wb-accent) !important;
 }
 
 .app-shell-header,
@@ -100,11 +179,11 @@ body {
   margin: 0;
   font-size: 1rem;
   line-height: 1.2;
+  color: var(--wb-text);
 }
 
 .app-shell-copy p {
   margin: 0.18rem 0 0 0;
-  color: var(--wb-muted);
   font-size: 0.88rem;
 }
 
@@ -140,21 +219,35 @@ body {
 }
 
 .filter-rail--scenario-inputs {
-  max-width: 440px;
+  max-width: 360px;
 }
 
 .scenario-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
   margin-bottom: 0.35rem;
 }
 
-.scenario-control-column,
-.scenario-control-cluster {
+.scenario-control-block,
+.scenario-control-stack,
+.scenario-checkbox-group {
   gap: 0.25rem;
 }
 
-.scenario-control-cluster {
+.scenario-control-block,
+.scenario-control-stack {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.scenario-control-stack {
   margin-top: 0.1rem;
+}
+
+.scenario-checkbox-group {
+  margin-top: 0.15rem;
 }
 
 .catalog-utility-row {
@@ -179,7 +272,6 @@ body {
 
 .section-header p {
   margin: 0.14rem 0 0 0;
-  color: var(--wb-muted);
   font-size: 0.88rem;
 }
 
@@ -210,13 +302,11 @@ body {
 
 .chart-help p {
   margin: 0.18rem 0 0 0;
-  color: var(--wb-muted);
   line-height: 1.45;
 }
 
 .compact-helper {
   margin: 0.15rem 0 0.55rem 0;
-  color: var(--wb-muted);
   line-height: 1.45;
 }
 
@@ -925,4 +1015,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         ssr_mode=False,
+        theme=APP_THEME,
     )

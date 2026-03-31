@@ -17,6 +17,7 @@ from langdetect import LangDetectException, detect
 from tokenizer_registry import supported_tokenizers_map
 
 _AutoTokenizer = None
+_snapshot_download = None
 
 
 def _get_auto_tokenizer():
@@ -25,6 +26,14 @@ def _get_auto_tokenizer():
         from transformers import AutoTokenizer
         _AutoTokenizer = AutoTokenizer
     return _AutoTokenizer
+
+
+def _get_snapshot_download():
+    global _snapshot_download
+    if _snapshot_download is None:
+        from huggingface_hub import snapshot_download
+        _snapshot_download = snapshot_download
+    return _snapshot_download
 
 
 class _LazyAutoTokenizer:
@@ -70,6 +79,14 @@ _tokenizer_cache: OrderedDict[str, object] = OrderedDict()
 _tokenizer_lock = threading.Lock()
 
 
+def _local_snapshot_path(repo_id: str) -> str | None:
+    """Return a cached local snapshot path when available, else None."""
+    try:
+        return _get_snapshot_download()(repo_id, local_files_only=True)
+    except Exception:
+        return None
+
+
 def get_tokenizer(name: str):
     """Return (and cache) a tokenizer for the given registry name.
 
@@ -98,19 +115,26 @@ def get_tokenizer(name: str):
                 _tokenizer_cache[name] = TiktokenAdapter(encoding_name)
             else:
                 try:
-                    try:
+                    local_source = _local_snapshot_path(repo_id)
+                    if local_source:
+                        _tokenizer_cache[name] = AutoTokenizer.from_pretrained(
+                            local_source,
+                            local_files_only=True,
+                        )
+                    else:
                         _tokenizer_cache[name] = AutoTokenizer.from_pretrained(
                             repo_id,
                             local_files_only=True,
                         )
-                    except Exception:
+                except Exception:
+                    try:
                         _tokenizer_cache[name] = AutoTokenizer.from_pretrained(repo_id)
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"Failed to load tokenizer '{name}' from '{repo_id}'. "
-                        f"Check your network connection or set TRANSFORMERS_OFFLINE=1 "
-                        f"if you have a local cache. Original error: {exc}"
-                    ) from exc
+                    except Exception as exc:
+                        raise RuntimeError(
+                            f"Failed to load tokenizer '{name}' from '{repo_id}'. "
+                            f"Check your network connection or set TRANSFORMERS_OFFLINE=1 "
+                            f"if you have a local cache. Original error: {exc}"
+                        ) from exc
             _tokenizer_cache.move_to_end(name)
             while len(_tokenizer_cache) > _TOKENIZER_CACHE_MAX_SIZE:
                 _tokenizer_cache.popitem(last=False)

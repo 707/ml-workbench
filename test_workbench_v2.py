@@ -336,12 +336,14 @@ class TestRequirements:
 
         requirements = Path(__file__).with_name("requirements.txt").read_text(encoding="utf-8")
         assert "gradio[oauth,mcp]==6.8.0" in requirements
+        assert "protobuf>=4.25" in requirements
 
     def test_pyproject_aligns_with_hf_gradio_sdk(self):
         from pathlib import Path
 
         pyproject = Path(__file__).with_name("pyproject.toml").read_text(encoding="utf-8")
         assert 'gradio[oauth,mcp]==6.8.0' in pyproject
+        assert 'protobuf>=4.25' in pyproject
 
 
 class TestDeployVerification:
