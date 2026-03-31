@@ -93,7 +93,7 @@ class TestWorkbenchHandlers:
             ]
 
         with patch("token_tax_ui.scenario_analysis", side_effect=_fake_scenario_analysis):
-            outputs = list(_handle_scenario_tab(
+            outputs = _handle_scenario_tab(
                 ["en"],
                 ["gpt-oss"],
                 100000,
@@ -106,15 +106,15 @@ class TestWorkbenchHandlers:
                 False,
                 False,
                 False,
-            ))
+            )
 
         assert captured["model_ids"] == ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"]
-        assert outputs[-1][0]["data"][0][2] in {"openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"}
+        assert outputs[0]["data"][0][2] in {"openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"}
 
     def test_handle_scenario_tab_returns_empty_state_when_no_tokenizers_selected(self):
         from token_tax_ui import _handle_scenario_tab
 
-        outputs = list(_handle_scenario_tab(
+        outputs = _handle_scenario_tab(
             ["en"],
             [],
             100000,
@@ -127,10 +127,10 @@ class TestWorkbenchHandlers:
             False,
             False,
             False,
-        ))
+        )
 
-        assert outputs[-1][0]["data"] == []
-        assert "Select at least one benchmark tokenizer family." in outputs[-1][-2]
+        assert outputs[0]["data"] == []
+        assert "Select at least one benchmark tokenizer family." in outputs[-2]
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
@@ -148,13 +148,24 @@ class TestWorkbenchHandlers:
         ]
 
         with patch("token_tax_ui.build_tokenizer_catalog", return_value=tokenizer_rows):
-            outputs = list(_handle_catalog_tab(include_proxy=False, refresh_live=False, live_updates=True))
-            table, appendix, diagnostics = outputs[-1]
+            table, appendix, diagnostics = _handle_catalog_tab(
+                include_proxy=False,
+                refresh_live=False,
+                live_updates=True,
+            )
 
         assert table["headers"][0] == "Tokenizer Family"
         assert table["data"][0][1] == "llama-3"
         assert "Catalog Appendix" in appendix
         assert "Diagnostics" in diagnostics
+
+    def test_handle_catalog_tab_returns_final_tuple_not_streaming_generator(self):
+        from token_tax_ui import _handle_catalog_tab
+
+        outputs = _handle_catalog_tab(include_proxy=False, refresh_live=False, live_updates=False)
+
+        assert isinstance(outputs, tuple)
+        assert len(outputs) == 3
 
     def test_aggregate_scenario_rows_groups_by_model(self):
         from token_tax_ui import _aggregate_scenario_rows
@@ -423,6 +434,8 @@ class TestWorkbenchHandlers:
         assert "scenario-control-stack" in src
         assert "scenario-checkbox-group" in src
         assert "scenario-custom-row" in src
+        assert "scenario-options-row" in src
+        assert 'show_progress="full"' in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
@@ -518,6 +531,76 @@ class TestWorkbenchHandlers:
         assert outputs[2].data
         assert outputs[4].data
         assert outputs[9].data
+
+    def test_handle_scenario_tab_recomputes_chart_outputs_across_runs(self):
+        from token_tax_ui import _handle_scenario_tab
+
+        def _fake_scenario_analysis(**kwargs):
+            tokenizer_key = kwargs["tokenizer_keys"][0]
+            if tokenizer_key == "llama-3":
+                return [
+                    {
+                        "label": "Llama 3.2 3B Instruct (Free)",
+                        "model_id": "meta-llama/llama-3.2-3b-instruct:free",
+                        "language": "en",
+                        "tokenizer_key": "llama-3",
+                        "rtc": 1.2,
+                        "context_loss_pct": 10.0,
+                        "monthly_input_tokens": 120000,
+                        "monthly_output_tokens": 25000,
+                        "monthly_cost": 8.0,
+                        "ttft_seconds": None,
+                        "output_tokens_per_second": None,
+                        "provenance": "strict_verified",
+                    }
+                ]
+            return [
+                {
+                    "label": "Qwen 2.5 7B Instruct (Free)",
+                    "model_id": "qwen/qwen-2.5-7b-instruct:free",
+                    "language": "en",
+                    "tokenizer_key": "qwen-2.5",
+                    "rtc": 1.8,
+                    "context_loss_pct": 20.0,
+                    "monthly_input_tokens": 180000,
+                    "monthly_output_tokens": 25000,
+                    "monthly_cost": 14.0,
+                    "ttft_seconds": None,
+                    "output_tokens_per_second": None,
+                    "provenance": "strict_verified",
+                }
+            ]
+
+        with patch("token_tax_ui.scenario_analysis", side_effect=_fake_scenario_analysis):
+            first = _handle_scenario_tab(
+                ["en"], ["llama-3"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False, False
+            )
+            second = _handle_scenario_tab(
+                ["en"], ["qwen-2.5"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False, False
+            )
+
+        assert float(first[1].data[0].x[0]) != float(second[1].data[0].x[0])
+
+    def test_handle_scenario_tab_returns_final_tuple_not_streaming_generator(self):
+        from token_tax_ui import _handle_scenario_tab
+
+        with patch("token_tax_ui.scenario_analysis", return_value=[]):
+            result = _handle_scenario_tab(
+                ["en"],
+                ["llama-3"],
+                100000,
+                600,
+                250,
+                0.1,
+                "rtc",
+                "monthly_cost",
+                "none",
+                False,
+                False,
+                False,
+            )
+
+        assert isinstance(result, tuple)
 
     def test_build_benchmark_chart_explainer_mentions_plain_language_terms(self):
         from token_tax_ui import build_benchmark_chart_explainer_markdown

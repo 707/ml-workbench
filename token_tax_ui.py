@@ -1181,11 +1181,14 @@ def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: b
         refresh_live=bool(refresh_live),
         live_updates=bool(live_updates),
     )
-    yield serialize_table([], CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
     if refresh_live:
         refresh_catalog()
     rows = build_tokenizer_catalog(include_proxy=include_proxy)
-    yield serialize_table(_catalog_display_rows(rows), CATALOG_COLUMNS), catalog_appendix(include_proxy), render_markdown()
+    return (
+        serialize_table(_catalog_display_rows(rows), CATALOG_COLUMNS),
+        catalog_appendix(include_proxy),
+        render_markdown(),
+    )
 
 
 def _handle_scenario_tab(
@@ -1201,11 +1204,12 @@ def _handle_scenario_tab(
     include_estimates: bool,
     include_proxy: bool,
     live_updates: bool,
+    progress=gr.Progress(),
 ):
     corpus_key = "strict_parallel"
     if not tokenizer_keys:
         empty = serialize_table([], SCENARIO_COLUMNS)
-        yield (
+        return (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_scenario_language_detail_scatter([], x_key="rtc", y_key="monthly_cost"),
@@ -1219,12 +1223,11 @@ def _handle_scenario_tab(
             "Select at least one benchmark tokenizer family.",
             render_markdown(),
         )
-        return
 
     model_ids = derive_scenario_model_ids(tokenizer_keys, include_proxy=include_proxy)
     if not model_ids:
         empty = serialize_table([], SCENARIO_COLUMNS)
-        yield (
+        return (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_scenario_language_detail_scatter([], x_key="rtc", y_key="monthly_cost"),
@@ -1238,10 +1241,10 @@ def _handle_scenario_tab(
             "No valid free models match the selected tokenizer families.",
             render_markdown(),
         )
-        return
 
     try:
         clear_events()
+        progress((0, 3), desc="Preparing scenario…")
         log_event(
             "scenario.run.start",
             "Preparing scenario analysis",
@@ -1250,20 +1253,7 @@ def _handle_scenario_tab(
             model_count=len(model_ids or []),
             live_updates=bool(live_updates),
         )
-        yield (
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            build_scenario_speed_summary_markdown([]),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            gr.skip(),
-            scenario_appendix(),
-            render_markdown(),
-        )
+        progress((1, 3), desc="Computing scenario rows…")
         rows = scenario_analysis(
             corpus_key=corpus_key,
             languages=languages,
@@ -1277,11 +1267,11 @@ def _handle_scenario_tab(
             include_estimates=include_estimates,
             include_proxy=include_proxy,
         )
-        if live_updates:
-            yield _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
+        progress((2, 3), desc="Building charts…")
     except Exception as exc:
         empty = serialize_table([], SCENARIO_COLUMNS)
-        yield (
+        progress(None)
+        return (
             empty,
             build_metric_scatter([], x_key="rtc", y_key="monthly_cost"),
             build_scenario_language_detail_scatter([], x_key="rtc", y_key="monthly_cost"),
@@ -1295,9 +1285,8 @@ def _handle_scenario_tab(
             f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
-        return
-
-    yield _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
+    progress((3, 3), desc="Done")
+    return _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
 
 
 DEFAULT_BENCHMARK_TOKENIZER_KEYS = [
@@ -1612,6 +1601,30 @@ def build_token_tax_ui() -> gr.Blocks:
                                 info="Metric plotted on the y-axis of the custom slice chart.",
                                 scale=1,
                             )
+                        with gr.Row(elem_classes="scenario-options-row"):
+                            slice_size = gr.Dropdown(
+                                choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
+                                value="none",
+                                label="Bubble Size",
+                                info="Optional bubble sizing field for the custom slice chart.",
+                                scale=1,
+                            )
+                            with gr.Group(elem_classes="scenario-checkbox-group checkbox-stack"):
+                                scenario_include_estimates = gr.Checkbox(
+                                    label="Include estimated values",
+                                    value=False,
+                                    info="Include estimated or non-strict rows in the scenario comparison.",
+                                )
+                                scenario_include_proxy = gr.Checkbox(
+                                    label="Include proxy mappings",
+                                    value=False,
+                                    info="Allow tokenizer families with documented proxy mappings into the scenario.",
+                                )
+                                scenario_live_updates = gr.Checkbox(
+                                    label="Live diagnostics",
+                                    value=False,
+                                    info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
+                                )
                     with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs", min_width=360, scale=0):
                         with gr.Group(elem_classes="scenario-control-grid"):
                             with gr.Column(elem_classes="scenario-control-block", min_width=160, scale=1):
@@ -1649,28 +1662,6 @@ def build_token_tax_ui() -> gr.Blocks:
                                     info="Extra completion-token multiplier for reasoning-heavy workloads.",
                                 )
                         with gr.Group(elem_classes="scenario-control-stack"):
-                            slice_size = gr.Dropdown(
-                                choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
-                                value="none",
-                                label="Bubble Size",
-                                info="Optional bubble sizing field for the custom slice chart.",
-                            )
-                            with gr.Group(elem_classes="scenario-checkbox-group checkbox-stack"):
-                                scenario_include_estimates = gr.Checkbox(
-                                    label="Include estimated values",
-                                    value=False,
-                                    info="Include estimated or non-strict rows in the scenario comparison.",
-                                )
-                                scenario_include_proxy = gr.Checkbox(
-                                    label="Include proxy mappings",
-                                    value=False,
-                                    info="Allow tokenizer families with documented proxy mappings into the scenario.",
-                                )
-                                scenario_live_updates = gr.Checkbox(
-                                    label="Live diagnostics",
-                                    value=False,
-                                    info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
-                                )
                             scenario_run = gr.Button("Run Scenario Lab", variant="primary", size="sm", elem_classes="compact-action")
                 gr.HTML(
                     build_chart_help_markdown(
@@ -1742,7 +1733,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_appendix_md,
                         scenario_diagnostics_md,
                     ],
-                    show_progress="minimal",
+                    show_progress="full",
                 )
 
             with gr.TabItem("Audit"):

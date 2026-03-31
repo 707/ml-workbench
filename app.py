@@ -234,6 +234,13 @@ body {
   margin-top: 0.2rem;
 }
 
+.scenario-options-row {
+  align-items: end;
+  gap: 0.7rem;
+  margin-top: 0.2rem;
+  flex-wrap: wrap;
+}
+
 .scenario-control-block,
 .scenario-control-stack,
 .scenario-checkbox-group {
@@ -253,6 +260,11 @@ body {
 
 .scenario-checkbox-group {
   margin-top: 0.15rem;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.7rem;
 }
 
 .catalog-utility-row {
