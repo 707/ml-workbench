@@ -16,7 +16,7 @@ from time import perf_counter
 import gradio as gr
 from langdetect import LangDetectException, detect
 
-from tokenizer_registry import supported_tokenizers_map
+from tokenizer_registry import TOKENIZER_FAMILY_SPECS, supported_tokenizers_map
 
 _AutoTokenizer = None
 _snapshot_download = None
@@ -98,6 +98,42 @@ def _local_snapshot_path(repo_id: str) -> str | None:
         return _get_snapshot_download()(repo_id, local_files_only=True)
     except Exception:
         return None
+
+
+def list_tokenizer_snapshot_status(*, include_proxy: bool = False) -> list[dict]:
+    """Return local snapshot readiness for tokenizer families."""
+    rows: list[dict] = []
+    for key, spec in TOKENIZER_FAMILY_SPECS.items():
+        if spec.mapping_quality == "proxy" and not include_proxy:
+            continue
+
+        source = SUPPORTED_TOKENIZERS[key]
+        if source.startswith("tiktoken:"):
+            rows.append(
+                {
+                    "key": key,
+                    "label": spec.label,
+                    "status": "builtin",
+                    "status_label": "built in",
+                    "source": source,
+                    "local_path": None,
+                }
+            )
+            continue
+
+        local_path = _local_snapshot_path(source)
+        ready = bool(local_path and Path(local_path).exists())
+        rows.append(
+            {
+                "key": key,
+                "label": spec.label,
+                "status": "ready_local" if ready else "missing_local_snapshot",
+                "status_label": "ready locally" if ready else "missing local snapshot",
+                "source": source,
+                "local_path": local_path,
+            }
+        )
+    return sorted(rows, key=lambda row: row["label"])
 
 
 def get_tokenizer(name: str):

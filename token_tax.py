@@ -27,6 +27,7 @@ from tokenizer import (
     context_window_usage,
     fragmentation_ratio,
     get_tokenizer,
+    list_tokenizer_snapshot_status,
     quality_risk_level,
     relative_tokenization_cost,
     tokenize_text,
@@ -1075,6 +1076,15 @@ def audit_markdown() -> str:
     for family in families:
         lines.append(
             f"- **{family['label']}** (`{family['key']}`) — {family['mapping_quality']} mapping — {family['tokenizer_source']}"
+        )
+
+    lines.extend([
+        "",
+        "### Tokenizer Snapshot Health",
+    ])
+    for item in list_tokenizer_snapshot_status(include_proxy=False):
+        lines.append(
+            f"- **{item['label']}** (`{item['key']}`) — {item['status_label']}"
         )
 
     lines.extend([

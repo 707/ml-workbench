@@ -385,6 +385,22 @@ class TestAuditMarkdown:
         assert "FLORES-200" in markdown
         assert "OpenRouter Models API" in markdown
 
+    def test_audit_markdown_mentions_tokenizer_snapshot_health(self):
+        from token_tax import audit_markdown
+
+        with patch(
+            "token_tax.list_tokenizer_snapshot_status",
+            return_value=[
+                {"label": "Llama 3 family", "key": "llama-3", "status_label": "ready locally"},
+                {"label": "Nemotron 3 Super family", "key": "nemotron-3-super", "status_label": "missing local snapshot"},
+            ],
+        ):
+            markdown = audit_markdown()
+
+        assert "Tokenizer Snapshot Health" in markdown
+        assert "ready locally" in markdown
+        assert "missing local snapshot" in markdown
+
 
 class TestSpaceConfig:
     def test_readme_declares_docker_sdk_entrypoint(self):

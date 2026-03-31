@@ -125,6 +125,25 @@ class TestGetTokenizer:
         assert result == "/tmp/example-snapshot"
         mock_snapshot_download.assert_not_called()
 
+    def test_list_tokenizer_snapshot_status_reports_ready_and_missing(self):
+        import tokenizer as tok_module
+
+        def fake_local_snapshot_path(repo_id: str) -> str | None:
+            if repo_id == "NousResearch/Meta-Llama-3-8B":
+                return "/tmp/llama-ready"
+            if repo_id == "mistralai/Mistral-7B-v0.1":
+                return None
+            return "/tmp/other-ready"
+
+        with patch("tokenizer._local_snapshot_path", side_effect=fake_local_snapshot_path):
+            with patch.object(tok_module.Path, "exists", lambda self: str(self) != "/tmp/mistral-missing"):
+                rows = tok_module.list_tokenizer_snapshot_status(include_proxy=False)
+
+        by_key = {row["key"]: row for row in rows}
+        assert by_key["llama-3"]["status"] == "ready_local"
+        assert by_key["mistral"]["status"] == "missing_local_snapshot"
+        assert by_key["o200k_base"]["status"] == "builtin"
+
     def test_caches_tokenizer_on_second_call(self):
         """Second call with same name must not call from_pretrained again."""
         # Import fresh to reset module-level cache
