@@ -60,6 +60,34 @@ class TestBenchmarkCorpus:
         assert result["rows"][0]["english_baseline_ratio"] is not None
         assert result["rows"][0]["rtc"] is None
 
+    def test_benchmark_corpus_reports_tokenizer_progress(self):
+        from corpora import CorpusSample
+        from token_tax import benchmark_corpus
+
+        samples = {
+            "en": [
+                CorpusSample("en", "hello world", "hello world", "strict_parallel", "https://example.com", "strict_verified"),
+            ],
+            "ar": [
+                CorpusSample("ar", "مرحبا بالعالم", "hello world", "strict_parallel", "https://example.com", "strict_verified"),
+            ],
+        }
+        progress_calls: list[tuple[float, str]] = []
+
+        with patch("token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+                benchmark_corpus(
+                    "strict_parallel",
+                    ["en", "ar"],
+                    ["gpt2", "mistral"],
+                    progress_callback=lambda ratio, desc: progress_calls.append((ratio, desc)),
+                )
+
+        assert progress_calls
+        assert progress_calls[0][0] >= 0.0
+        assert progress_calls[-1][0] == pytest.approx(1.0)
+        assert "gpt-2 legacy" in progress_calls[0][1].lower() or "mistral" in progress_calls[0][1].lower()
+
     def test_benchmark_appendix_mentions_streaming_lane(self):
         from token_tax import benchmark_appendix
 
@@ -258,6 +286,19 @@ class TestScenarioAnalysis:
                 avg_output_tokens=50,
                 reasoning_share=0.1,
             )
+
+
+class TestWarmTokenizerDefaults:
+    def test_default_warm_keys_cover_exact_free_runtime_families(self):
+        from model_registry import list_free_runtime_choices
+        from warm_tokenizers import DEFAULT_KEYS
+
+        expected = {
+            row["tokenizer_key"]
+            for row in list_free_runtime_choices(include_proxy=False)
+        }
+
+        assert expected.issubset(set(DEFAULT_KEYS))
 
 
 class TestScenarioCharts:

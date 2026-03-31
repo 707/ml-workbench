@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import sys
 
+from model_registry import list_free_runtime_choices
 from tokenizer import get_tokenizer
 
-DEFAULT_KEYS = [
-    "gpt2",
-    "o200k_base",
-    "llama-3",
-    "mistral",
-    "qwen-2.5",
-]
+
+def default_keys() -> list[str]:
+    """Return the tokenizer families that should be warmed during image build."""
+    keys = [
+        "gpt2",
+        "o200k_base",
+        "cl100k_base",
+    ]
+    keys.extend(
+        row["tokenizer_key"]
+        for row in list_free_runtime_choices(include_proxy=False)
+    )
+    return list(dict.fromkeys(keys))
+
+
+DEFAULT_KEYS = default_keys()
 
 
 def main(argv: list[str]) -> int:

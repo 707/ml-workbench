@@ -6,6 +6,7 @@ import csv
 import io
 import json
 from statistics import median, quantiles
+from typing import Callable
 
 from corpora import DEFAULT_BENCHMARK_LANGUAGES, fetch_corpus_samples, list_corpora
 from diagnostics import log_event
@@ -525,6 +526,7 @@ def _iter_benchmark_payload(
     row_limit: int = 25,
     include_estimates: bool = False,
     include_proxy: bool = False,
+    progress_callback: Callable[[float, str], None] | None = None,
 ):
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
     fetch_languages = list(selected_languages)
@@ -550,6 +552,7 @@ def _iter_benchmark_payload(
     lane = _lane_label(corpus_key)
     raw_rows: list[dict] = []
 
+    visible_selections = []
     for tokenizer in tokenizer_keys:
         selection = resolve_selection(tokenizer)
         if not provenance_visible(
@@ -558,6 +561,16 @@ def _iter_benchmark_payload(
             include_proxy=include_proxy,
         ):
             continue
+        visible_selections.append(selection)
+
+    total_tokenizers = len(visible_selections)
+
+    for index, selection in enumerate(visible_selections):
+        if progress_callback and total_tokenizers:
+            progress_callback(
+                index / total_tokenizers,
+                f"Benchmarking {selection['label']}…",
+            )
 
         log_event(
             "benchmark.tokenizer.load.start",
@@ -575,6 +588,11 @@ def _iter_benchmark_payload(
                 lane=lane,
                 error=str(exc),
             )
+            if progress_callback and total_tokenizers:
+                progress_callback(
+                    (index + 1) / total_tokenizers,
+                    f"Skipped {selection['label']}",
+                )
             continue
         log_event(
             "benchmark.tokenizer.load.success",
@@ -691,6 +709,12 @@ def _iter_benchmark_payload(
             )
             yield aggregated, raw_rows
 
+        if progress_callback and total_tokenizers:
+            progress_callback(
+                (index + 1) / total_tokenizers,
+                f"Finished {selection['label']}",
+            )
+
 
 def build_benchmark_detail_rows(
     corpus_key: str,
@@ -740,6 +764,7 @@ def benchmark_corpus(
     row_limit: int = 25,
     include_estimates: bool = False,
     include_proxy: bool = False,
+    progress_callback: Callable[[float, str], None] | None = None,
 ) -> dict:
     """Compute aggregate tokenizer benchmark rows from a registered corpus."""
     log_event(
@@ -760,6 +785,7 @@ def benchmark_corpus(
         row_limit=row_limit,
         include_estimates=include_estimates,
         include_proxy=include_proxy,
+        progress_callback=progress_callback,
     ):
         rows.append(row)
         raw_rows = current_raw_rows
@@ -809,6 +835,7 @@ def scenario_analysis(
     reasoning_share: float,
     include_estimates: bool = False,
     include_proxy: bool = False,
+    progress_callback: Callable[[float, str], None] | None = None,
 ) -> list[dict]:
     """Build scenario rows joining benchmark metrics and deployable model metadata."""
     if corpus_key != "strict_parallel":
@@ -823,6 +850,11 @@ def scenario_analysis(
         tokenizer_keys=tokenizer_keys,
         model_ids=model_ids,
     )
+    def _benchmark_progress(ratio: float, desc: str) -> None:
+        if progress_callback is None:
+            return
+        progress_callback(0.12 + (ratio * 0.63), desc)
+
     benchmark = benchmark_corpus(
         corpus_key,
         languages,
@@ -830,6 +862,7 @@ def scenario_analysis(
         row_limit=row_limit,
         include_estimates=include_estimates,
         include_proxy=include_proxy,
+        progress_callback=_benchmark_progress,
     )
     benchmark_lookup = {
         (row["language"], row["tokenizer_key"]): row
@@ -840,6 +873,8 @@ def scenario_analysis(
     selected_models = {row["model_id"]: row for row in catalog if row["model_id"] in model_ids}
 
     rows = []
+    if progress_callback is not None:
+        progress_callback(0.82, "Joining model metadata…")
     for model_id, model in selected_models.items():
         for language in benchmark["languages"]:
             benchmark_row = benchmark_lookup.get((language, model["tokenizer_key"]))
@@ -891,6 +926,8 @@ def scenario_analysis(
         row_count=len(rows),
         model_count=len(selected_models),
     )
+    if progress_callback is not None:
+        progress_callback(0.9, "Scenario rows ready")
     return rows
 
 

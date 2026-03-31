@@ -1244,7 +1244,7 @@ def _handle_scenario_tab(
 
     try:
         clear_events()
-        progress((0, 3), desc="Preparing scenario…")
+        progress(0.05, desc="Preparing scenario…")
         log_event(
             "scenario.run.start",
             "Preparing scenario analysis",
@@ -1253,7 +1253,6 @@ def _handle_scenario_tab(
             model_count=len(model_ids or []),
             live_updates=bool(live_updates),
         )
-        progress((1, 3), desc="Computing scenario rows…")
         rows = scenario_analysis(
             corpus_key=corpus_key,
             languages=languages,
@@ -1266,8 +1265,9 @@ def _handle_scenario_tab(
             reasoning_share=float(reasoning_share),
             include_estimates=include_estimates,
             include_proxy=include_proxy,
+            progress_callback=lambda ratio, desc: progress(ratio, desc=desc),
         )
-        progress((2, 3), desc="Building charts…")
+        progress(0.94, desc="Building charts…")
     except Exception as exc:
         empty = serialize_table([], SCENARIO_COLUMNS)
         progress(None)
@@ -1285,8 +1285,9 @@ def _handle_scenario_tab(
             f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
-    progress((3, 3), desc="Done")
-    return _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
+    outputs = _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
+    progress(None)
+    return outputs
 
 
 DEFAULT_BENCHMARK_TOKENIZER_KEYS = [
