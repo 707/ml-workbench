@@ -335,7 +335,7 @@ def build_tokenizer_catalog(
                 "output_per_million": pricing["output_per_million"],
                 "context_window": pricing["context_window"],
                 "runtime_badge": "Runnable here for free",
-                "mapping_badge": "Exact tokenizer mapping" if mapping.mapping_quality == "exact" else "Proxy mapping",
+                "mapping_badge": "Exact tokenizer mapping" if mapping.mapping_quality == "exact" else "Proxy tokenizer mapping",
             })
 
         free_input_prices = [model["input_per_million"] for model in free_models]

@@ -1035,8 +1035,9 @@ def catalog_appendix(include_proxy: bool) -> str:
         f"- Last refresh error: **{status['last_refresh_error'] or 'none'}**",
         f"- AA snapshot captured at: **{aa_status['captured_at'] or 'not available'}**",
         f"- AA benchmark matches loaded: **{aa_status['model_count']}**",
-        "- Mapping policy: exact mappings are visible by default; proxy mappings are hidden unless enabled",
+        "- Mapping policy: exact mappings are visible by default; proxy tokenizer stand-ins are hidden unless enabled",
         f"- Proxy mappings visible: **{'yes' if include_proxy else 'no'}**",
+        "- Current proxy families: Gemma uses a Gemma-family stand-in and Command R uses a BLOOM stand-in until exact equivalence is documented",
     ]
     return "\n".join(lines)
 
@@ -1045,6 +1046,8 @@ def scenario_appendix() -> str:
     """Build markdown appendix for the Scenario Lab tab."""
     lines = [
         "### Scenario Appendix",
+        "- Method: **Strict benchmark-driven estimate** using measured multilingual benchmark rows",
+        "- Contrast: **Legacy heuristic estimate** remains separate and uses the 4 chars/token portfolio shortcut for CSV traffic demos only",
         "- Benchmark lane: **Strict Evidence**",
         "- Input cost formula: `monthly_requests * (avg_input_tokens * RTC) * input_price / 1e6`",
         "- Output cost formula: `monthly_requests * (avg_output_tokens * (1 + reasoning_share)) * output_price / 1e6`",
@@ -1075,7 +1078,7 @@ def audit_markdown() -> str:
     ])
     for family in families:
         lines.append(
-            f"- **{family['label']}** (`{family['key']}`) — {family['mapping_quality']} mapping — {family['tokenizer_source']}"
+            f"- **{family['label']}** (`{family['key']}`) — {'exact tokenizer mapping' if family['mapping_quality'] == 'exact' else 'proxy tokenizer mapping'} — {family['tokenizer_source']}"
         )
 
     lines.extend([

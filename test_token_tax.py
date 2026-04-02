@@ -670,6 +670,14 @@ class TestLegacyCharsPerToken:
         assert "LEGACY_CHARS_PER_TOKEN" in source
         assert "/ 4.0)" not in source
 
+    def test_scenario_appendix_labels_strict_method_against_legacy_estimator(self):
+        from token_tax import scenario_appendix
+
+        markdown = scenario_appendix()
+
+        assert "Strict benchmark-driven estimate" in markdown
+        assert "Legacy heuristic estimate" in markdown
+
 
 # ---------------------------------------------------------------------------
 # parse_traffic_csv (GH-6)

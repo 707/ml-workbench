@@ -246,6 +246,17 @@ class TestTokenizerFirstCatalog:
         exact_specs = [spec for spec in TOKENIZER_FAMILY_SPECS.values() if spec.mapping_quality == "exact"]
         assert all(spec.chart_color.startswith("#") for spec in exact_specs)
 
+    def test_proxy_family_labels_call_out_stand_ins(self):
+        from model_registry import list_tokenizer_families
+
+        rows = list_tokenizer_families(include_proxy=True)
+
+        gemma = next(row for row in rows if row["key"] == "gemma-2")
+        command_r = next(row for row in rows if row["key"] == "command-r")
+
+        assert "proxy" in gemma["label"].lower()
+        assert "bloom" in command_r["label"].lower()
+
 
 class TestArtificialAnalysisSnapshot:
     def test_catalog_attaches_aa_matches_from_snapshot(self, tmp_path, monkeypatch):

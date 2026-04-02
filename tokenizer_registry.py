@@ -33,7 +33,7 @@ TOKENIZER_FAMILY_SPECS: dict[str, TokenizerFamilySpec] = {
     "nemotron-nano-9b-v2": TokenizerFamilySpec("nemotron-nano-9b-v2", "Nemotron Nano 9B V2 family", "nvidia/NVIDIA-Nemotron-Nano-9B-v2", "exact", "strict_verified", "auto", "#818cf8"),
     "trinity-large": TokenizerFamilySpec("trinity-large", "Trinity Large family", "arcee-ai/Trinity-Large-Preview", "exact", "strict_verified", "auto", "#ec4899"),
     "trinity-mini": TokenizerFamilySpec("trinity-mini", "Trinity Mini family", "arcee-ai/Trinity-Mini", "exact", "strict_verified", "auto", "#db2777"),
-    "gemma-2": TokenizerFamilySpec("gemma-2", "Gemma family", "unsloth/gemma-2-2b", "proxy", "proxy", "sentencepiece", "#e377c2"),
+    "gemma-2": TokenizerFamilySpec("gemma-2", "Gemma family (Gemma proxy)", "unsloth/gemma-2-2b", "proxy", "proxy", "sentencepiece", "#e377c2"),
     "command-r": TokenizerFamilySpec("command-r", "Command R family (BLOOM proxy)", "bigscience/bloom-560m", "proxy", "proxy", "gpt2_prefix", "#7f7f7f"),
     "gpt2": TokenizerFamilySpec("gpt2", "GPT-2 legacy", "gpt2", "exact", "strict_verified", "gpt2_prefix", "#bcbd22"),
 }

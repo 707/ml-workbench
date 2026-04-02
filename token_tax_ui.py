@@ -362,11 +362,12 @@ def _catalog_display_rows(rows: list[dict]) -> list[dict]:
     for row in rows:
         free_models = row.get("free_models", [])
         aa_matches = row.get("aa_matches", [])
+        mapping_label = "Exact tokenizer mapping" if row["mapping_quality"] == "exact" else "Proxy tokenizer mapping"
         display_rows.append({
             "Tokenizer Family": row["label"],
             "Tokenizer Key": row["tokenizer_key"],
             "Tokenizer Source": row["tokenizer_source"],
-            "Mapping": row["mapping_quality"],
+            "Mapping": mapping_label,
             "Free Models": row.get("free_model_count", len(free_models)),
             "Free Model Examples": ", ".join(model["label"] for model in free_models) or "None attached",
             "AA Benchmarks": row.get("aa_match_count", len(aa_matches)),
@@ -396,7 +397,7 @@ def build_scenario_appendix_summary_html() -> str:
     return (
         '<div class="chart-help">'
         "<strong>Scenario assumptions</strong>"
-        "<p>Scenario Lab turns Strict Evidence benchmark rows into business impact. It estimates monthly spend and context loss from the selected languages, tokenizer families, and attached free models.</p>"
+        "<p>Scenario Lab is the strict benchmark-driven estimate. It turns Strict Evidence benchmark rows into business impact and uses measured tokenizer behavior, not the legacy 4 chars/token heuristic.</p>"
         "</div>"
     )
 
@@ -993,6 +994,7 @@ def _handle_traffic(csv_file, model_name: str) -> tuple[dict, object, str]:
         for entry in result["languages"]
     ]
     summary_lines = [
+        "Legacy heuristic estimate (4 chars/token).",
         f"Total monthly cost: ${result['total_monthly_cost']:.4f}",
         f"Weighted token tax exposure: {result['token_tax_exposure']:.2f}x",
     ]

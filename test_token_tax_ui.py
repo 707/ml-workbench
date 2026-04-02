@@ -720,6 +720,8 @@ class TestWorkbenchHandlers:
         assert "Scenario assumptions" in html
         assert "Strict Evidence" in html
         assert "business impact" in html
+        assert "benchmark-driven" in html.lower()
+        assert "legacy 4 chars/token heuristic" in html.lower()
 
     def test_shorten_model_label_truncates_long_values(self):
         from token_tax_ui import shorten_model_label
@@ -773,6 +775,27 @@ class TestWorkbenchHandlers:
         assert "Free Model Examples" in CATALOG_COLUMNS
         assert rows[0]["Tokenizer Family"] == "Llama 3 family"
         assert rows[0]["Free Model Examples"] == "Llama 3.2 3B Instruct (Free)"
+
+    def test_catalog_display_rows_use_human_friendly_mapping_labels(self):
+        from token_tax_ui import _catalog_display_rows
+
+        rows = _catalog_display_rows(
+            [
+                {
+                    "tokenizer_key": "command-r",
+                    "label": "Command R family (BLOOM proxy)",
+                    "tokenizer_source": "bigscience/bloom-560m",
+                    "mapping_quality": "proxy",
+                    "provenance": "proxy",
+                    "free_models": [],
+                    "aa_matches": [],
+                    "min_input_per_million": None,
+                    "max_context_window": None,
+                },
+            ]
+        )
+
+        assert rows[0]["Mapping"] == "Proxy tokenizer mapping"
 
 
 # ---------------------------------------------------------------------------
@@ -942,6 +965,8 @@ class TestHandleTraffic:
 
             assert len(table["data"]) == 2
             assert "token tax exposure" in summary.lower()
+            assert "legacy heuristic estimate" in summary.lower()
+            assert "4 chars/token" in summary.lower()
         finally:
             os.unlink(path)
 
