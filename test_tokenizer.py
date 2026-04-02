@@ -74,7 +74,7 @@ class TestGetTokenizer:
                 with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
                     get_tokenizer("gpt2")
 
-        mock_fp.assert_called_once_with("gpt2", local_files_only=True)
+        mock_fp.assert_called_once_with("gpt2", local_files_only=True, fix_mistral_regex=True)
 
     def test_calls_from_pretrained_with_correct_repo_id_for_llama3(self):
         """get_tokenizer('llama-3') must use NousResearch/Meta-Llama-3-8B."""
@@ -86,7 +86,7 @@ class TestGetTokenizer:
                 with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
                     get_tokenizer("llama-3")
 
-        mock_fp.assert_called_once_with("NousResearch/Meta-Llama-3-8B", local_files_only=True)
+        mock_fp.assert_called_once_with("NousResearch/Meta-Llama-3-8B", local_files_only=True, fix_mistral_regex=True)
 
     def test_calls_from_pretrained_with_correct_repo_id_for_mistral(self):
         """get_tokenizer('mistral') must use mistralai/Mistral-7B-v0.1."""
@@ -98,7 +98,7 @@ class TestGetTokenizer:
                 with patch("tokenizer.AutoTokenizer.from_pretrained", return_value=MagicMock()) as mock_fp:
                     get_tokenizer("mistral")
 
-        mock_fp.assert_called_once_with("mistralai/Mistral-7B-v0.1", local_files_only=True)
+        mock_fp.assert_called_once_with("mistralai/Mistral-7B-v0.1", local_files_only=True, fix_mistral_regex=True)
 
     def test_prefers_local_snapshot_path_for_hf_tokenizers(self):
         """When a local HF snapshot exists, load from the local path to avoid online metadata calls."""
@@ -112,7 +112,25 @@ class TestGetTokenizer:
                     result = get_tokenizer("qwen-2.5")
 
         assert result is mock_tok
-        mock_fp.assert_called_once_with("/tmp/qwen-local", local_files_only=True)
+        mock_fp.assert_called_once_with("/tmp/qwen-local", local_files_only=True, fix_mistral_regex=True)
+
+    def test_load_auto_tokenizer_falls_back_when_fix_flag_unsupported(self):
+        import tokenizer as tok_module
+
+        calls: list[tuple[tuple, dict]] = []
+
+        def fake_from_pretrained(*args, **kwargs):
+            calls.append((args, kwargs))
+            if "fix_mistral_regex" in kwargs:
+                raise TypeError("unexpected keyword argument")
+            return MagicMock()
+
+        with patch("tokenizer.AutoTokenizer.from_pretrained", side_effect=fake_from_pretrained):
+            tok_module._load_auto_tokenizer("gpt2", local_files_only=True)
+
+        assert len(calls) == 2
+        assert calls[0][1]["fix_mistral_regex"] is True
+        assert calls[1][1] == {"local_files_only": True}
 
     def test_local_snapshot_path_prefers_manifest_entry(self):
         import tokenizer as tok_module
@@ -268,7 +286,10 @@ class TestGetTokenizerErrorHandling:
                         tok_module.get_tokenizer("gpt2")
 
         assert mock_fp.call_args_list[0].args == ("gpt2",)
-        assert mock_fp.call_args_list[0].kwargs == {"local_files_only": True}
+        assert mock_fp.call_args_list[0].kwargs == {
+            "local_files_only": True,
+            "fix_mistral_regex": True,
+        }
         assert len(mock_fp.call_args_list) == 1
 
 

@@ -11,8 +11,8 @@ from model_registry import list_free_runtime_choices
 from tokenizer import (
     SNAPSHOT_MANIFEST_PATH,
     SUPPORTED_TOKENIZERS,
-    AutoTokenizer,
     TiktokenAdapter,
+    _load_auto_tokenizer,
     get_tokenizer,
 )
 
@@ -50,7 +50,7 @@ DEFAULT_KEYS = default_keys()
 def _warm_hf_tokenizer(repo_id: str) -> str:
     """Download only tokenizer-relevant files and verify they reopen locally."""
     snapshot_path = snapshot_download(repo_id, allow_patterns=TOKENIZER_FILE_PATTERNS)
-    AutoTokenizer.from_pretrained(snapshot_path, local_files_only=True)
+    _load_auto_tokenizer(snapshot_path, local_files_only=True)
     return snapshot_path
 
 

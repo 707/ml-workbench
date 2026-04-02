@@ -39,6 +39,21 @@ def _get_snapshot_download():
     return _snapshot_download
 
 
+def _load_auto_tokenizer(source: str, *, local_files_only: bool = True):
+    """Load a Hugging Face tokenizer with compatibility flags when available."""
+    try:
+        return AutoTokenizer.from_pretrained(
+            source,
+            local_files_only=local_files_only,
+            fix_mistral_regex=True,
+        )
+    except TypeError:
+        return AutoTokenizer.from_pretrained(
+            source,
+            local_files_only=local_files_only,
+        )
+
+
 class _LazyAutoTokenizer:
     """Proxy that defers transformers import until first attribute access."""
 
@@ -166,12 +181,12 @@ def get_tokenizer(name: str):
                 try:
                     local_source = _local_snapshot_path(repo_id)
                     if local_source:
-                        _tokenizer_cache[name] = AutoTokenizer.from_pretrained(
+                        _tokenizer_cache[name] = _load_auto_tokenizer(
                             local_source,
                             local_files_only=True,
                         )
                     else:
-                        _tokenizer_cache[name] = AutoTokenizer.from_pretrained(
+                        _tokenizer_cache[name] = _load_auto_tokenizer(
                             repo_id,
                             local_files_only=True,
                         )

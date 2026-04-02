@@ -4,7 +4,6 @@ RUN useradd -m -u 1000 user
 WORKDIR /home/user/app
 
 ENV HF_HOME=/home/user/.cache/huggingface
-ENV TRANSFORMERS_CACHE=/home/user/.cache/huggingface/hub
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
