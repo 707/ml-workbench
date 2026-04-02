@@ -184,6 +184,22 @@ def _normalize_tokenizer_selection(
         ),
     )
 
+
+def _tokenizer_selection_warning(
+    selected: list[str] | None,
+    *,
+    allowed: list[str],
+    max_count: int,
+    context_label: str,
+) -> str:
+    _, warning = _normalize_tokenizer_selection(
+        selected,
+        allowed=allowed,
+        max_count=max_count,
+        context_label=context_label,
+    )
+    return warning
+
 def metric_display_label(metric_key: str) -> str:
     return PLAIN_LANGUAGE_METRIC_LABELS.get(metric_key, metric_key.replace("_", " ").title())
 
@@ -1356,14 +1372,14 @@ def build_token_tax_ui() -> gr.Blocks:
                                 info="Stream progress updates while the benchmark is running. Turning this off is faster.",
                             )
                 benchmark_tokenizers.change(
-                    fn=lambda selected: _normalize_tokenizer_selection(
+                    fn=lambda selected: _tokenizer_selection_warning(
                         selected,
                         allowed=exact_tokenizers,
                         max_count=MAX_BENCHMARK_TOKENIZERS,
                         context_label="Benchmark",
                     ),
                     inputs=[benchmark_tokenizers],
-                    outputs=[benchmark_tokenizers, benchmark_tokenizer_warning],
+                    outputs=[benchmark_tokenizer_warning],
                     queue=False,
                 )
                 benchmark_preset.change(
@@ -1591,14 +1607,14 @@ def build_token_tax_ui() -> gr.Blocks:
                                 elem_classes="compact-action compact-action--scenario",
                             )
                 scenario_tokenizers.change(
-                    fn=lambda selected: _normalize_tokenizer_selection(
+                    fn=lambda selected: _tokenizer_selection_warning(
                         selected,
                         allowed=exact_tokenizers,
                         max_count=MAX_SCENARIO_TOKENIZERS,
                         context_label="Scenario Lab",
                     ),
                     inputs=[scenario_tokenizers],
-                    outputs=[scenario_tokenizers, scenario_tokenizer_warning],
+                    outputs=[scenario_tokenizer_warning],
                     queue=False,
                 )
                 gr.HTML(
