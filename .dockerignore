@@ -3,7 +3,10 @@
 !requirements.txt
 !README.md
 !app.py
+!benchmark_engine.py
 !bootstrap.py
+!catalog_engine.py
+!catalog_viewmodels.py
 !charts.py
 !corpora.py
 !data/
@@ -17,8 +20,12 @@
 !openrouter.py
 !pricing.py
 !provenance.py
+!scenario_engine.py
+!scenario_viewmodels.py
 !token_tax.py
 !token_tax_ui.py
 !tokenizer.py
 !tokenizer_registry.py
+!ui_feedback.py
 !warm_tokenizers.py
+!workbench_types.py
