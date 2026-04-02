@@ -7,9 +7,9 @@ import html
 import gradio as gr
 import plotly.graph_objects as go
 
-from corpora import fetch_corpus_samples
-from model_registry import list_tokenizer_families
-from tokenizer import get_tokenizer, tokenize_text
+from workbench.corpora import fetch_corpus_samples
+from workbench.model_registry import list_tokenizer_families
+from workbench.tokenizer import get_tokenizer, tokenize_text
 
 LANGUAGE_LABELS = {
     "ar": "Arabic",

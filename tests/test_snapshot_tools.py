@@ -7,7 +7,7 @@ def test_validate_strict_parallel_snapshot_accepts_current_repo_snapshot():
     from snapshot_tools import validate_strict_parallel_snapshot
 
     result = validate_strict_parallel_snapshot(
-        Path(__file__).with_name("data") / "strict_parallel" / "flores_v1.jsonl"
+        Path(__file__).resolve().parents[1] / "data" / "strict_parallel" / "flores_v1.jsonl"
     )
 
     assert result["row_count"] > 0
@@ -18,7 +18,7 @@ def test_validate_artificial_analysis_snapshot_accepts_current_repo_snapshot():
     from snapshot_tools import validate_artificial_analysis_snapshot
 
     result = validate_artificial_analysis_snapshot(
-        Path(__file__).with_name("data") / "telemetry" / "artificial_analysis_snapshot.json"
+        Path(__file__).resolve().parents[1] / "data" / "telemetry" / "artificial_analysis_snapshot.json"
     )
 
     assert result["model_count"] > 0
@@ -26,7 +26,7 @@ def test_validate_artificial_analysis_snapshot_accepts_current_repo_snapshot():
 
 
 def test_snapshot_refresh_scripts_exist():
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
 
     assert (root / "scripts" / "rebuild_flores_snapshot.py").exists()
     assert (root / "scripts" / "refresh_aa_snapshot.py").exists()

@@ -16,7 +16,8 @@ from time import perf_counter
 import gradio as gr
 from langdetect import LangDetectException, detect
 
-from tokenizer_registry import TOKENIZER_FAMILY_SPECS, supported_tokenizers_map
+from workbench import REPO_ROOT
+from workbench.tokenizer_registry import TOKENIZER_FAMILY_SPECS, supported_tokenizers_map
 
 _AutoTokenizer = None
 _snapshot_download = None
@@ -64,7 +65,7 @@ class _LazyAutoTokenizer:
 AutoTokenizer = _LazyAutoTokenizer()
 
 SUPPORTED_TOKENIZERS: dict[str, str] = supported_tokenizers_map()
-SNAPSHOT_MANIFEST_PATH = Path(__file__).resolve().parent / "data" / "tokenizer_snapshots.json"
+SNAPSHOT_MANIFEST_PATH = REPO_ROOT / "data" / "tokenizer_snapshots.json"
 
 
 class TiktokenAdapter:

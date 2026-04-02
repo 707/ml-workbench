@@ -25,7 +25,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups
-      - run: uv run mypy app.py charts.py token_tax.py token_tax_ui.py model_registry.py tokenizer.py corpora.py
+      - run: uv run mypy app.py workbench
 
   pytest:
     runs-on: ubuntu-latest

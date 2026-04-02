@@ -11,7 +11,7 @@ static MODEL_PRICING.  Static entries (tokenizer keys) take precedence.
 import threading
 from datetime import datetime, timezone
 
-from diagnostics import log_event
+from workbench.diagnostics import log_event
 
 LAST_UPDATED = "2026-03-25"
 
@@ -176,7 +176,7 @@ def refresh_from_openrouter() -> None:
     global _last_refreshed, _last_refresh_error
     log_event("catalog.refresh.start", "Refreshing OpenRouter catalog pricing")
     try:
-        from openrouter import fetch_models
+        from workbench.openrouter import fetch_models
 
         models = fetch_models()
         new_cache: dict[str, dict] = {}

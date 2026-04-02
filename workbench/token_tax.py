@@ -8,21 +8,21 @@ import json
 from statistics import median, quantiles
 from typing import Callable
 
-from corpora import DEFAULT_BENCHMARK_LANGUAGES, fetch_corpus_samples, list_corpora
-from diagnostics import log_event
-from model_registry import (
+from workbench.corpora import DEFAULT_BENCHMARK_LANGUAGES, fetch_corpus_samples, list_corpora
+from workbench.diagnostics import log_event
+from workbench.model_registry import (
     artificial_analysis_status,
     build_catalog_entries,
     list_tokenizer_families,
     resolve_selection,
 )
-from pricing import get_pricing, pricing_status, refresh_from_openrouter
-from provenance import (
+from workbench.pricing import get_pricing, pricing_status, refresh_from_openrouter
+from workbench.provenance import (
     provenance_badge,
     provenance_description,
     provenance_visible,
 )
-from tokenizer import (
+from workbench.tokenizer import (
     byte_premium,
     context_window_usage,
     fragmentation_ratio,
@@ -32,7 +32,7 @@ from tokenizer import (
     relative_tokenization_cost,
     tokenize_text,
 )
-from tokenizer_registry import continuation_style_map
+from workbench.tokenizer_registry import continuation_style_map
 
 # ---------------------------------------------------------------------------
 # Demo fixtures retained for backwards-compatible examples
@@ -426,6 +426,22 @@ def _unit_count(text: str) -> int:
     return len(text.split())
 
 
+def _token_script(token_text: str) -> str:
+    for char in token_text:
+        code = ord(char)
+        if 0x0600 <= code <= 0x06FF:
+            return "Arabic"
+        if 0x0900 <= code <= 0x097F:
+            return "Devanagari"
+        if 0x3040 <= code <= 0x30FF or 0x4E00 <= code <= 0x9FFF:
+            return "CJK"
+        if 0x0400 <= code <= 0x04FF:
+            return "Cyrillic"
+        if ("A" <= char <= "Z") or ("a" <= char <= "z"):
+            return "Latin"
+    return "Other"
+
+
 def _sample_metrics(
     text: str,
     english_text: str | None,
@@ -527,6 +543,8 @@ def _iter_benchmark_payload(
     row_limit: int = 25,
     include_estimates: bool = False,
     include_proxy: bool = False,
+    include_raw_rows: bool = False,
+    include_token_texts: bool = False,
     progress_callback: Callable[[float, str], None] | None = None,
 ):
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
@@ -552,6 +570,7 @@ def _iter_benchmark_payload(
     )
     lane = _lane_label(corpus_key)
     raw_rows: list[dict] = []
+    composition_counts: dict[tuple[str, str], int] = {}
 
     visible_selections = []
     for tokenizer in tokenizer_keys:
@@ -648,27 +667,33 @@ def _iter_benchmark_payload(
                     english_baseline_token_count=english_baseline if corpus_key == "streaming_exploration" else None,
                 )
                 observed_tokens.update(metrics["token_texts"])
-                raw_rows.append({
-                    "lane": lane,
-                    "language": language,
-                    "tokenizer_key": selection["tokenizer_key"],
-                    "label": selection["label"],
-                    "sample_index": sample_index,
-                    "text": sample.text,
-                    "english_text": sample.english_text,
-                    "token_count": metrics["token_count"],
-                    "unique_tokens": metrics["unique_tokens"],
-                    "continued_word_rate": round(metrics["continued_word_rate"], 4),
-                    "token_fertility": round(metrics["token_fertility"], 4),
-                    "bytes_per_token": round(metrics["bytes_per_token"], 4),
-                    "rtc": round(metrics["rtc"], 4) if metrics.get("rtc") is not None else None,
-                    "english_baseline_ratio": round(metrics["english_baseline_ratio"], 4)
-                    if metrics.get("english_baseline_ratio") is not None else None,
-                    "token_preview": " | ".join(metrics["token_texts"][:20]),
-                    "token_texts": metrics["token_texts"],
-                    "provenance": sample.provenance,
-                    "corpus_key": corpus_key,
-                })
+                for token in metrics["token_texts"]:
+                    script = _token_script(token)
+                    composition_key = (selection["tokenizer_key"], script)
+                    composition_counts[composition_key] = composition_counts.get(composition_key, 0) + 1
+                if include_raw_rows:
+                    detail_row = {
+                        "lane": lane,
+                        "language": language,
+                        "tokenizer_key": selection["tokenizer_key"],
+                        "label": selection["label"],
+                        "sample_index": sample_index,
+                        "text": sample.text,
+                        "token_count": metrics["token_count"],
+                        "unique_tokens": metrics["unique_tokens"],
+                        "continued_word_rate": round(metrics["continued_word_rate"], 4),
+                        "token_fertility": round(metrics["token_fertility"], 4),
+                        "bytes_per_token": round(metrics["bytes_per_token"], 4),
+                        "rtc": round(metrics["rtc"], 4) if metrics.get("rtc") is not None else None,
+                        "english_baseline_ratio": round(metrics["english_baseline_ratio"], 4)
+                        if metrics.get("english_baseline_ratio") is not None else None,
+                        "token_preview": " | ".join(metrics["token_texts"][:20]),
+                        "provenance": sample.provenance,
+                        "corpus_key": corpus_key,
+                    }
+                    if include_token_texts:
+                        detail_row["token_texts"] = metrics["token_texts"]
+                    raw_rows.append(detail_row)
                 computed.append(metrics)
 
             rtc = _safe_median([item.get("rtc") for item in computed]) if corpus_key == "strict_parallel" else None
@@ -708,7 +733,7 @@ def _iter_benchmark_payload(
                 sample_count=len(computed),
                 lane=lane,
             )
-            yield aggregated, raw_rows
+            yield aggregated, raw_rows, composition_counts
 
         if progress_callback and total_tokenizers:
             progress_callback(
@@ -726,11 +751,13 @@ def build_benchmark_detail_rows(
 ) -> list[dict]:
     """Return per-sample benchmark details for preview/raw-data subviews."""
     rows: list[dict] = []
-    for _, current_raw_rows in _iter_benchmark_payload(
+    for _, current_raw_rows, _ in _iter_benchmark_payload(
         corpus_key,
         languages,
         tokenizer_keys,
         row_limit=row_limit,
+        include_raw_rows=True,
+        include_token_texts=True,
     ):
         rows = current_raw_rows
     return rows
@@ -746,7 +773,7 @@ def iter_benchmark_rows(
     include_proxy: bool = False,
 ):
     """Yield aggregate benchmark rows one tokenizer/language at a time."""
-    for row, _ in _iter_benchmark_payload(
+    for row, _, _ in _iter_benchmark_payload(
         corpus_key,
         languages,
         tokenizer_keys,
@@ -765,6 +792,7 @@ def benchmark_corpus(
     row_limit: int = 25,
     include_estimates: bool = False,
     include_proxy: bool = False,
+    include_raw_rows: bool = False,
     progress_callback: Callable[[float, str], None] | None = None,
 ) -> dict:
     """Compute aggregate tokenizer benchmark rows from a registered corpus."""
@@ -779,17 +807,20 @@ def benchmark_corpus(
     selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
     rows: list[dict] = []
     raw_rows: list[dict] = []
-    for row, current_raw_rows in _iter_benchmark_payload(
+    composition_counts: dict[tuple[str, str], int] = {}
+    for row, current_raw_rows, current_composition_counts in _iter_benchmark_payload(
         corpus_key,
         selected_languages,
         tokenizer_keys,
         row_limit=row_limit,
         include_estimates=include_estimates,
         include_proxy=include_proxy,
+        include_raw_rows=include_raw_rows,
         progress_callback=progress_callback,
     ):
         rows.append(row)
         raw_rows = current_raw_rows
+        composition_counts = current_composition_counts
     matrix: dict[tuple[str, str], dict] = {
         (row["language"], row["tokenizer_key"]): row
         for row in rows
@@ -820,6 +851,14 @@ def benchmark_corpus(
         "matrix": matrix,
         "languages": selected_languages,
         "tokenizers": list(dict.fromkeys(row["tokenizer_key"] for row in rows)),
+        "composition_rows": [
+            {
+                "tokenizer_key": tokenizer_key,
+                "script": script,
+                "token_count": count,
+            }
+            for (tokenizer_key, script), count in sorted(composition_counts.items())
+        ],
     }
 
 

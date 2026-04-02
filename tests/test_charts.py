@@ -11,18 +11,18 @@ class TestRiskColors:
     """Validate RISK_COLORS dict exported from charts."""
 
     def test_is_dict(self):
-        from charts import RISK_COLORS
+        from workbench.charts import RISK_COLORS
 
         assert isinstance(RISK_COLORS, dict)
 
     def test_has_all_risk_levels(self):
-        from charts import RISK_COLORS
+        from workbench.charts import RISK_COLORS
 
         for level in ("low", "moderate", "high", "severe"):
             assert level in RISK_COLORS
 
     def test_values_are_hex_colors(self):
-        from charts import RISK_COLORS
+        from workbench.charts import RISK_COLORS
 
         for color in RISK_COLORS.values():
             assert color.startswith("#")
@@ -62,32 +62,32 @@ class TestBuildBubbleChart:
     """Tests for build_bubble_chart() -> plotly Figure."""
 
     def test_returns_figure(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(SAMPLE_RESULTS)
         assert fig.__class__.__name__ == "Figure"
 
     def test_empty_results_returns_figure(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart([])
         assert fig.__class__.__name__ == "Figure"
 
     def test_empty_results_has_annotation(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart([])
         annotations = fig.layout.annotations
         assert len(annotations) > 0
 
     def test_one_trace_per_model(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(SAMPLE_RESULTS)
         assert len(fig.data) == 2
 
     def test_trace_names_match_models(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(SAMPLE_RESULTS)
         names = {t.name for t in fig.data}
@@ -95,14 +95,14 @@ class TestBuildBubbleChart:
 
     def test_has_model_labels_on_bubbles(self):
         """Bubbles should show model name as text label (not just hover)."""
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(SAMPLE_RESULTS)
         for trace in fig.data:
             assert "text" in trace.mode
 
     def test_uses_theme_aware_layout_colors(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(SAMPLE_RESULTS)
         assert fig.layout.paper_bgcolor == "#ffffff"
@@ -119,26 +119,26 @@ class TestBuildContextChart:
     """Tests for build_context_chart() -> plotly Figure."""
 
     def test_returns_figure(self):
-        from charts import build_context_chart
+        from workbench.charts import build_context_chart
 
         fig = build_context_chart(SAMPLE_RESULTS)
         assert fig.__class__.__name__ == "Figure"
 
     def test_empty_returns_figure(self):
-        from charts import build_context_chart
+        from workbench.charts import build_context_chart
 
         fig = build_context_chart([])
         assert fig.__class__.__name__ == "Figure"
 
     def test_has_bar_traces(self):
-        from charts import build_context_chart
+        from workbench.charts import build_context_chart
 
         fig = build_context_chart(SAMPLE_RESULTS)
         assert len(fig.data) >= 1
         assert fig.data[0].type == "bar"
 
     def test_bar_count_matches_models(self):
-        from charts import build_context_chart
+        from workbench.charts import build_context_chart
 
         fig = build_context_chart(SAMPLE_RESULTS)
         assert len(fig.data[0].y) == 2
@@ -161,26 +161,26 @@ class TestBuildHeatmap:
     """Tests for build_heatmap() -> plotly Figure."""
 
     def test_returns_figure(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
         assert fig.__class__.__name__ == "Figure"
 
     def test_empty_returns_figure(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap({}, [], [])
         assert fig.__class__.__name__ == "Figure"
 
     def test_has_heatmap_trace(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
         assert len(fig.data) >= 1
         assert fig.data[0].type == "heatmap"
 
     def test_z_values_shape(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
         z = fig.data[0].z
@@ -188,7 +188,7 @@ class TestBuildHeatmap:
         assert len(z[0]) == 2  # 2 models
 
     def test_heatmap_uses_theme_aware_layout_colors(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
         assert fig.layout.paper_bgcolor == "#ffffff"
@@ -196,7 +196,7 @@ class TestBuildHeatmap:
         assert fig.layout.font.color == "#111111"
 
     def test_heatmap_uses_intuitive_green_to_red_scale(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap(SAMPLE_BENCHMARK, ["en", "ar"], ["gpt2", "llama-3"])
         colorscale = list(fig.data[0].colorscale)
@@ -205,7 +205,7 @@ class TestBuildHeatmap:
         assert colorscale[-1][1] == "#ef4444"
 
     def test_heatmap_preserves_missing_cells_as_none(self):
-        from charts import build_heatmap
+        from workbench.charts import build_heatmap
 
         fig = build_heatmap(
             {("en", "gpt2"): {"rtc": 1.0}},
@@ -221,7 +221,7 @@ class TestBuildHeatmap:
 
 class TestBuildMetricScatter:
     def test_metric_scatter_truncates_visible_labels_but_keeps_full_hover_name(self):
-        from charts import build_metric_scatter
+        from workbench.charts import build_metric_scatter
 
         fig = build_metric_scatter(
             [
@@ -241,7 +241,7 @@ class TestBuildMetricScatter:
         assert fig.data[0].name == "Qwen 2.5 7B Instruct (Free) with a much longer display label"
 
     def test_speed_metadata_empty_state_mentions_benchmark_match(self):
-        from charts import build_metric_scatter
+        from workbench.charts import build_metric_scatter
 
         fig = build_metric_scatter(
             [{"label": "Llama 3.1 8B", "ttft_seconds": None, "output_tokens_per_second": None}],
@@ -252,7 +252,7 @@ class TestBuildMetricScatter:
         assert "benchmark-only speed metadata" in fig.layout.annotations[0].text.lower()
 
     def test_bubble_sizes_are_bounded_for_large_size_values(self):
-        from charts import build_metric_scatter
+        from workbench.charts import build_metric_scatter
 
         fig = build_metric_scatter(
             [
@@ -270,7 +270,7 @@ class TestBuildMetricScatter:
         assert all(size >= 14 for size in sizes)
 
     def test_equal_size_values_use_stable_midpoint_bubbles(self):
-        from charts import build_metric_scatter
+        from workbench.charts import build_metric_scatter
 
         fig = build_metric_scatter(
             [
@@ -288,7 +288,7 @@ class TestBuildMetricScatter:
 
 class TestBenchmarkBarCharts:
     def test_build_category_bar_returns_grouped_bar_chart(self):
-        from charts import build_category_bar
+        from workbench.charts import build_category_bar
 
         fig = build_category_bar(
             [
@@ -309,7 +309,7 @@ class TestBenchmarkBarCharts:
         assert all(trace.type == "bar" for trace in fig.data)
 
     def test_build_stacked_category_bar_returns_stacked_bars(self):
-        from charts import build_stacked_category_bar
+        from workbench.charts import build_stacked_category_bar
 
         fig = build_stacked_category_bar(
             [
@@ -333,7 +333,7 @@ class TestBenchmarkBarCharts:
 
 class TestBuildScenarioLanguageDetailScatter:
     def test_renders_language_points_and_average_points(self):
-        from charts import build_scenario_language_detail_scatter
+        from workbench.charts import build_scenario_language_detail_scatter
 
         fig = build_scenario_language_detail_scatter(
             [
@@ -377,7 +377,7 @@ class TestBuildScenarioLanguageDetailScatter:
         assert {trace.marker.symbol for trace in fig.data} == {"circle", "diamond"}
 
     def test_keeps_white_chart_theme(self):
-        from charts import build_scenario_language_detail_scatter
+        from workbench.charts import build_scenario_language_detail_scatter
 
         fig = build_scenario_language_detail_scatter(
             [
@@ -419,27 +419,27 @@ class TestBuildCostWaterfall:
     """Tests for build_cost_waterfall() -> plotly Figure."""
 
     def test_returns_figure(self):
-        from charts import build_cost_waterfall
+        from workbench.charts import build_cost_waterfall
 
         fig = build_cost_waterfall(SAMPLE_PORTFOLIO)
         assert fig.__class__.__name__ == "Figure"
 
     def test_empty_returns_figure(self):
-        from charts import build_cost_waterfall
+        from workbench.charts import build_cost_waterfall
 
         fig = build_cost_waterfall({"total_monthly_cost": 0, "token_tax_exposure": 1.0, "languages": []})
         assert fig.__class__.__name__ == "Figure"
 
     def test_has_two_bar_traces(self):
         """Should have English-equivalent cost + token tax surcharge stacked bars."""
-        from charts import build_cost_waterfall
+        from workbench.charts import build_cost_waterfall
 
         fig = build_cost_waterfall(SAMPLE_PORTFOLIO)
         bar_traces = [t for t in fig.data if t.type == "bar"]
         assert len(bar_traces) == 2
 
     def test_bar_labels_are_languages(self):
-        from charts import build_cost_waterfall
+        from workbench.charts import build_cost_waterfall
 
         fig = build_cost_waterfall(SAMPLE_PORTFOLIO)
         bar_trace = fig.data[0]

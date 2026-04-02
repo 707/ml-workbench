@@ -13,11 +13,11 @@ from typing import Any
 
 import gradio as gr
 
-from explainer import build_explainer_ui
-from model_registry import list_free_runtime_choices
-from openrouter import OPENROUTER_URL, call_openrouter, extract_usage  # noqa: F401
-from token_tax_ui import build_token_tax_ui
-from tokenizer import build_tokenizer_ui
+from workbench.explainer import build_explainer_ui
+from workbench.model_registry import list_free_runtime_choices
+from workbench.openrouter import OPENROUTER_URL, call_openrouter, extract_usage  # noqa: F401
+from workbench.token_tax_ui import build_token_tax_ui
+from workbench.tokenizer import build_tokenizer_ui
 
 # ---------------------------------------------------------------------------
 # Config

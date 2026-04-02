@@ -12,10 +12,11 @@ from threading import Lock
 
 import requests
 
-from diagnostics import log_event
+from workbench import REPO_ROOT
+from workbench.diagnostics import log_event
 
 HF_DATASET_VIEWER_URL = "https://datasets-server.huggingface.co/first-rows"
-STRICT_PARALLEL_SNAPSHOT_PATH = Path(__file__).resolve().parent / "data" / "strict_parallel" / "flores_v1.jsonl"
+STRICT_PARALLEL_SNAPSHOT_PATH = REPO_ROOT / "data" / "strict_parallel" / "flores_v1.jsonl"
 STREAMING_LANGUAGE_CONFIGS = {
     "en": "eng_Latn",
     "ar": "arb_Arab",

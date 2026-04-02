@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
-from scenario_engine import derive_scenario_model_ids, run_scenario_request
-from workbench_types import ScenarioRequest
+from workbench.engines.scenario import derive_scenario_model_ids, run_scenario_request
+from workbench.types import ScenarioRequest
 
 
 class TestScenarioEngine:
@@ -10,13 +10,13 @@ class TestScenarioEngine:
             {"model_id": "a", "tokenizer_key": "llama-3"},
             {"model_id": "b", "tokenizer_key": "mistral"},
         ]
-        with patch("scenario_engine.list_free_runtime_choices", return_value=rows):
+        with patch("workbench.engines.scenario.list_free_runtime_choices", return_value=rows):
             result = derive_scenario_model_ids(("mistral",), include_proxy=False)
 
         assert result == ["b"]
 
     def test_run_scenario_request_uses_derived_model_ids(self):
-        from workbench_types import BenchmarkResult
+        from workbench.types import BenchmarkResult
 
         request = ScenarioRequest.from_inputs(
             corpus_key="strict_parallel",
@@ -29,9 +29,9 @@ class TestScenarioEngine:
             reasoning_share=0.1,
         )
         with (
-            patch("scenario_engine.derive_scenario_model_ids", return_value=["model-a"]) as mock_ids,
+            patch("workbench.engines.scenario.derive_scenario_model_ids", return_value=["model-a"]) as mock_ids,
             patch(
-                "scenario_engine.run_benchmark_request",
+                "workbench.engines.scenario.run_benchmark_request",
                 return_value=BenchmarkResult(
                     rows=[
                         {
@@ -42,13 +42,13 @@ class TestScenarioEngine:
                         }
                     ],
                     raw_rows=[],
-                    matrix={("en", "llama-3"): {"rtc": 1.5}},
                     languages=["en"],
                     tokenizers=["llama-3"],
+                    composition_rows=[],
                 ),
             ) as mock_benchmark,
             patch(
-                "scenario_engine.build_catalog_entries",
+                "workbench.engines.scenario.build_catalog_entries",
                 return_value=[
                     {
                         "model_id": "model-a",
@@ -75,7 +75,7 @@ class TestScenarioEngine:
         assert result.rows[0]["model_id"] == "model-a"
 
     def test_run_scenario_request_raises_when_selected_tokenizer_missing_from_benchmark(self):
-        from workbench_types import BenchmarkResult
+        from workbench.types import BenchmarkResult
 
         request = ScenarioRequest.from_inputs(
             corpus_key="strict_parallel",
@@ -88,19 +88,19 @@ class TestScenarioEngine:
             reasoning_share=0.1,
         )
 
-        with patch("scenario_engine.derive_scenario_model_ids", return_value=["model-a"]):
+        with patch("workbench.engines.scenario.derive_scenario_model_ids", return_value=["model-a"]):
             with patch(
-                "scenario_engine.run_benchmark_request",
+                "workbench.engines.scenario.run_benchmark_request",
                 return_value=BenchmarkResult(
                     rows=[],
                     raw_rows=[],
-                    matrix={},
                     languages=["en"],
                     tokenizers=[],
+                    composition_rows=[],
                 ),
             ):
-                with patch("scenario_engine.resolve_selection", return_value={"label": "Nemotron 3 Super family"}):
-                    with patch("scenario_engine.build_catalog_entries", return_value=[]):
+                with patch("workbench.engines.scenario.resolve_selection", return_value={"label": "Nemotron 3 Super family"}):
+                    with patch("workbench.engines.scenario.build_catalog_entries", return_value=[]):
                         try:
                             run_scenario_request(request)
                         except RuntimeError as exc:

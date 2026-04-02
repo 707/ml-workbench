@@ -7,8 +7,8 @@ import sys
 
 from huggingface_hub import snapshot_download
 
-from model_registry import list_free_runtime_choices
-from tokenizer import (
+from workbench.model_registry import list_free_runtime_choices
+from workbench.tokenizer import (
     SNAPSHOT_MANIFEST_PATH,
     SUPPORTED_TOKENIZERS,
     TiktokenAdapter,

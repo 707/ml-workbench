@@ -323,7 +323,7 @@ class TestCallOpenrouter:
         """Must POST to the OpenRouter chat completions endpoint."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {"choices": []}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -336,7 +336,7 @@ class TestCallOpenrouter:
         """Authorization header must include the API key."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -350,7 +350,7 @@ class TestCallOpenrouter:
         """The model ID must appear in the POST body."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -363,7 +363,7 @@ class TestCallOpenrouter:
         """The prompt must appear as a user message in the messages list."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -379,7 +379,7 @@ class TestCallOpenrouter:
 
         expected = {"choices": [{"message": {"content": "4"}}]}
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = expected
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -393,7 +393,7 @@ class TestCallOpenrouter:
 
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.raise_for_status.side_effect = req_lib.HTTPError("401")
 
             with pytest.raises(req_lib.HTTPError):
@@ -881,7 +881,7 @@ class TestFreeModels:
 
     def test_free_models_are_derived_from_shared_runtime_registry(self):
         from app import FREE_MODELS
-        from model_registry import list_free_runtime_choices
+        from workbench.model_registry import list_free_runtime_choices
 
         expected = sorted(
             (row["label"], row["model_id"])
@@ -912,7 +912,7 @@ class TestCallOpenrouterInferenceParams:
         """temperature kwarg must appear in the POST body when provided."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -925,7 +925,7 @@ class TestCallOpenrouterInferenceParams:
         """max_tokens kwarg must appear in the POST body when provided."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -938,7 +938,7 @@ class TestCallOpenrouterInferenceParams:
         """temperature must NOT appear in payload when not provided (None)."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -951,7 +951,7 @@ class TestCallOpenrouterInferenceParams:
         """max_tokens must NOT appear in payload when not provided (None)."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 
@@ -964,7 +964,7 @@ class TestCallOpenrouterInferenceParams:
         """Both temperature and max_tokens appear together when both provided."""
         from app import call_openrouter
 
-        with patch("openrouter.requests.post") as mock_post:
+        with patch("workbench.openrouter.requests.post") as mock_post:
             mock_post.return_value.json.return_value = {}
             mock_post.return_value.raise_for_status = MagicMock()
 

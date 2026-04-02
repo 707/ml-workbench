@@ -1,4 +1,4 @@
-from workbench_types import BenchmarkRequest, ScenarioRequest
+from workbench.types import BenchmarkRequest, ScenarioRequest
 
 
 class TestBenchmarkRequest:
@@ -10,6 +10,7 @@ class TestBenchmarkRequest:
             row_limit=5,
             include_estimates=False,
             include_proxy=False,
+            include_raw_rows=False,
         )
 
         assert request.languages == ("en", "ja")
@@ -21,7 +22,24 @@ class TestBenchmarkRequest:
             5,
             False,
             False,
+            False,
         )
+
+    def test_to_benchmark_request_can_disable_raw_rows_for_scenario_reuse(self):
+        request = ScenarioRequest.from_inputs(
+            corpus_key="strict_parallel",
+            languages=["en"],
+            tokenizer_keys=["mistral"],
+            row_limit=25,
+            monthly_requests=100000,
+            avg_input_tokens=600,
+            avg_output_tokens=250,
+            reasoning_share=0.1,
+        )
+
+        benchmark_request = request.to_benchmark_request()
+
+        assert benchmark_request.include_raw_rows is False
 
 
 class TestScenarioRequest:

@@ -13,8 +13,8 @@ class TestBenchmarkCorpus:
         return tok
 
     def test_benchmark_corpus_returns_rows(self):
-        from corpora import CorpusSample
-        from token_tax import benchmark_corpus
+        from workbench.corpora import CorpusSample
+        from workbench.token_tax import benchmark_corpus
 
         samples = {
             "en": [
@@ -25,23 +25,23 @@ class TestBenchmarkCorpus:
             ],
         }
 
-        with patch("token_tax.fetch_corpus_samples", return_value=samples):
-            with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
                 result = benchmark_corpus("strict_parallel", ["en", "ar"], ["gpt2"])
 
         assert len(result["rows"]) == 2
         assert ("ar", "gpt2") in result["matrix"]
 
     def test_benchmark_corpus_raises_when_no_rows_are_available(self):
-        from token_tax import benchmark_corpus
+        from workbench.token_tax import benchmark_corpus
 
-        with patch("token_tax.fetch_corpus_samples", return_value={}):
+        with patch("workbench.token_tax.fetch_corpus_samples", return_value={}):
             with pytest.raises(RuntimeError, match="No benchmark rows were produced"):
                 benchmark_corpus("strict_parallel", ["en"], ["gpt2"])
 
     def test_benchmark_corpus_tags_rows_with_lane(self):
-        from corpora import CorpusSample
-        from token_tax import benchmark_corpus
+        from workbench.corpora import CorpusSample
+        from workbench.token_tax import benchmark_corpus
 
         samples = {
             "en": [
@@ -52,8 +52,8 @@ class TestBenchmarkCorpus:
             ],
         }
 
-        with patch("token_tax.fetch_corpus_samples", return_value=samples):
-            with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
                 result = benchmark_corpus("streaming_exploration", ["fr"], ["gpt2"])
 
         assert result["rows"][0]["lane"] == "Streaming Exploration"
@@ -61,8 +61,8 @@ class TestBenchmarkCorpus:
         assert result["rows"][0]["rtc"] is None
 
     def test_benchmark_corpus_reports_tokenizer_progress(self):
-        from corpora import CorpusSample
-        from token_tax import benchmark_corpus
+        from workbench.corpora import CorpusSample
+        from workbench.token_tax import benchmark_corpus
 
         samples = {
             "en": [
@@ -74,8 +74,8 @@ class TestBenchmarkCorpus:
         }
         progress_calls: list[tuple[float, str]] = []
 
-        with patch("token_tax.fetch_corpus_samples", return_value=samples):
-            with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.fetch_corpus_samples", return_value=samples):
+            with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
                 benchmark_corpus(
                     "strict_parallel",
                     ["en", "ar"],
@@ -89,7 +89,7 @@ class TestBenchmarkCorpus:
         assert "gpt-2 legacy" in progress_calls[0][1].lower() or "mistral" in progress_calls[0][1].lower()
 
     def test_benchmark_appendix_mentions_streaming_lane(self):
-        from token_tax import benchmark_appendix
+        from workbench.token_tax import benchmark_appendix
 
         appendix = benchmark_appendix("streaming_exploration")
         assert "exploratory only" in appendix.lower()
@@ -98,7 +98,7 @@ class TestBenchmarkCorpus:
 
 class TestScenarioAnalysis:
     def test_scenario_analysis_returns_cost_rows(self):
-        from token_tax import scenario_analysis
+        from workbench.token_tax import scenario_analysis
 
         benchmark_rows = [
             {
@@ -126,8 +126,8 @@ class TestScenarioAnalysis:
             },
         ]
 
-        with patch("token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ar"]}):
-            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+        with patch("workbench.token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ar"]}):
+            with patch("workbench.token_tax.build_catalog_entries", return_value=catalog_rows):
                 rows = scenario_analysis(
                     corpus_key="strict_parallel",
                     languages=["ar"],
@@ -144,10 +144,10 @@ class TestScenarioAnalysis:
         assert rows[0]["monthly_cost"] > 0
 
     def test_scenario_analysis_raises_when_benchmark_is_empty(self):
-        from token_tax import scenario_analysis
+        from workbench.token_tax import scenario_analysis
 
-        with patch("token_tax.benchmark_corpus", return_value={"rows": [], "languages": ["ar"]}):
-            with patch("token_tax.build_catalog_entries", return_value=[]):
+        with patch("workbench.token_tax.benchmark_corpus", return_value={"rows": [], "languages": ["ar"]}):
+            with patch("workbench.token_tax.build_catalog_entries", return_value=[]):
                 with pytest.raises(RuntimeError, match="No scenario rows were produced"):
                     scenario_analysis(
                         corpus_key="strict_parallel",
@@ -162,7 +162,7 @@ class TestScenarioAnalysis:
                     )
 
     def test_scenario_analysis_preserves_speed_metadata(self):
-        from token_tax import scenario_analysis
+        from workbench.token_tax import scenario_analysis
 
         benchmark_rows = [
             {
@@ -193,8 +193,8 @@ class TestScenarioAnalysis:
             },
         ]
 
-        with patch("token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ar"]}):
-            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+        with patch("workbench.token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ar"]}):
+            with patch("workbench.token_tax.build_catalog_entries", return_value=catalog_rows):
                 rows = scenario_analysis(
                     corpus_key="strict_parallel",
                     languages=["ar"],
@@ -211,7 +211,7 @@ class TestScenarioAnalysis:
         assert rows[0]["output_tokens_per_second"] == 84.2
 
     def test_scenario_analysis_compares_multiple_models_on_one_tokenizer(self):
-        from token_tax import scenario_analysis
+        from workbench.token_tax import scenario_analysis
 
         benchmark_rows = [
             {
@@ -252,8 +252,8 @@ class TestScenarioAnalysis:
             },
         ]
 
-        with patch("token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ja"]}):
-            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+        with patch("workbench.token_tax.benchmark_corpus", return_value={"rows": benchmark_rows, "languages": ["ja"]}):
+            with patch("workbench.token_tax.build_catalog_entries", return_value=catalog_rows):
                 rows = scenario_analysis(
                     corpus_key="strict_parallel",
                     languages=["ja"],
@@ -272,7 +272,7 @@ class TestScenarioAnalysis:
         assert len(rows) == 2
 
     def test_scenario_analysis_rejects_streaming_exploration_as_cost_basis(self):
-        from token_tax import scenario_analysis
+        from workbench.token_tax import scenario_analysis
 
         with pytest.raises(ValueError, match="Strict Evidence"):
             scenario_analysis(
@@ -288,7 +288,7 @@ class TestScenarioAnalysis:
             )
 
     def test_scenario_analysis_raises_when_selected_tokenizer_family_is_missing(self):
-        from token_tax import scenario_analysis
+        from workbench.token_tax import scenario_analysis
 
         benchmark_rows = [
             {
@@ -330,10 +330,10 @@ class TestScenarioAnalysis:
         ]
 
         with patch(
-            "token_tax.benchmark_corpus",
+            "workbench.token_tax.benchmark_corpus",
             return_value={"rows": benchmark_rows, "languages": ["en"], "tokenizers": ["llama-3"]},
         ):
-            with patch("token_tax.build_catalog_entries", return_value=catalog_rows):
+            with patch("workbench.token_tax.build_catalog_entries", return_value=catalog_rows):
                 with pytest.raises(RuntimeError, match="missing tokenizer families"):
                     scenario_analysis(
                         corpus_key="strict_parallel",
@@ -353,8 +353,8 @@ class TestScenarioAnalysis:
 
 class TestWarmTokenizerDefaults:
     def test_default_warm_keys_cover_exact_free_runtime_families(self):
-        from model_registry import list_free_runtime_choices
         from warm_tokenizers import DEFAULT_KEYS
+        from workbench.model_registry import list_free_runtime_choices
 
         expected = {
             row["tokenizer_key"]
@@ -366,7 +366,7 @@ class TestWarmTokenizerDefaults:
 
 class TestScenarioCharts:
     def test_latency_chart_explains_missing_metadata(self):
-        from charts import build_metric_scatter
+        from workbench.charts import build_metric_scatter
 
         fig = build_metric_scatter(
             [{"label": "GPT-4o", "monthly_cost": 10.0, "latency_ms": None}],
@@ -379,17 +379,17 @@ class TestScenarioCharts:
 
 class TestAuditMarkdown:
     def test_audit_markdown_mentions_sources(self):
-        from token_tax import audit_markdown
+        from workbench.token_tax import audit_markdown
 
         markdown = audit_markdown()
         assert "FLORES-200" in markdown
         assert "OpenRouter Models API" in markdown
 
     def test_audit_markdown_mentions_tokenizer_snapshot_health(self):
-        from token_tax import audit_markdown
+        from workbench.token_tax import audit_markdown
 
         with patch(
-            "token_tax.list_tokenizer_snapshot_status",
+            "workbench.token_tax.list_tokenizer_snapshot_status",
             return_value=[
                 {"label": "Llama 3 family", "key": "llama-3", "status_label": "ready locally"},
                 {"label": "Nemotron 3 Super family", "key": "nemotron-3-super", "status_label": "missing local snapshot"},
@@ -406,7 +406,7 @@ class TestSpaceConfig:
     def test_readme_declares_docker_sdk_entrypoint(self):
         from pathlib import Path
 
-        readme = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
+        readme = Path(__file__).resolve().parents[1].joinpath("README.md").read_text(encoding="utf-8")
         assert 'sdk: docker' in readme
         assert 'app_port: 7860' in readme
 
@@ -415,7 +415,7 @@ class TestDockerfile:
     def test_dockerfile_is_minimal_and_bootstraps_app(self):
         from pathlib import Path
 
-        dockerfile = Path(__file__).with_name("Dockerfile").read_text(encoding="utf-8")
+        dockerfile = Path(__file__).resolve().parents[1].joinpath("Dockerfile").read_text(encoding="utf-8")
         assert "FROM python:3.10-slim" in dockerfile
         assert "apt-get" not in dockerfile
         assert 'CMD ["python", "-u", "bootstrap.py"]' in dockerfile
@@ -425,7 +425,7 @@ class TestDockerIgnore:
     def test_dockerignore_includes_benchmark_and_telemetry_snapshots(self):
         from pathlib import Path
 
-        dockerignore = Path(__file__).with_name(".dockerignore").read_text(encoding="utf-8")
+        dockerignore = Path(__file__).resolve().parents[1].joinpath(".dockerignore").read_text(encoding="utf-8")
         assert "!data/strict_parallel/flores_v1.jsonl" in dockerignore
         assert "!data/telemetry/" in dockerignore
         assert "!data/telemetry/artificial_analysis_snapshot.json" in dockerignore
@@ -437,15 +437,15 @@ class TestBootstrap:
 
         for module_name in (
             "app",
-            "charts",
-            "corpora",
-            "diagnostics",
-            "model_registry",
-            "pricing",
-            "provenance",
-            "token_tax",
-            "token_tax_ui",
-            "tokenizer",
+            "workbench.charts",
+            "workbench.corpora",
+            "workbench.diagnostics",
+            "workbench.model_registry",
+            "workbench.pricing",
+            "workbench.provenance",
+            "workbench.token_tax",
+            "workbench.token_tax_ui",
+            "workbench.tokenizer",
         ):
             assert module_name in REQUIRED_MODULES
 
@@ -454,14 +454,14 @@ class TestRequirements:
     def test_requirements_align_with_hf_gradio_sdk(self):
         from pathlib import Path
 
-        requirements = Path(__file__).with_name("requirements.txt").read_text(encoding="utf-8")
+        requirements = Path(__file__).resolve().parents[1].joinpath("requirements.txt").read_text(encoding="utf-8")
         assert "gradio[oauth,mcp]==6.8.0" in requirements
         assert "protobuf>=4.25" in requirements
 
     def test_pyproject_aligns_with_hf_gradio_sdk(self):
         from pathlib import Path
 
-        pyproject = Path(__file__).with_name("pyproject.toml").read_text(encoding="utf-8")
+        pyproject = Path(__file__).resolve().parents[1].joinpath("pyproject.toml").read_text(encoding="utf-8")
         assert 'gradio[oauth,mcp]==6.8.0' in pyproject
         assert 'protobuf>=4.25' in pyproject
 
@@ -470,7 +470,7 @@ class TestDeployVerification:
     def test_makefile_exposes_render_and_hf_deploy_paths(self):
         from pathlib import Path
 
-        makefile = Path(__file__).with_name("Makefile").read_text(encoding="utf-8")
+        makefile = Path(__file__).resolve().parents[1].joinpath("Makefile").read_text(encoding="utf-8")
         assert "deploy-render" in makefile
         assert "git push $(GITHUB_REMOTE) main" in makefile
         assert "deploy-hf" in makefile

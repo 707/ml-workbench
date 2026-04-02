@@ -7,7 +7,7 @@ API calls for identical inputs.
 
 import functools
 
-from openrouter import call_openrouter
+from workbench.openrouter import call_openrouter
 
 _TRANSLATION_MODEL = "meta-llama/llama-3.1-8b-instruct"
 

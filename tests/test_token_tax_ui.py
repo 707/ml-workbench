@@ -19,7 +19,7 @@ class TestBuildTokenTaxUi:
     def test_returns_gradio_blocks(self):
         import gradio as gr
 
-        from token_tax_ui import build_token_tax_ui
+        from workbench.token_tax_ui import build_token_tax_ui
 
         demo = build_token_tax_ui()
         assert isinstance(demo, gr.Blocks)
@@ -27,13 +27,13 @@ class TestBuildTokenTaxUi:
 
 class TestWorkbenchHandlers:
     def test_default_benchmark_metric_uses_dense_streaming_metric(self):
-        from token_tax_ui import _default_benchmark_metric_for
+        from workbench.token_tax_ui import _default_benchmark_metric_for
 
         assert _default_benchmark_metric_for("strict_parallel") == "rtc"
         assert _default_benchmark_metric_for("streaming_exploration") == "bytes_per_token"
 
     def test_default_benchmark_tokenizers_use_curated_subset(self):
-        from token_tax_ui import default_benchmark_tokenizers
+        from workbench.token_tax_ui import default_benchmark_tokenizers
 
         selected = default_benchmark_tokenizers()
 
@@ -44,7 +44,7 @@ class TestWorkbenchHandlers:
         assert len(selected) <= 4
 
     def test_scenario_model_ids_use_all_valid_free_models_for_selected_tokenizers(self):
-        from token_tax_ui import derive_scenario_model_ids
+        from workbench.token_tax_ui import derive_scenario_model_ids
 
         selected = derive_scenario_model_ids(["llama-3", "mistral"], include_proxy=False)
 
@@ -53,12 +53,12 @@ class TestWorkbenchHandlers:
         assert "qwen/qwen-2.5-7b-instruct:free" not in selected
 
     def test_scenario_model_ids_return_empty_when_no_tokenizers_selected(self):
-        from token_tax_ui import derive_scenario_model_ids
+        from workbench.token_tax_ui import derive_scenario_model_ids
 
         assert derive_scenario_model_ids([], include_proxy=False) == []
 
     def test_scenario_model_ids_respect_proxy_toggle(self):
-        from token_tax_ui import derive_scenario_model_ids
+        from workbench.token_tax_ui import derive_scenario_model_ids
 
         without_proxy = derive_scenario_model_ids(["gemma-2"], include_proxy=False)
         with_proxy = derive_scenario_model_ids(["gemma-2"], include_proxy=True)
@@ -67,8 +67,8 @@ class TestWorkbenchHandlers:
         assert with_proxy == ["google/gemma-3-27b-it:free"]
 
     def test_handle_scenario_tab_derives_current_model_selection(self):
-        from token_tax_ui import _handle_scenario_tab
-        from workbench_types import ScenarioResult
+        from workbench.token_tax_ui import _handle_scenario_tab
+        from workbench.types import ScenarioResult
 
         captured: dict[str, object] = {}
 
@@ -96,7 +96,7 @@ class TestWorkbenchHandlers:
                 model_ids=["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             )
 
-        with patch("token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
+        with patch("workbench.token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
             outputs = _handle_scenario_tab(
                 ["en"],
                 ["gpt-oss"],
@@ -116,7 +116,7 @@ class TestWorkbenchHandlers:
         assert outputs[0]["data"][0][2] in {"openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"}
 
     def test_handle_scenario_tab_returns_empty_state_when_no_tokenizers_selected(self):
-        from token_tax_ui import _handle_scenario_tab
+        from workbench.token_tax_ui import _handle_scenario_tab
 
         outputs = _handle_scenario_tab(
             ["en"],
@@ -137,8 +137,8 @@ class TestWorkbenchHandlers:
         assert "Select at least one benchmark tokenizer family." in outputs[-2]
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
-        from token_tax_ui import _handle_catalog_tab
-        from workbench_types import CatalogResult
+        from workbench.token_tax_ui import _handle_catalog_tab
+        from workbench.types import CatalogResult
 
         tokenizer_rows = [
             {
@@ -153,7 +153,7 @@ class TestWorkbenchHandlers:
         ]
 
         with patch(
-            "token_tax_ui.run_catalog_request",
+            "workbench.token_tax_ui.run_catalog_request",
             return_value=CatalogResult(
                 rows=tokenizer_rows,
                 appendix="## Catalog Appendix",
@@ -172,7 +172,7 @@ class TestWorkbenchHandlers:
         assert "Diagnostics" in diagnostics
 
     def test_handle_catalog_tab_returns_final_tuple_not_streaming_generator(self):
-        from token_tax_ui import _handle_catalog_tab
+        from workbench.token_tax_ui import _handle_catalog_tab
 
         outputs = _handle_catalog_tab(include_proxy=False, refresh_live=False, live_updates=False)
 
@@ -180,7 +180,7 @@ class TestWorkbenchHandlers:
         assert len(outputs) == 3
 
     def test_aggregate_scenario_rows_groups_by_model(self):
-        from token_tax_ui import _aggregate_scenario_rows
+        from workbench.token_tax_ui import _aggregate_scenario_rows
 
         rows = [
             {
@@ -220,8 +220,8 @@ class TestWorkbenchHandlers:
         assert aggregated[0]["monthly_input_tokens"] == 350_000
 
     def test_handle_benchmark_tab_returns_final_tuple_with_live_diagnostics_enabled(self):
-        from token_tax_ui import _handle_benchmark_tab
-        from workbench_types import BenchmarkResult
+        from workbench.token_tax_ui import _handle_benchmark_tab
+        from workbench.types import BenchmarkResult
 
         benchmark_rows = [
             {
@@ -258,13 +258,13 @@ class TestWorkbenchHandlers:
             },
         ]
         with patch(
-            "token_tax_ui.run_benchmark_request",
+            "workbench.token_tax_ui.run_benchmark_request",
             return_value=BenchmarkResult(
                 rows=benchmark_rows,
                 raw_rows=raw_rows,
-                matrix={("en", "gpt2"): benchmark_rows[0]},
                 languages=["en"],
                 tokenizers=["gpt2"],
+                composition_rows=[],
             ),
         ):
             outputs = _handle_benchmark_tab(
@@ -287,9 +287,9 @@ class TestWorkbenchHandlers:
         assert "Diagnostics" in outputs[-1]
 
     def test_handle_benchmark_tab_returns_runtime_message_when_benchmark_errors(self):
-        from token_tax_ui import _handle_benchmark_tab
+        from workbench.token_tax_ui import _handle_benchmark_tab
 
-        with patch("token_tax_ui.run_benchmark_request", side_effect=RuntimeError("boom")):
+        with patch("workbench.token_tax_ui.run_benchmark_request", side_effect=RuntimeError("boom")):
             outputs = _handle_benchmark_tab(
                 "Strict Evidence",
                 ["en"],
@@ -308,13 +308,13 @@ class TestWorkbenchHandlers:
         assert "boom" in outputs[-2]
 
     def test_language_script_presets_filter_supported_languages(self):
-        from token_tax_ui import apply_language_preset
+        from workbench.token_tax_ui import apply_language_preset
 
         assert apply_language_preset("Arabic") == ["ar"]
         assert set(apply_language_preset("Latin")) >= {"en", "fr", "de", "es", "pt"}
 
     def test_language_choice_pairs_use_human_readable_labels(self):
-        from token_tax_ui import language_choice_pairs
+        from workbench.token_tax_ui import language_choice_pairs
 
         choices = language_choice_pairs(["en", "ar", "hi"])
         assert ("English", "en") in choices
@@ -322,7 +322,7 @@ class TestWorkbenchHandlers:
         assert ("Hindi", "hi") in choices
 
     def test_build_benchmark_preview_markdown_uses_selected_row(self):
-        from token_tax_ui import build_benchmark_preview_markdown
+        from workbench.token_tax_ui import build_benchmark_preview_markdown
 
         markdown = build_benchmark_preview_markdown(
             [
@@ -348,7 +348,7 @@ class TestWorkbenchHandlers:
         assert "Bonjour le monde" in markdown
 
     def test_build_coverage_rows_extracts_unique_token_metrics(self):
-        from token_tax_ui import build_coverage_rows
+        from workbench.token_tax_ui import build_coverage_rows
 
         rows = build_coverage_rows(
             [
@@ -368,7 +368,7 @@ class TestWorkbenchHandlers:
         assert rows[0]["continued_word_rate"] == 0.4
 
     def test_observed_composition_uses_full_token_texts_not_preview(self):
-        from token_tax_ui import build_observed_composition_rows
+        from workbench.token_tax_ui import build_observed_composition_rows
 
         rows = build_observed_composition_rows(
             [
@@ -384,7 +384,7 @@ class TestWorkbenchHandlers:
         assert sum(row["token_count"] for row in rows) == 3
 
     def test_build_benchmark_summary_markdown_reports_key_ranges(self):
-        from token_tax_ui import build_benchmark_summary_markdown
+        from workbench.token_tax_ui import build_benchmark_summary_markdown
 
         markdown = build_benchmark_summary_markdown(
             [
@@ -415,7 +415,7 @@ class TestWorkbenchHandlers:
         assert "Word split rate" in markdown
 
     def test_build_benchmark_summary_markdown_uses_plain_language_labels(self):
-        from token_tax_ui import build_benchmark_summary_markdown
+        from workbench.token_tax_ui import build_benchmark_summary_markdown
 
         markdown = build_benchmark_summary_markdown(
             [
@@ -438,7 +438,7 @@ class TestWorkbenchHandlers:
     def test_chart_explainer_text_is_visible_copy_not_tooltip_html(self):
         import inspect
 
-        import token_tax_ui
+        import workbench.token_tax_ui as token_tax_ui
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
         assert "tooltip_label_html" not in src
@@ -447,7 +447,7 @@ class TestWorkbenchHandlers:
     def test_filter_layout_uses_asymmetric_rail_classes(self):
         import inspect
 
-        import token_tax_ui
+        import workbench.token_tax_ui as token_tax_ui
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
         assert "filter-rail filter-rail--compact" in src
@@ -463,13 +463,13 @@ class TestWorkbenchHandlers:
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
 
-        import token_tax_ui
+        import workbench.token_tax_ui as token_tax_ui
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
         assert "catalog-utility-row" in src
 
     def test_build_coverage_rows_preserve_fertility_for_bar_charts(self):
-        from token_tax_ui import build_coverage_rows
+        from workbench.token_tax_ui import build_coverage_rows
 
         rows = build_coverage_rows(
             [
@@ -489,7 +489,7 @@ class TestWorkbenchHandlers:
         assert rows[0]["token_fertility"] == 1.9
 
     def test_build_scenario_speed_summary_reports_matches_and_gaps(self):
-        from token_tax_ui import build_scenario_speed_summary_markdown
+        from workbench.token_tax_ui import build_scenario_speed_summary_markdown
 
         markdown = build_scenario_speed_summary_markdown(
             [
@@ -516,7 +516,7 @@ class TestWorkbenchHandlers:
         assert "Llama 3.2 3B Instruct (Free)" in markdown
 
     def test_build_scenario_outputs_includes_language_detail_plots(self):
-        from token_tax_ui import _build_scenario_outputs
+        from workbench.token_tax_ui import _build_scenario_outputs
 
         rows = [
             {
@@ -556,8 +556,8 @@ class TestWorkbenchHandlers:
         assert outputs[9].data
 
     def test_handle_scenario_tab_recomputes_chart_outputs_across_runs(self):
-        from token_tax_ui import _handle_scenario_tab
-        from workbench_types import ScenarioResult
+        from workbench.token_tax_ui import _handle_scenario_tab
+        from workbench.types import ScenarioResult
 
         def _fake_run_scenario_request(request, progress_callback=None):
             tokenizer_key = request.tokenizer_keys[0]
@@ -595,7 +595,7 @@ class TestWorkbenchHandlers:
                 }
             ], model_ids=["qwen/qwen-2.5-7b-instruct:free"])
 
-        with patch("token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
+        with patch("workbench.token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
             first = _handle_scenario_tab(
                 ["en"], ["llama-3"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False, False
             )
@@ -606,10 +606,10 @@ class TestWorkbenchHandlers:
         assert float(first[1].data[0].x[0]) != float(second[1].data[0].x[0])
 
     def test_handle_scenario_tab_returns_final_tuple_not_streaming_generator(self):
-        from token_tax_ui import _handle_scenario_tab
-        from workbench_types import ScenarioResult
+        from workbench.token_tax_ui import _handle_scenario_tab
+        from workbench.types import ScenarioResult
 
-        with patch("token_tax_ui.run_scenario_request", return_value=ScenarioResult(rows=[], model_ids=[])):
+        with patch("workbench.token_tax_ui.run_scenario_request", return_value=ScenarioResult(rows=[], model_ids=[])):
             result = _handle_scenario_tab(
                 ["en"],
                 ["llama-3"],
@@ -628,7 +628,7 @@ class TestWorkbenchHandlers:
         assert isinstance(result, tuple)
 
     def test_build_benchmark_chart_explainer_mentions_plain_language_terms(self):
-        from token_tax_ui import build_benchmark_chart_explainer_markdown
+        from workbench.token_tax_ui import build_benchmark_chart_explainer_markdown
 
         markdown = build_benchmark_chart_explainer_markdown("rtc", "Coverage")
 
@@ -637,7 +637,7 @@ class TestWorkbenchHandlers:
         assert "###" not in markdown
 
     def test_build_benchmark_chart_explainer_for_coverage_mentions_split_rate(self):
-        from token_tax_ui import build_benchmark_chart_explainer_markdown
+        from workbench.token_tax_ui import build_benchmark_chart_explainer_markdown
 
         markdown = build_benchmark_chart_explainer_markdown("token_fertility", "Coverage")
 
@@ -646,7 +646,7 @@ class TestWorkbenchHandlers:
         assert markdown.lstrip().startswith("<div")
 
     def test_build_benchmark_chart_explainer_for_streaming_baseline_mentions_caveat(self):
-        from token_tax_ui import build_benchmark_chart_explainer_markdown
+        from workbench.token_tax_ui import build_benchmark_chart_explainer_markdown
 
         markdown = build_benchmark_chart_explainer_markdown("english_baseline_ratio", "Overview")
 
@@ -656,7 +656,7 @@ class TestWorkbenchHandlers:
         assert "metric-badge" in markdown
 
     def test_sparse_streaming_baseline_metric_shows_explanatory_empty_state(self):
-        from token_tax_ui import _build_benchmark_outputs
+        from workbench.token_tax_ui import _build_benchmark_outputs
 
         rows = [
             {
@@ -703,6 +703,7 @@ class TestWorkbenchHandlers:
         outputs = _build_benchmark_outputs(
             rows,
             [],
+            [],
             ["en", "ar", "hi"],
             "english_baseline_ratio",
             "appendix",
@@ -718,7 +719,7 @@ class TestWorkbenchHandlers:
         assert "english baseline" in distribution.layout.annotations[0].text.lower()
 
     def test_build_benchmark_summary_marks_streaming_baseline_as_exploratory(self):
-        from token_tax_ui import build_benchmark_summary_markdown
+        from workbench.token_tax_ui import build_benchmark_summary_markdown
 
         markdown = build_benchmark_summary_markdown(
             [
@@ -738,7 +739,7 @@ class TestWorkbenchHandlers:
         assert "metric-badge" in markdown
 
     def test_build_scenario_appendix_summary_is_compact_plain_language(self):
-        from token_tax_ui import build_scenario_appendix_summary_html
+        from workbench.token_tax_ui import build_scenario_appendix_summary_html
 
         html = build_scenario_appendix_summary_html()
 
@@ -749,7 +750,7 @@ class TestWorkbenchHandlers:
         assert "legacy 4 chars/token heuristic" in html.lower()
 
     def test_shorten_model_label_truncates_long_values(self):
-        from token_tax_ui import shorten_model_label
+        from workbench.token_tax_ui import shorten_model_label
 
         shortened = shorten_model_label("Qwen 2.5 7B Instruct (Free) with very long suffix")
 
@@ -757,7 +758,7 @@ class TestWorkbenchHandlers:
         assert len(shortened) < len("Qwen 2.5 7B Instruct (Free) with very long suffix")
 
     def test_export_serialized_table_csv_writes_current_rows(self):
-        from token_tax_ui import export_serialized_table_csv
+        from workbench.token_tax_ui import export_serialized_table_csv
 
         path = export_serialized_table_csv(
             {
@@ -773,12 +774,12 @@ class TestWorkbenchHandlers:
         assert csv_path.read_text(encoding="utf-8").splitlines()[0] == "language,tokenizer_key,rtc"
 
     def test_export_serialized_table_csv_returns_none_for_empty_table(self):
-        from token_tax_ui import export_serialized_table_csv
+        from workbench.token_tax_ui import export_serialized_table_csv
 
         assert export_serialized_table_csv({"headers": ["language"], "data": []}) is None
 
     def test_catalog_display_rows_use_review_friendly_column_labels(self):
-        from token_tax_ui import CATALOG_COLUMNS, _catalog_display_rows
+        from workbench.token_tax_ui import CATALOG_COLUMNS, _catalog_display_rows
 
         rows = _catalog_display_rows(
             [
@@ -802,7 +803,7 @@ class TestWorkbenchHandlers:
         assert rows[0]["Free Model Examples"] == "Llama 3.2 3B Instruct (Free)"
 
     def test_catalog_display_rows_use_human_friendly_mapping_labels(self):
-        from token_tax_ui import _catalog_display_rows
+        from workbench.token_tax_ui import _catalog_display_rows
 
         rows = _catalog_display_rows(
             [
@@ -838,9 +839,9 @@ class TestHandleDashboard:
         return tok
 
     def test_returns_expected_outputs(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
-        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
             result = _handle_dashboard(
                 text="hello world",
                 english_text="hello world",
@@ -859,9 +860,9 @@ class TestHandleDashboard:
         assert isinstance(recs_md, str)
 
     def test_table_has_expected_columns(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
-        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
             table_data, _, _, _, _ = _handle_dashboard(
                 text="test",
                 english_text="test",
@@ -875,9 +876,9 @@ class TestHandleDashboard:
         assert len(table_data["data"]) == 1  # one model
 
     def test_multiple_models(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
-        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
             table_data, _, _, _, _ = _handle_dashboard(
                 text="test",
                 english_text="test",
@@ -889,9 +890,9 @@ class TestHandleDashboard:
         assert len(table_data["data"]) == 2
 
     def test_no_english_text_still_works(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
-        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+        with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
             result = _handle_dashboard(
                 text="hello",
                 english_text="",
@@ -903,9 +904,9 @@ class TestHandleDashboard:
         assert len(result) == 5
 
     def test_empty_text_returns_gracefully(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
-        with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(0)):
+        with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(0)):
             result = _handle_dashboard(
                 text="",
                 english_text="",
@@ -917,7 +918,7 @@ class TestHandleDashboard:
         assert len(result) == 5
 
     def test_no_models_selected_returns_empty(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
         result = _handle_dashboard(
             text="test",
@@ -931,9 +932,9 @@ class TestHandleDashboard:
         assert len(table_data["data"]) == 0
 
     def test_error_returns_error_message(self):
-        from token_tax_ui import _handle_dashboard
+        from workbench.token_tax_ui import _handle_dashboard
 
-        with patch("token_tax.get_tokenizer", side_effect=ValueError("bad model")):
+        with patch("workbench.token_tax.get_tokenizer", side_effect=ValueError("bad model")):
             result = _handle_dashboard(
                 text="test",
                 english_text="test",
@@ -971,21 +972,21 @@ class TestHandleTraffic:
         return tok
 
     def test_no_file_returns_upload_message(self):
-        from token_tax_ui import _handle_traffic
+        from workbench.token_tax_ui import _handle_traffic
 
         table, _, summary = _handle_traffic(None, "gpt2")
         assert "Upload" in summary
         assert len(table["data"]) == 0
 
     def test_valid_csv_returns_results(self):
-        from token_tax_ui import _handle_traffic
+        from workbench.token_tax_ui import _handle_traffic
 
         path = _write_csv(
             [["en", "1000", "500"], ["ar", "2000", "300"]],
             headers=["language", "request_count", "avg_chars"],
         )
         try:
-            with patch("token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
+            with patch("workbench.token_tax.get_tokenizer", return_value=self._mock_tokenizer(5)):
                 table, _, summary = _handle_traffic(path, "gpt2")
 
             assert len(table["data"]) == 2
@@ -996,7 +997,7 @@ class TestHandleTraffic:
             os.unlink(path)
 
     def test_invalid_csv_returns_error(self):
-        from token_tax_ui import _handle_traffic
+        from workbench.token_tax_ui import _handle_traffic
 
         path = _write_csv(
             [["en", "1000"]],
@@ -1009,7 +1010,7 @@ class TestHandleTraffic:
             os.unlink(path)
 
     def test_empty_csv_returns_no_data_message(self):
-        from token_tax_ui import _handle_traffic
+        from workbench.token_tax_ui import _handle_traffic
 
         path = _write_csv(
             [],
@@ -1022,21 +1023,21 @@ class TestHandleTraffic:
             os.unlink(path)
 
     def test_analysis_error_returns_error_message(self):
-        from token_tax_ui import _handle_traffic
+        from workbench.token_tax_ui import _handle_traffic
 
         path = _write_csv(
             [["en", "1000", "500"]],
             headers=["language", "request_count", "avg_chars"],
         )
         try:
-            with patch("token_tax.get_tokenizer", side_effect=ValueError("bad")):
+            with patch("workbench.token_tax.get_tokenizer", side_effect=ValueError("bad")):
                 table, _, summary = _handle_traffic(path, "gpt2")
             assert "error" in summary.lower()
         finally:
             os.unlink(path)
 
     def test_high_exposure_shows_warning(self):
-        from token_tax_ui import _handle_traffic
+        from workbench.token_tax_ui import _handle_traffic
 
         path = _write_csv(
             [["ar", "5000", "500"]],
@@ -1049,8 +1050,8 @@ class TestHandleTraffic:
             def _side_effect(name):
                 return source_tok  # same tokenizer, tokenize_text will differ
 
-            with patch("token_tax.get_tokenizer", side_effect=_side_effect):
-                with patch("token_tax.tokenize_text") as mock_tt:
+            with patch("workbench.token_tax.get_tokenizer", side_effect=_side_effect):
+                with patch("workbench.token_tax.tokenize_text") as mock_tt:
                     # First call = English baseline, second = Arabic
                     mock_tt.side_effect = [
                         [{"token": f"t{i}", "id": i} for i in range(5)],   # en
@@ -1088,26 +1089,26 @@ class TestBuildBubbleChart:
         ]
 
     def test_returns_plotly_figure(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(self._make_results())
         assert isinstance(fig, go.Figure)
 
     def test_figure_has_traces(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(self._make_results(3))
         assert len(fig.data) > 0
 
     def test_trace_type_is_scatter(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(self._make_results(3))
         for trace in fig.data:
             assert trace.type == "scatter"
 
     def test_empty_results_returns_empty_figure(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart([])
         assert isinstance(fig, go.Figure)
@@ -1117,14 +1118,14 @@ class TestBuildBubbleChart:
         )
 
     def test_single_model_does_not_crash(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(self._make_results(1))
         assert isinstance(fig, go.Figure)
         assert len(fig.data) > 0
 
     def test_bubble_size_varies_with_token_count(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         results = self._make_results(3)
         fig = build_bubble_chart(results)
@@ -1134,7 +1135,7 @@ class TestBuildBubbleChart:
             assert trace.marker.size is not None
 
     def test_axes_labels(self):
-        from charts import build_bubble_chart
+        from workbench.charts import build_bubble_chart
 
         fig = build_bubble_chart(self._make_results(3))
         assert "RTC" in (fig.layout.xaxis.title.text or "")

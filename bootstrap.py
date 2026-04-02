@@ -8,16 +8,17 @@ import sys
 
 REQUIRED_MODULES = [
     "app",
-    "charts",
-    "corpora",
-    "diagnostics",
-    "model_registry",
-    "openrouter",
-    "pricing",
-    "provenance",
-    "token_tax",
-    "token_tax_ui",
-    "tokenizer",
+    "workbench",
+    "workbench.charts",
+    "workbench.corpora",
+    "workbench.diagnostics",
+    "workbench.model_registry",
+    "workbench.openrouter",
+    "workbench.pricing",
+    "workbench.provenance",
+    "workbench.token_tax",
+    "workbench.token_tax_ui",
+    "workbench.tokenizer",
 ]
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ui_feedback import mapping_quality_label
+from workbench.viewmodels.feedback import mapping_quality_label
 
 
 def catalog_display_rows(rows: list[dict]) -> list[dict]:

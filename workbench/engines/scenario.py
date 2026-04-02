@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Callable
 
-from benchmark_engine import run_benchmark_request
-from model_registry import build_catalog_entries, list_free_runtime_choices, resolve_selection
-from workbench_types import ScenarioRequest, ScenarioResult
+from workbench.engines.benchmark import run_benchmark_request
+from workbench.model_registry import (
+    build_catalog_entries,
+    list_free_runtime_choices,
+    resolve_selection,
+)
+from workbench.types import ScenarioRequest, ScenarioResult
 
 
 def derive_scenario_model_ids(

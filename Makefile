@@ -29,7 +29,7 @@ lint:
 	uv run ruff check .
 
 typecheck:
-	uv run mypy app.py charts.py token_tax.py token_tax_ui.py model_registry.py tokenizer.py corpora.py
+	uv run mypy app.py workbench
 
 test:
 	uv run pytest -v --cov --cov-report=term-missing

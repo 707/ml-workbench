@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from tokenizer_registry import tokenizer_color_map
+from workbench.tokenizer_registry import tokenizer_color_map
 
 RISK_COLORS = {
     "low": "#4CAF50",
@@ -436,7 +436,7 @@ def build_context_chart(analysis_results: list[dict], avg_english_tokens_per_wor
     """Horizontal bar chart showing effective context window in words."""
     import plotly.graph_objects as go
 
-    from pricing import get_pricing
+    from workbench.pricing import get_pricing
 
     if not analysis_results:
         return _empty_figure("No data — run an analysis first")

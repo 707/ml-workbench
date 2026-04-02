@@ -115,15 +115,15 @@ The app is intentionally split into a few clear layers so the data flow stays ex
   - Why Tokenizers Matter
 
 ### Tokenizer benchmark pipeline
-- [`corpora.py`](corpora.py) provides the strict snapshot and the streaming corpus fetch path
-- [`tokenizer_registry.py`](tokenizer_registry.py) is the source of truth for tokenizer-family metadata
-- [`tokenizer.py`](tokenizer.py) loads and caches tokenizer implementations
-- [`token_tax.py`](token_tax.py) computes benchmark rows, raw rows, scenario projections, and appendices
-- [`charts.py`](charts.py) turns benchmark and scenario rows into Plotly figures
-- [`token_tax_ui.py`](token_tax_ui.py) wires those handlers into Gradio tabs, tables, plots, CSV export, and explanatory copy
+- [`workbench/corpora.py`](workbench/corpora.py) provides the strict snapshot and the streaming corpus fetch path
+- [`workbench/tokenizer_registry.py`](workbench/tokenizer_registry.py) is the source of truth for tokenizer-family metadata
+- [`workbench/tokenizer.py`](workbench/tokenizer.py) loads and caches tokenizer implementations
+- [`workbench/token_tax.py`](workbench/token_tax.py) computes benchmark rows, raw rows, scenario projections, and appendices
+- [`workbench/charts.py`](workbench/charts.py) turns benchmark and scenario rows into Plotly figures
+- [`workbench/token_tax_ui.py`](workbench/token_tax_ui.py) wires those handlers into Gradio tabs, tables, plots, CSV export, and explanatory copy
 
 ### Registry-driven model mapping
-- [`model_registry.py`](model_registry.py) maps tokenizer families to free deployable models, pricing, and benchmark-only speed metadata
+- [`workbench/model_registry.py`](workbench/model_registry.py) maps tokenizer families to free deployable models, pricing, and benchmark-only speed metadata
 - Scenario Lab only uses models with acceptable tokenizer provenance for the current policy settings
 
 ### Scenario modelling
@@ -145,23 +145,23 @@ The app is intentionally split into a few clear layers so the data flow stays ex
 
 ### Core app
 - [`app.py`](app.py): Gradio shell and comparison tab
-- [`explainer.py`](explainer.py): plain-language explainer tab
+- [`workbench/explainer.py`](workbench/explainer.py): plain-language explainer tab
 
 ### Benchmark + scenario
-- [`token_tax.py`](token_tax.py): benchmark/scenario computation
-- [`token_tax_ui.py`](token_tax_ui.py): workbench UI composition
-- [`charts.py`](charts.py): chart builders
+- [`workbench/token_tax.py`](workbench/token_tax.py): benchmark/scenario computation
+- [`workbench/token_tax_ui.py`](workbench/token_tax_ui.py): workbench UI composition
+- [`workbench/charts.py`](workbench/charts.py): chart builders
 
 ### Registries + data
-- [`tokenizer_registry.py`](tokenizer_registry.py): tokenizer family metadata
-- [`model_registry.py`](model_registry.py): free model mappings and pricing metadata
-- [`corpora.py`](corpora.py): corpus sources and snapshot loading
+- [`workbench/tokenizer_registry.py`](workbench/tokenizer_registry.py): tokenizer family metadata
+- [`workbench/model_registry.py`](workbench/model_registry.py): free model mappings and pricing metadata
+- [`workbench/corpora.py`](workbench/corpora.py): corpus sources and snapshot loading
 - [`data/`](data/): committed benchmark and telemetry snapshots
 
 ### Verification and tooling
 - [`review_harness.py`](review_harness.py): screenshot review harness
 - [`scripts/`](scripts/): review, snapshot, and utility scripts
-- `test_*.py`: TDD/regression suite
+- [`tests/`](tests/): TDD/regression suite
 
 ## Quality And Verification
 

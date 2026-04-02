@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
 
-from pricing import get_pricing, refresh_from_openrouter
-from tokenizer_registry import TOKENIZER_FAMILY_SPECS
+from workbench import REPO_ROOT
+from workbench.pricing import get_pricing, refresh_from_openrouter
+from workbench.tokenizer_registry import TOKENIZER_FAMILY_SPECS
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,7 @@ FREE_OPENROUTER_MODELS: dict[str, tuple[str, ...]] = {
 }
 
 ARTIFICIAL_ANALYSIS_SNAPSHOT_PATH = (
-    Path(__file__).resolve().parent / "data" / "telemetry" / "artificial_analysis_snapshot.json"
+    REPO_ROOT / "data" / "telemetry" / "artificial_analysis_snapshot.json"
 )
 
 

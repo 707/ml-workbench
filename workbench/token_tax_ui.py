@@ -8,10 +8,7 @@ import tempfile
 
 import gradio as gr
 
-from benchmark_engine import run_benchmark_request
-from catalog_engine import run_catalog_request
-from catalog_viewmodels import catalog_display_rows
-from charts import (
+from workbench.charts import (
     build_bubble_chart,
     build_category_bar,
     build_context_chart,
@@ -22,21 +19,18 @@ from charts import (
     build_scenario_language_detail_scatter,
     build_stacked_category_bar,
 )
-from corpora import DEFAULT_BENCHMARK_LANGUAGES
-from diagnostics import clear_events, log_event, render_markdown
-from model_registry import list_tokenizer_families
-from scenario_engine import (
+from workbench.corpora import DEFAULT_BENCHMARK_LANGUAGES
+from workbench.diagnostics import clear_events, log_event, render_markdown
+from workbench.engines.benchmark import run_benchmark_request
+from workbench.engines.catalog import run_catalog_request
+from workbench.engines.scenario import (
     derive_scenario_model_ids as derive_scenario_model_ids_for_request,
 )
-from scenario_engine import (
+from workbench.engines.scenario import (
     run_scenario_request,
 )
-from scenario_viewmodels import (
-    aggregate_scenario_rows,
-    build_scenario_language_detail_rows,
-    build_scenario_speed_summary,
-)
-from token_tax import (
+from workbench.model_registry import list_tokenizer_families
+from workbench.token_tax import (
     analyze_text_across_models,
     audit_markdown,
     benchmark_all,
@@ -51,12 +45,18 @@ from token_tax import (
     scenario_appendix,
     serialize_table,
 )
-from ui_feedback import (
+from workbench.types import BenchmarkRequest, CatalogRequest, ScenarioRequest
+from workbench.viewmodels.catalog import catalog_display_rows
+from workbench.viewmodels.feedback import (
     build_chart_help_html,
     build_empty_state_markdown,
     build_runtime_error_markdown,
 )
-from workbench_types import BenchmarkRequest, CatalogRequest, ScenarioRequest
+from workbench.viewmodels.scenario import (
+    aggregate_scenario_rows,
+    build_scenario_language_detail_rows,
+    build_scenario_speed_summary,
+)
 
 SCRIPT_FAMILY_PRESETS = {
     "All": list(DEFAULT_BENCHMARK_LANGUAGES),
@@ -599,6 +599,7 @@ def build_observed_composition_rows(raw_rows: list[dict]) -> list[dict]:
 def _build_benchmark_outputs(
     rows: list[dict],
     raw_rows: list[dict],
+    composition_rows: list[dict],
     selected_languages: list[str],
     metric_key: str,
     appendix: str,
@@ -619,7 +620,7 @@ def _build_benchmark_outputs(
     }
     tokenizers = list(dict.fromkeys(row["tokenizer_key"] for row in rows))
     coverage_rows = build_coverage_rows(rows)
-    composition_rows = build_observed_composition_rows(raw_rows)
+    composition_rows = composition_rows or build_observed_composition_rows(raw_rows)
     sparse_streaming_baseline = (
         corpus_key == "streaming_exploration"
         and metric_key == "english_baseline_ratio"
@@ -972,6 +973,7 @@ def _handle_benchmark_tab(
         row_limit=row_limit,
         include_estimates=include_estimates,
         include_proxy=include_proxy,
+        include_raw_rows=True,
     )
     benchmark_columns = _benchmark_columns_for(corpus_key)
     raw_benchmark_columns = _raw_benchmark_columns_for(corpus_key)
@@ -1024,6 +1026,7 @@ def _handle_benchmark_tab(
         )
         rows = benchmark.rows
         raw_rows = benchmark.raw_rows
+        composition_rows = benchmark.composition_rows
         progress(0.94, desc="Building charts…")
     except Exception as exc:
         progress(None)
@@ -1049,6 +1052,7 @@ def _handle_benchmark_tab(
     outputs = _build_benchmark_outputs(
         rows,
         raw_rows,
+        composition_rows,
         selected_languages,
         metric_key,
         appendix,

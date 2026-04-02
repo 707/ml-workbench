@@ -17,6 +17,7 @@ class BenchmarkRequest:
     row_limit: int
     include_estimates: bool = False
     include_proxy: bool = False
+    include_raw_rows: bool = False
 
     @classmethod
     def from_inputs(
@@ -28,6 +29,7 @@ class BenchmarkRequest:
         row_limit: int,
         include_estimates: bool = False,
         include_proxy: bool = False,
+        include_raw_rows: bool = False,
     ) -> "BenchmarkRequest":
         return cls(
             corpus_key=corpus_key,
@@ -36,6 +38,7 @@ class BenchmarkRequest:
             row_limit=int(row_limit),
             include_estimates=bool(include_estimates),
             include_proxy=bool(include_proxy),
+            include_raw_rows=bool(include_raw_rows),
         )
 
     def cache_key(self) -> tuple[object, ...]:
@@ -46,6 +49,7 @@ class BenchmarkRequest:
             self.row_limit,
             self.include_estimates,
             self.include_proxy,
+            self.include_raw_rows,
         )
 
 
@@ -53,9 +57,9 @@ class BenchmarkRequest:
 class BenchmarkResult:
     rows: list[dict]
     raw_rows: list[dict]
-    matrix: dict[tuple[str, str], dict]
     languages: list[str]
     tokenizers: list[str]
+    composition_rows: list[dict]
 
 
 @dataclass(frozen=True)
