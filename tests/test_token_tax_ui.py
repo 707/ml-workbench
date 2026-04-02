@@ -42,6 +42,16 @@ class TestWorkbenchHandlers:
         assert "cl100k_base" not in selected
         assert len(selected) <= 4
 
+    def test_scenario_tokenizer_families_exclude_benchmark_only_options(self):
+        from workbench.token_tax_ui import scenario_tokenizer_families
+
+        keys = [row["key"] for row in scenario_tokenizer_families()]
+
+        assert keys == ["llama-3", "mistral", "qwen-2.5"]
+        assert "gpt2" not in keys
+        assert "o200k_base" not in keys
+        assert "cl100k_base" not in keys
+
     def test_scenario_model_ids_use_all_valid_free_models_for_selected_tokenizers(self):
         from workbench.token_tax_ui import derive_scenario_model_ids
 
@@ -458,6 +468,8 @@ class TestWorkbenchHandlers:
         assert "Strict Evidence uses aligned benchmark text" in src
         assert "How to read this chart" not in src
         assert "How to use this table" not in src
+        assert "Choose up to 4 families per run on the hosted app." in src
+        assert "Scenario Lab only shows families with attached free models, up to 3 at a time." in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect

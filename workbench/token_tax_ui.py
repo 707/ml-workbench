@@ -29,7 +29,7 @@ from workbench.engines.scenario import (
 from workbench.engines.scenario import (
     run_scenario_request,
 )
-from workbench.model_registry import list_tokenizer_families
+from workbench.model_registry import list_free_runtime_choices, list_tokenizer_families
 from workbench.token_tax import (
     analyze_text_across_models,
     audit_markdown,
@@ -199,6 +199,16 @@ def _tokenizer_selection_warning(
         context_label=context_label,
     )
     return warning
+
+
+def scenario_tokenizer_families() -> list[dict]:
+    """Return only tokenizer families that can produce Scenario Lab model rows."""
+    exact_families = list_tokenizer_families(include_proxy=False)
+    scenario_keys = {
+        row["tokenizer_key"]
+        for row in list_free_runtime_choices(include_proxy=False)
+    }
+    return [family for family in exact_families if family["key"] in scenario_keys]
 
 def metric_display_label(metric_key: str) -> str:
     return PLAIN_LANGUAGE_METRIC_LABELS.get(metric_key, metric_key.replace("_", " ").title())
@@ -1263,7 +1273,7 @@ def default_benchmark_tokenizers() -> list[str]:
 
 def default_scenario_tokenizers() -> list[str]:
     """Return a curated tokenizer subset aligned to the default scenario models."""
-    available = {family["key"] for family in list_tokenizer_families(include_proxy=False)}
+    available = {family["key"] for family in scenario_tokenizer_families()}
     return [key for key in DEFAULT_SCENARIO_TOKENIZER_KEYS if key in available]
 
 
@@ -1280,8 +1290,10 @@ def build_token_tax_ui() -> gr.Blocks:
     """Construct the Token Tax Workbench."""
     tokenizer_families = list_tokenizer_families(include_proxy=False)
     exact_tokenizers = [family["key"] for family in tokenizer_families]
+    scenario_families = scenario_tokenizer_families()
+    scenario_family_keys = [family["key"] for family in scenario_families]
     benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(MAX_BENCHMARK_TOKENIZERS, len(exact_tokenizers))]
-    scenario_default_tokenizers = default_scenario_tokenizers() or benchmark_default_tokenizers
+    scenario_default_tokenizers = default_scenario_tokenizers() or scenario_family_keys[: min(MAX_SCENARIO_TOKENIZERS, len(scenario_family_keys))]
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
         proxy_disabled = gr.State(False)
@@ -1336,7 +1348,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             value=benchmark_default_tokenizers,
                             multiselect=True,
                             label="Tokenizer Families",
-                            info="Tokenizer families to benchmark against the selected corpus samples.",
+                            info="Tokenizer families to benchmark against the selected corpus samples. Choose up to 4 families per run on the hosted app.",
                         )
                         benchmark_tokenizer_warning = gr.HTML(value="")
                     with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=300, scale=0):
@@ -1521,11 +1533,11 @@ def build_token_tax_ui() -> gr.Blocks:
                             info="Languages included in the strict multilingual scenario baseline.",
                         )
                         scenario_tokenizers = gr.Dropdown(
-                            choices=[(family["label"], family["key"]) for family in tokenizer_families],
+                            choices=[(family["label"], family["key"]) for family in scenario_families],
                             value=scenario_default_tokenizers,
                             multiselect=True,
                             label="Benchmark Tokenizers",
-                            info="Tokenizer families used to supply the strict multilingual benchmark baseline.",
+                            info="Tokenizer families used to supply the strict multilingual benchmark baseline. Scenario Lab only shows families with attached free models, up to 3 at a time.",
                         )
                         scenario_tokenizer_warning = gr.HTML(value="")
                         with gr.Accordion("Advanced Scenario Controls", open=False):
@@ -1609,7 +1621,7 @@ def build_token_tax_ui() -> gr.Blocks:
                 scenario_tokenizers.change(
                     fn=lambda selected: _tokenizer_selection_warning(
                         selected,
-                        allowed=exact_tokenizers,
+                        allowed=scenario_family_keys,
                         max_count=MAX_SCENARIO_TOKENIZERS,
                         context_label="Scenario Lab",
                     ),
