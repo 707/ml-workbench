@@ -1492,6 +1492,9 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_diagnostics_md,
                     ],
                     show_progress="full",
+                    trigger_mode="once",
+                    concurrency_limit=1,
+                    concurrency_id="benchmark-run",
                 )
 
             with gr.TabItem("Catalog"):
@@ -1521,6 +1524,9 @@ def build_token_tax_ui() -> gr.Blocks:
                     fn=_handle_catalog_tab,
                     inputs=[proxy_disabled, catalog_refresh_live, catalog_live_updates],
                     outputs=[catalog_table, catalog_appendix_md, catalog_diagnostics_md],
+                    trigger_mode="once",
+                    concurrency_limit=1,
+                    concurrency_id="catalog-run",
                 )
 
             with gr.TabItem("Scenario Lab"):
@@ -1701,6 +1707,9 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_diagnostics_md,
                     ],
                     show_progress="full",
+                    trigger_mode="once",
+                    concurrency_limit=1,
+                    concurrency_id="scenario-run",
                 )
 
             with gr.TabItem("Audit"):

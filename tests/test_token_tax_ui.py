@@ -462,6 +462,10 @@ class TestWorkbenchHandlers:
         assert "scenario-custom-row" in src
         assert "scenario-options-row" in src
         assert 'show_progress="full"' in src
+        assert 'trigger_mode="once"' in src
+        assert 'concurrency_limit=1' in src
+        assert 'concurrency_id="benchmark-run"' in src
+        assert 'concurrency_id="scenario-run"' in src
         assert 'gr.File(label="Raw Data CSV"' in src
         assert 'gr.DataFrame(label="Raw Benchmark Data"' not in src
         assert 'Include proxy mappings' not in src
