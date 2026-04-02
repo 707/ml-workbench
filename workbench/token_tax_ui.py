@@ -1347,6 +1347,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             choices=[(family["label"], family["key"]) for family in tokenizer_families],
                             value=benchmark_default_tokenizers,
                             multiselect=True,
+                            max_choices=MAX_BENCHMARK_TOKENIZERS,
                             label="Tokenizer Families",
                             info="Tokenizer families to benchmark against the selected corpus samples. Choose up to 4 families per run on the hosted app.",
                         )
@@ -1536,6 +1537,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             choices=[(family["label"], family["key"]) for family in scenario_families],
                             value=scenario_default_tokenizers,
                             multiselect=True,
+                            max_choices=MAX_SCENARIO_TOKENIZERS,
                             label="Benchmark Tokenizers",
                             info="Tokenizer families used to supply the strict multilingual benchmark baseline. Scenario Lab only shows families with attached free models, up to 3 at a time.",
                         )
