@@ -207,7 +207,7 @@ class TestWorkbenchHandlers:
         assert aggregated[0]["monthly_cost"] == 17.5
         assert aggregated[0]["monthly_input_tokens"] == 350_000
 
-    def test_handle_benchmark_tab_can_stream_live_diagnostics(self):
+    def test_handle_benchmark_tab_returns_final_tuple_with_live_diagnostics_enabled(self):
         from token_tax_ui import _handle_benchmark_tab
 
         benchmark_rows = [
@@ -244,45 +244,52 @@ class TestWorkbenchHandlers:
                 "token_preview": "hello | world",
             },
         ]
-        payload = iter((row, raw_rows) for row in benchmark_rows)
-        with patch("token_tax_ui._iter_benchmark_payload", return_value=payload):
-                outputs = list(_handle_benchmark_tab(
-                    "strict_parallel",
-                    ["en"],
-                    ["gpt2"],
-                    "rtc",
-                    5,
-                    False,
-                    False,
-                    "en",
-                    "gpt2",
-                    0,
-                    True,
-                ))
+        with patch("token_tax_ui.benchmark_corpus", return_value={
+            "rows": benchmark_rows,
+            "raw_rows": raw_rows,
+            "matrix": {("en", "gpt2"): benchmark_rows[0]},
+            "languages": ["en"],
+            "tokenizers": ["gpt2"],
+        }):
+            outputs = _handle_benchmark_tab(
+                "strict_parallel",
+                ["en"],
+                ["gpt2"],
+                "rtc",
+                5,
+                False,
+                False,
+                "en",
+                "gpt2",
+                0,
+                True,
+            )
 
-        assert len(outputs) >= 2
-        assert len(outputs[-1]) == 12
-        assert "Benchmark Summary" in outputs[-1][0]
-        assert "Diagnostics" in outputs[-1][-1]
+        assert isinstance(outputs, tuple)
+        assert len(outputs) == 12
+        assert "Benchmark Summary" in outputs[0]
+        assert "Diagnostics" in outputs[-1]
 
-    def test_handle_benchmark_tab_logs_start_event_before_results(self):
+    def test_handle_benchmark_tab_returns_runtime_message_when_benchmark_errors(self):
         from token_tax_ui import _handle_benchmark_tab
 
-        outputs = next(_handle_benchmark_tab(
-            "Strict Evidence",
-            ["en"],
-            ["gpt2"],
-            "rtc",
-            5,
-            False,
-            False,
-            "en",
-            "gpt2",
-            0,
-            False,
-        ))
+        with patch("token_tax_ui.benchmark_corpus", side_effect=RuntimeError("boom")):
+            outputs = _handle_benchmark_tab(
+                "Strict Evidence",
+                ["en"],
+                ["gpt2"],
+                "rtc",
+                5,
+                False,
+                False,
+                "en",
+                "gpt2",
+                0,
+                False,
+            )
 
-        assert "benchmark.run.start" in outputs[-1]
+        assert "Runtime error" in outputs[-2]
+        assert "boom" in outputs[-2]
 
     def test_language_script_presets_filter_supported_languages(self):
         from token_tax_ui import apply_language_preset

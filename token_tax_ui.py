@@ -27,11 +27,11 @@ from model_registry import (
     list_tokenizer_families,
 )
 from token_tax import (
-    _iter_benchmark_payload,
     analyze_text_across_models,
     audit_markdown,
     benchmark_all,
     benchmark_appendix,
+    benchmark_corpus,
     catalog_appendix,
     cost_projection,
     export_csv,
@@ -1054,6 +1054,7 @@ def _handle_benchmark_tab(
     preview_tokenizer: str,
     preview_sample_index: int,
     live_updates: bool,
+    progress=gr.Progress(),
 ):
     corpus_key = _resolve_corpus_key(lane_or_corpus)
     benchmark_columns = _benchmark_columns_for(corpus_key)
@@ -1069,7 +1070,7 @@ def _handle_benchmark_tab(
     empty_fertility = build_category_bar([], category_key="language", value_key="token_fertility")
     empty_composition = build_stacked_category_bar([], category_key="tokenizer_key", value_key="token_count", stack_key="script")
     if not tokenizer_keys:
-        yield (
+        return (
             build_benchmark_summary_markdown([], metric_key),
             empty_table,
             empty_heatmap,
@@ -1083,10 +1084,10 @@ def _handle_benchmark_tab(
             f"{benchmark_appendix(corpus_key)}\n\n**Select at least one tokenizer family.**",
             render_markdown(),
         )
-        return
 
     try:
         clear_events()
+        progress(0.05, desc="Preparing benchmark…")
         log_event(
             "benchmark.run.start",
             "Preparing benchmark run",
@@ -1098,50 +1099,21 @@ def _handle_benchmark_tab(
         )
         selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
         appendix = benchmark_appendix(corpus_key)
-        yield (
-            build_benchmark_summary_markdown([], metric_key),
-            empty_table,
-            empty_heatmap,
-            empty_distribution,
-            empty_preview,
-            empty_raw_table,
-            empty_coverage,
-            empty_split,
-            empty_fertility,
-            empty_composition,
-            appendix,
-            render_markdown(),
-        )
-        raw_rows: list[dict] = []
-        rows: list[dict] = []
-        for row, current_raw_rows in _iter_benchmark_payload(
+        benchmark = benchmark_corpus(
             corpus_key,
             selected_languages,
             tokenizer_keys,
             row_limit=int(row_limit),
             include_estimates=include_estimates,
             include_proxy=include_proxy,
-        ):
-            rows.append(row)
-            raw_rows = current_raw_rows
-            if live_updates:
-                yield _build_benchmark_outputs(
-                    rows,
-                    raw_rows,
-                    selected_languages,
-                    metric_key,
-                    appendix,
-                    preview_language,
-                    preview_tokenizer,
-                    preview_sample_index,
-                    skip_plot_updates=True,
-                )
-        if not rows:
-            raise RuntimeError(
-                "No benchmark rows were produced. The strict corpus fetch may have failed or returned zero samples."
-            )
+            progress_callback=lambda ratio, desc: progress(ratio, desc=desc),
+        )
+        rows = benchmark["rows"]
+        raw_rows = benchmark["raw_rows"]
+        progress(0.94, desc="Building charts…")
     except Exception as exc:
-        yield (
+        progress(None)
+        return (
             build_benchmark_summary_markdown([], metric_key),
             empty_table,
             empty_heatmap,
@@ -1160,9 +1132,7 @@ def _handle_benchmark_tab(
             f"{benchmark_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
             render_markdown(),
         )
-        return
-
-    yield _build_benchmark_outputs(
+    outputs = _build_benchmark_outputs(
         rows,
         raw_rows,
         selected_languages,
@@ -1172,6 +1142,8 @@ def _handle_benchmark_tab(
         preview_tokenizer,
         preview_sample_index,
     )
+    progress(None)
+    return outputs
 
 
 def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: bool):
@@ -1530,6 +1502,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_appendix_md,
                         benchmark_diagnostics_md,
                     ],
+                    show_progress="full",
                 )
                 benchmark_raw_export_btn.click(
                     fn=lambda table: export_serialized_table_csv(table, prefix="benchmark-raw"),

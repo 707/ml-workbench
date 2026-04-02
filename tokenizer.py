@@ -175,15 +175,12 @@ def get_tokenizer(name: str):
                             repo_id,
                             local_files_only=True,
                         )
-                except Exception:
-                    try:
-                        _tokenizer_cache[name] = AutoTokenizer.from_pretrained(repo_id)
-                    except Exception as exc:
-                        raise RuntimeError(
-                            f"Failed to load tokenizer '{name}' from '{repo_id}'. "
-                            f"Check your network connection or set TRANSFORMERS_OFFLINE=1 "
-                            f"if you have a local cache. Original error: {exc}"
-                        ) from exc
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Failed to load tokenizer '{name}' from '{repo_id}'. "
+                        f"The app requires a local tokenizer snapshot at runtime and will not fetch remote assets on demand. "
+                        f"Original error: {exc}"
+                    ) from exc
             _tokenizer_cache.move_to_end(name)
             while len(_tokenizer_cache) > _TOKENIZER_CACHE_MAX_SIZE:
                 _tokenizer_cache.popitem(last=False)

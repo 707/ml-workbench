@@ -254,24 +254,22 @@ class TestGetTokenizerErrorHandling:
                     tok_module.get_tokenizer("gpt2")
             assert "gpt2" not in tok_module._tokenizer_cache
 
-    def test_falls_back_to_network_load_when_local_cache_misses(self):
-        """Local-files-only should be attempted first, then a normal load as fallback."""
+    def test_raises_without_network_fallback_when_local_cache_misses(self):
+        """Runtime should fail fast instead of fetching remote tokenizer assets on Render."""
         import tokenizer as tok_module
 
-        mock_tok = MagicMock()
         with patch.dict(tok_module._tokenizer_cache, {}, clear=True):
             with patch("tokenizer._local_snapshot_path", return_value=None):
                 with patch(
                     "tokenizer.AutoTokenizer.from_pretrained",
-                    side_effect=[OSError("cache miss"), mock_tok],
+                    side_effect=OSError("cache miss"),
                 ) as mock_fp:
-                    result = tok_module.get_tokenizer("gpt2")
+                    with pytest.raises(RuntimeError, match="local tokenizer snapshot"):
+                        tok_module.get_tokenizer("gpt2")
 
-        assert result is mock_tok
         assert mock_fp.call_args_list[0].args == ("gpt2",)
         assert mock_fp.call_args_list[0].kwargs == {"local_files_only": True}
-        assert mock_fp.call_args_list[1].args == ("gpt2",)
-        assert mock_fp.call_args_list[1].kwargs == {}
+        assert len(mock_fp.call_args_list) == 1
 
 
 class TestTiktokenAdapter:
@@ -1752,7 +1750,7 @@ class TestGetTokenizerThreadSafety:
         load_count = []
         barrier = threading.Barrier(2)
 
-        def slow_from_pretrained(repo_id):
+        def slow_from_pretrained(repo_id, **kwargs):
             # Simulate a slow load so threads genuinely race without the lock.
             time.sleep(0.05)
             load_count.append(1)
