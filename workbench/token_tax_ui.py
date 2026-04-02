@@ -205,19 +205,16 @@ def build_benchmark_chart_explainer_markdown(metric_key: str, section_name: str)
     )
 
 
-def export_serialized_table_csv(table: dict | None, prefix: str = "export") -> str | None:
-    """Write a serialized table dict to a temporary CSV file."""
-    if not table:
-        return None
-    headers = list(table.get("headers") or [])
-    rows = list(table.get("data") or [])
-    if not headers or not rows:
+def export_rows_csv(rows: list[dict] | None, columns: list[str], prefix: str = "export") -> str | None:
+    """Write selected rows to a temporary CSV file."""
+    if not rows or not columns:
         return None
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", suffix=".csv", prefix=f"{prefix}-", delete=False) as handle:
         writer = csv.writer(handle)
-        writer.writerow(headers)
-        writer.writerows(rows)
+        writer.writerow(columns)
+        for row in rows:
+            writer.writerow([row.get(column) for column in columns])
         return handle.name
 
 
@@ -642,7 +639,7 @@ def _build_benchmark_outputs(
         gr.skip() if skip_plot_updates else overview_heatmap,
         gr.skip() if skip_plot_updates else overview_distribution,
         build_benchmark_preview_markdown(raw_rows, preview_language, preview_tokenizer, preview_sample_index),
-        serialize_table(raw_rows, _raw_benchmark_columns_for(corpus_key)),
+        export_rows_csv(raw_rows, _raw_benchmark_columns_for(corpus_key), prefix="benchmark-raw"),
         gr.skip() if skip_plot_updates else build_category_bar(
             coverage_rows,
             category_key="language",
@@ -979,7 +976,7 @@ def _handle_benchmark_tab(
     raw_benchmark_columns = _raw_benchmark_columns_for(corpus_key)
     metric_key = metric_key if metric_key in _benchmark_metric_choices_for(corpus_key) else _default_benchmark_metric_for(corpus_key)
     empty_table = {"headers": benchmark_columns, "data": []}
-    empty_raw_table = serialize_table([], raw_benchmark_columns)
+    empty_raw_export = export_rows_csv([], raw_benchmark_columns, prefix="benchmark-raw")
     empty_heatmap = build_heatmap({}, [], [], metric_key=metric_key)
     empty_distribution = build_distribution_chart([], metric_key)
     empty_preview = build_benchmark_preview_markdown([], preview_language, preview_tokenizer, preview_sample_index)
@@ -994,7 +991,7 @@ def _handle_benchmark_tab(
             empty_heatmap,
             empty_distribution,
             empty_preview,
-            empty_raw_table,
+            empty_raw_export,
             empty_coverage,
             empty_split,
             empty_fertility,
@@ -1041,7 +1038,7 @@ def _handle_benchmark_tab(
                 '<p class="preview-empty">Runtime error before preview generation.</p>'
                 "</section>"
             ),
-            empty_raw_table,
+            empty_raw_export,
             empty_coverage,
             empty_split,
             empty_fertility,
@@ -1385,14 +1382,11 @@ def build_token_tax_ui() -> gr.Blocks:
                     with gr.TabItem("Raw Data"):
                         gr.HTML(
                             build_chart_help_markdown(
-                                "How to use this table",
-                                "This is the analyst view. Each row is one sampled text and the exact tokenization metrics used to build the higher-level summaries."
+                                "How to use this export",
+                                "Large raw benchmark tables are kept out of the live dashboard to reduce memory pressure. Download the CSV when you need the per-sample analyst view."
                             )
                         )
-                        with gr.Row(elem_classes="raw-export-row"):
-                            benchmark_raw_export_btn = gr.Button("Download CSV", size="sm", elem_classes="compact-action")
-                            benchmark_raw_export_file = gr.File(label="Raw Data CSV", interactive=False)
-                        benchmark_raw_table = gr.DataFrame(label="Raw Benchmark Data", interactive=False)
+                        benchmark_raw_export_file = gr.File(label="Raw Data CSV", interactive=False)
                 with gr.Accordion("Benchmark Appendix", open=False):
                     benchmark_appendix_md = gr.Markdown(label="Benchmark Appendix")
                 with gr.Accordion("Diagnostics", open=False):
@@ -1419,7 +1413,7 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_heatmap,
                         benchmark_distribution,
                         benchmark_preview_md,
-                        benchmark_raw_table,
+                        benchmark_raw_export_file,
                         benchmark_coverage_plot,
                         benchmark_split_plot,
                         benchmark_fertility_plot,
@@ -1428,12 +1422,6 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_diagnostics_md,
                     ],
                     show_progress="full",
-                )
-                benchmark_raw_export_btn.click(
-                    fn=lambda table: export_serialized_table_csv(table, prefix="benchmark-raw"),
-                    inputs=[benchmark_raw_table],
-                    outputs=[benchmark_raw_export_file],
-                    queue=False,
                 )
 
             with gr.TabItem("Catalog"):

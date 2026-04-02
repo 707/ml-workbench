@@ -284,6 +284,7 @@ class TestWorkbenchHandlers:
         assert isinstance(outputs, tuple)
         assert len(outputs) == 12
         assert "Benchmark Summary" in outputs[0]
+        assert outputs[5] is not None
         assert "Diagnostics" in outputs[-1]
 
     def test_handle_benchmark_tab_returns_runtime_message_when_benchmark_errors(self):
@@ -459,6 +460,8 @@ class TestWorkbenchHandlers:
         assert "scenario-custom-row" in src
         assert "scenario-options-row" in src
         assert 'show_progress="full"' in src
+        assert 'gr.File(label="Raw Data CSV"' in src
+        assert 'gr.DataFrame(label="Raw Benchmark Data"' not in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
@@ -757,14 +760,15 @@ class TestWorkbenchHandlers:
         assert shortened.endswith("...")
         assert len(shortened) < len("Qwen 2.5 7B Instruct (Free) with very long suffix")
 
-    def test_export_serialized_table_csv_writes_current_rows(self):
-        from workbench.token_tax_ui import export_serialized_table_csv
+    def test_export_rows_csv_writes_current_rows(self):
+        from workbench.token_tax_ui import export_rows_csv
 
-        path = export_serialized_table_csv(
-            {
-                "headers": ["language", "tokenizer_key", "rtc"],
-                "data": [["English", "gpt2", 1.0], ["Arabic", "gpt2", 2.4]],
-            },
+        path = export_rows_csv(
+            [
+                {"language": "English", "tokenizer_key": "gpt2", "rtc": 1.0},
+                {"language": "Arabic", "tokenizer_key": "gpt2", "rtc": 2.4},
+            ],
+            ["language", "tokenizer_key", "rtc"],
             prefix="benchmark-raw",
         )
 
@@ -773,10 +777,10 @@ class TestWorkbenchHandlers:
         assert csv_path.exists()
         assert csv_path.read_text(encoding="utf-8").splitlines()[0] == "language,tokenizer_key,rtc"
 
-    def test_export_serialized_table_csv_returns_none_for_empty_table(self):
-        from workbench.token_tax_ui import export_serialized_table_csv
+    def test_export_rows_csv_returns_none_for_empty_rows(self):
+        from workbench.token_tax_ui import export_rows_csv
 
-        assert export_serialized_table_csv({"headers": ["language"], "data": []}) is None
+        assert export_rows_csv([], ["language"]) is None
 
     def test_catalog_display_rows_use_review_friendly_column_labels(self):
         from workbench.token_tax_ui import CATALOG_COLUMNS, _catalog_display_rows
