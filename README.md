@@ -99,8 +99,8 @@ Only **Strict Evidence** feeds Scenario Lab cost and context projections.
 - it is supporting context, not the main token-tax evidence
 
 ### Mapping policy
-- exact tokenizer mappings are visible by default
-- proxy mappings are hidden unless the user explicitly enables them
+- the hosted app exposes a curated exact-only tokenizer set
+- heavier or proxy tokenizer families are intentionally excluded to keep hosted benchmarking stable
 
 ## Technical Architecture
 

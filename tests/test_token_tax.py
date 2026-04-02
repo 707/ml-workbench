@@ -952,7 +952,7 @@ class TestIsContinuedToken:
         from workbench.token_tax import _is_continued_token
 
         for key in ("o200k_base", "cl100k_base", "gpt2", "llama-3", "mistral",
-                    "qwen-2.5", "gemma-2", "unknown_family"):
+                    "qwen-2.5", "unknown_family"):
             assert _is_continued_token("", key) is False, f"Failed for {key}"
 
     def test_whitespace_only_not_continued(self):
@@ -1010,13 +1010,13 @@ class TestIsContinuedToken:
         assert _is_continued_token("ing", "gpt2") is True
 
     # ------------------------------------------------------------------
-    # SentencePiece families: llama-3, mistral, qwen-2.5, gemma-2
+    # SentencePiece families: llama-3, mistral, qwen-2.5
     # ------------------------------------------------------------------
 
     def test_sentencepiece_underscore_prefix_is_word_start(self):
         from workbench.token_tax import _is_continued_token
 
-        for key in ("llama-3", "mistral", "qwen-2.5", "gemma-2"):
+        for key in ("llama-3", "mistral", "qwen-2.5"):
             assert _is_continued_token("▁hello", key) is False, (
                 f"▁-prefixed token should be word-start for {key}"
             )
@@ -1024,25 +1024,10 @@ class TestIsContinuedToken:
     def test_sentencepiece_no_underscore_is_continuation(self):
         from workbench.token_tax import _is_continued_token
 
-        for key in ("llama-3", "mistral", "qwen-2.5", "gemma-2"):
+        for key in ("llama-3", "mistral", "qwen-2.5"):
             assert _is_continued_token("ello", key) is True, (
                 f"No-prefix token should be continuation for {key}"
             )
-
-    def test_new_exact_family_continuation_rules_come_from_registry_metadata(self):
-        from workbench.token_tax import _is_continued_token
-
-        assert _is_continued_token("▁hello", "qwen3-next") is False
-        assert _is_continued_token("ello", "qwen3-next") is True
-        assert _is_continued_token(" Hello", "gpt-oss") is False
-        assert _is_continued_token("ello", "gpt-oss") is True
-
-    def test_command_r_uses_gpt2_style_word_starts(self):
-        from workbench.token_tax import _is_continued_token
-
-        assert _is_continued_token("Ġhello", "command-r") is False
-        assert _is_continued_token("ello", "command-r") is True
-        assert _is_continued_token("▁hello", "command-r") is True
 
     # ------------------------------------------------------------------
     # BERT-style (not one of the 8 families but the logic must exist)

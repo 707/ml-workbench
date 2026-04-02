@@ -258,6 +258,12 @@ body {
   margin-top: 0.1rem;
 }
 
+.scenario-run-row {
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 0.1rem;
+}
+
 .scenario-checkbox-group {
   margin-top: 0.15rem;
   display: flex;
@@ -445,6 +451,13 @@ body {
   min-height: 2rem !important;
   padding-inline: 0.65rem !important;
   font-size: 0.88rem !important;
+}
+
+.compact-action--scenario,
+.compact-action--scenario button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: fit-content !important;
 }
 
 .app-shell-actions {

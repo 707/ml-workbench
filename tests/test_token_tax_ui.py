@@ -39,8 +39,7 @@ class TestWorkbenchHandlers:
 
         assert "gpt2" in selected
         assert "o200k_base" in selected
-        assert "qwen3-coder" not in selected
-        assert "trinity-large" not in selected
+        assert "cl100k_base" not in selected
         assert len(selected) <= 4
 
     def test_scenario_model_ids_use_all_valid_free_models_for_selected_tokenizers(self):
@@ -57,14 +56,10 @@ class TestWorkbenchHandlers:
 
         assert derive_scenario_model_ids([], include_proxy=False) == []
 
-    def test_scenario_model_ids_respect_proxy_toggle(self):
+    def test_scenario_model_ids_ignore_removed_families(self):
         from workbench.token_tax_ui import derive_scenario_model_ids
 
-        without_proxy = derive_scenario_model_ids(["gemma-2"], include_proxy=False)
-        with_proxy = derive_scenario_model_ids(["gemma-2"], include_proxy=True)
-
-        assert without_proxy == []
-        assert with_proxy == ["google/gemma-3-27b-it:free"]
+        assert derive_scenario_model_ids(["gemma-2"], include_proxy=False) == []
 
     def test_handle_scenario_tab_derives_current_model_selection(self):
         from workbench.token_tax_ui import _handle_scenario_tab
@@ -77,10 +72,10 @@ class TestWorkbenchHandlers:
             return ScenarioResult(
                 rows=[
                 {
-                    "label": "gpt-oss-20b (Free)",
-                    "model_id": "openai/gpt-oss-20b:free",
+                    "label": "Qwen 2.5 7B Instruct (Free)",
+                    "model_id": "qwen/qwen-2.5-7b-instruct:free",
                     "language": "en",
-                    "tokenizer_key": "gpt-oss",
+                    "tokenizer_key": "qwen-2.5",
                     "rtc": 1.4,
                     "context_loss_pct": 28.57,
                     "monthly_input_tokens": 140000,
@@ -93,13 +88,13 @@ class TestWorkbenchHandlers:
                     "lane": "Strict Evidence",
                 }
                 ],
-                model_ids=["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+                model_ids=["qwen/qwen-2.5-7b-instruct:free"],
             )
 
         with patch("workbench.token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
             outputs = _handle_scenario_tab(
                 ["en"],
-                ["gpt-oss"],
+                ["qwen-2.5"],
                 100000,
                 1000,
                 250,
@@ -109,11 +104,10 @@ class TestWorkbenchHandlers:
                 "none",
                 False,
                 False,
-                False,
             )
 
-        assert list(captured["request"].tokenizer_keys) == ["gpt-oss"]
-        assert outputs[0]["data"][0][2] in {"openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"}
+        assert list(captured["request"].tokenizer_keys) == ["qwen-2.5"]
+        assert outputs[0]["data"][0][2] == "qwen/qwen-2.5-7b-instruct:free"
 
     def test_handle_scenario_tab_returns_empty_state_when_no_tokenizers_selected(self):
         from workbench.token_tax_ui import _handle_scenario_tab
@@ -128,7 +122,6 @@ class TestWorkbenchHandlers:
             "rtc",
             "monthly_cost",
             "none",
-            False,
             False,
             False,
         )
@@ -274,7 +267,6 @@ class TestWorkbenchHandlers:
                 "rtc",
                 5,
                 False,
-                False,
                 "en",
                 "gpt2",
                 0,
@@ -297,7 +289,6 @@ class TestWorkbenchHandlers:
                 ["gpt2"],
                 "rtc",
                 5,
-                False,
                 False,
                 "en",
                 "gpt2",
@@ -443,7 +434,7 @@ class TestWorkbenchHandlers:
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
         assert "tooltip_label_html" not in src
-        assert "How to read this chart" in src
+        assert "Lower is better." in src
 
     def test_filter_layout_uses_asymmetric_rail_classes(self):
         import inspect
@@ -456,12 +447,17 @@ class TestWorkbenchHandlers:
         assert "filter-rail filter-rail--scenario-inputs" in src
         assert "scenario-control-grid" in src
         assert "scenario-control-stack" in src
+        assert "scenario-run-row" in src
         assert "scenario-checkbox-group" in src
         assert "scenario-custom-row" in src
         assert "scenario-options-row" in src
         assert 'show_progress="full"' in src
         assert 'gr.File(label="Raw Data CSV"' in src
         assert 'gr.DataFrame(label="Raw Benchmark Data"' not in src
+        assert 'Include proxy mappings' not in src
+        assert "Strict Evidence uses aligned benchmark text" in src
+        assert "How to read this chart" not in src
+        assert "How to use this table" not in src
 
     def test_catalog_filters_use_horizontal_utility_row(self):
         import inspect
@@ -470,6 +466,32 @@ class TestWorkbenchHandlers:
 
         src = inspect.getsource(token_tax_ui.build_token_tax_ui)
         assert "catalog-utility-row" in src
+
+    def test_normalize_tokenizer_selection_trims_benchmark_to_hosted_cap(self):
+        from workbench.token_tax_ui import _normalize_tokenizer_selection
+
+        normalized, warning = _normalize_tokenizer_selection(
+            ["gpt2", "o200k_base", "cl100k_base", "llama-3", "mistral"],
+            allowed=["gpt2", "o200k_base", "cl100k_base", "llama-3", "mistral", "qwen-2.5"],
+            max_count=4,
+            context_label="Benchmark",
+        )
+
+        assert normalized == ["gpt2", "o200k_base", "cl100k_base", "llama-3"]
+        assert "limited to 4 tokenizer families" in warning
+
+    def test_normalize_tokenizer_selection_trims_scenario_to_hosted_cap(self):
+        from workbench.token_tax_ui import _normalize_tokenizer_selection
+
+        normalized, warning = _normalize_tokenizer_selection(
+            ["gpt2", "llama-3", "mistral", "qwen-2.5"],
+            allowed=["gpt2", "o200k_base", "cl100k_base", "llama-3", "mistral", "qwen-2.5"],
+            max_count=3,
+            context_label="Scenario Lab",
+        )
+
+        assert normalized == ["gpt2", "llama-3", "mistral"]
+        assert "limited to 3 tokenizer families" in warning
 
     def test_build_coverage_rows_preserve_fertility_for_bar_charts(self):
         from workbench.token_tax_ui import build_coverage_rows
@@ -600,10 +622,10 @@ class TestWorkbenchHandlers:
 
         with patch("workbench.token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
             first = _handle_scenario_tab(
-                ["en"], ["llama-3"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False, False
+                ["en"], ["llama-3"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False
             )
             second = _handle_scenario_tab(
-                ["en"], ["qwen-2.5"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False, False
+                ["en"], ["qwen-2.5"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False
             )
 
         assert float(first[1].data[0].x[0]) != float(second[1].data[0].x[0])
@@ -623,7 +645,6 @@ class TestWorkbenchHandlers:
                 "rtc",
                 "monthly_cost",
                 "none",
-                False,
                 False,
                 False,
             )
@@ -812,11 +833,11 @@ class TestWorkbenchHandlers:
         rows = _catalog_display_rows(
             [
                 {
-                    "tokenizer_key": "command-r",
-                    "label": "Command R family (BLOOM proxy)",
-                    "tokenizer_source": "bigscience/bloom-560m",
-                    "mapping_quality": "proxy",
-                    "provenance": "proxy",
+                    "tokenizer_key": "mistral",
+                    "label": "Mistral family",
+                    "tokenizer_source": "mistralai/Mistral-7B-v0.1",
+                    "mapping_quality": "exact",
+                    "provenance": "strict_verified",
                     "free_models": [],
                     "aa_matches": [],
                     "min_input_per_million": None,
@@ -825,7 +846,7 @@ class TestWorkbenchHandlers:
             ]
         )
 
-        assert rows[0]["Mapping"] == "Proxy tokenizer mapping"
+        assert rows[0]["Mapping"] == "Exact tokenizer mapping"
 
 
 # ---------------------------------------------------------------------------

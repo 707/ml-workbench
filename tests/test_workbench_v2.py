@@ -315,9 +315,9 @@ class TestScenarioAnalysis:
                 "source": "test",
             },
             {
-                "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
-                "label": "Nemotron 3 Super 120B A12B (Free)",
-                "tokenizer_key": "nemotron-3-super",
+                "model_id": "qwen/qwen-2.5-7b-instruct:free",
+                "label": "Qwen 2.5 7B Instruct (Free)",
+                "tokenizer_key": "qwen-2.5",
                 "mapping_quality": "exact",
                 "provenance": "strict_verified",
                 "input_per_million": 0.03,
@@ -338,10 +338,10 @@ class TestScenarioAnalysis:
                     scenario_analysis(
                         corpus_key="strict_parallel",
                         languages=["en"],
-                        tokenizer_keys=["llama-3", "nemotron-3-super"],
+                        tokenizer_keys=["llama-3", "qwen-2.5"],
                         model_ids=[
                             "meta-llama/llama-3.2-3b-instruct:free",
-                            "nvidia/nemotron-3-super-120b-a12b:free",
+                            "qwen/qwen-2.5-7b-instruct:free",
                         ],
                         row_limit=25,
                         monthly_requests=1000,
@@ -392,7 +392,7 @@ class TestAuditMarkdown:
             "workbench.token_tax.list_tokenizer_snapshot_status",
             return_value=[
                 {"label": "Llama 3 family", "key": "llama-3", "status_label": "ready locally"},
-                {"label": "Nemotron 3 Super family", "key": "nemotron-3-super", "status_label": "missing local snapshot"},
+                {"label": "Qwen 2.5 family", "key": "qwen-2.5", "status_label": "missing local snapshot"},
             ],
         ):
             markdown = audit_markdown()

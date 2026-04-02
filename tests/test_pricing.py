@@ -29,17 +29,17 @@ class TestModelPricing:
 
         assert "mistral" in MODEL_PRICING
 
-    def test_contains_v2_frontier_models(self):
-        """MODEL_PRICING must include all v2 tokenizer families."""
+    def test_contains_hosted_safe_families(self):
+        """MODEL_PRICING must include the hosted-safe tokenizer families."""
         from workbench.pricing import MODEL_PRICING
 
-        for key in ("o200k_base", "cl100k_base", "qwen-2.5", "gemma-2", "command-r"):
+        for key in ("o200k_base", "cl100k_base", "qwen-2.5"):
             assert key in MODEL_PRICING, f"missing: {key}"
 
-    def test_has_at_least_eight_entries(self):
+    def test_has_exactly_supported_entries(self):
         from workbench.pricing import MODEL_PRICING
 
-        assert len(MODEL_PRICING) >= 8
+        assert len(MODEL_PRICING) == 6
 
     def test_all_entries_have_required_keys(self):
         from workbench.pricing import MODEL_PRICING

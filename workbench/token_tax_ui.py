@@ -145,6 +145,9 @@ STREAMING_BENCHMARK_METRICS = [
     "token_count",
 ]
 
+MAX_BENCHMARK_TOKENIZERS = 4
+MAX_SCENARIO_TOKENIZERS = 3
+
 
 def apply_language_preset(preset: str) -> list[str]:
     """Return the supported languages for a script-family preset."""
@@ -161,11 +164,33 @@ def language_choice_pairs(codes: list[str] | None = None) -> list[tuple[str, str
     selected = codes or list(DEFAULT_BENCHMARK_LANGUAGES)
     return [(language_label(code), code) for code in selected]
 
+
+def _normalize_tokenizer_selection(
+    selected: list[str] | None,
+    *,
+    allowed: list[str],
+    max_count: int,
+    context_label: str,
+) -> tuple[list[str], str]:
+    normalized = [key for key in (selected or []) if key in allowed]
+    if len(normalized) <= max_count:
+        return normalized, ""
+    trimmed = normalized[:max_count]
+    return (
+        trimmed,
+        (
+            f"<div class='inline-note'>{html.escape(context_label)} is limited to "
+            f"{max_count} tokenizer families on the hosted app. The first {max_count} selections were kept.</div>"
+        ),
+    )
+
 def metric_display_label(metric_key: str) -> str:
     return PLAIN_LANGUAGE_METRIC_LABELS.get(metric_key, metric_key.replace("_", " ").title())
 
 
 def build_chart_help_markdown(title: str, body: str) -> str:
+    if not title:
+        return f'<div class="chart-help"><p>{body}</p></div>'
     return build_chart_help_html(title, body)
 
 
@@ -184,23 +209,22 @@ def build_benchmark_chart_explainer_markdown(metric_key: str, section_name: str)
     if metric_key == "english_baseline_ratio":
         return (
             '<div class="chart-help">'
-            "<strong>How to read this chart</strong>"
             f"{exploratory_metric_badge_html()}"
             "<p>This is an exploratory metric, not aligned RTC. It compares live streaming samples against a same-tokenizer English baseline when that baseline was successfully captured, so sparse or blank states are expected.</p>"
             "</div>"
         )
     if section_name == "Coverage":
         return build_chart_help_markdown(
-            "How to read this chart",
+            "",
             f"These bars compare {metric_label}, Word split rate, and Tokens per word / character across languages. They answer one practical question: when two languages say the same meaning, which tokenizer breaks the text into more pieces?"
         )
     if section_name == "Observed Composition":
         return build_chart_help_markdown(
-            "How to read this chart",
+            "",
             "This stacked bar shows which writing systems the tokenizer actually used on the selected benchmark rows. It helps you see whether a tokenizer spreads its pieces across Arabic, Cyrillic, CJK, Latin, and other scripts or leans heavily on one script."
         )
     return build_chart_help_markdown(
-        "How to read this chart",
+        "",
         f"This view compares {metric_label} across languages and tokenizer families. Lower relative token cost usually means the tokenizer needs fewer pieces to express the same meaning."
     )
 
@@ -955,7 +979,6 @@ def _handle_benchmark_tab(
     metric_key: str,
     row_limit: int,
     include_estimates: bool,
-    include_proxy: bool,
     preview_language: str,
     preview_tokenizer: str,
     preview_sample_index: int,
@@ -963,13 +986,19 @@ def _handle_benchmark_tab(
     progress=gr.Progress(),
 ):
     corpus_key = _resolve_corpus_key(lane_or_corpus)
+    tokenizer_keys, _ = _normalize_tokenizer_selection(
+        tokenizer_keys,
+        allowed=[family["key"] for family in list_tokenizer_families(include_proxy=False)],
+        max_count=MAX_BENCHMARK_TOKENIZERS,
+        context_label="Benchmark",
+    )
     request = BenchmarkRequest.from_inputs(
         corpus_key=corpus_key,
         languages=languages,
         tokenizer_keys=tokenizer_keys,
         row_limit=row_limit,
         include_estimates=include_estimates,
-        include_proxy=include_proxy,
+        include_proxy=False,
         include_raw_rows=True,
     )
     benchmark_columns = _benchmark_columns_for(corpus_key)
@@ -1063,7 +1092,7 @@ def _handle_benchmark_tab(
 
 def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: bool):
     request = CatalogRequest(
-        include_proxy=bool(include_proxy),
+        include_proxy=False,
         refresh_live=bool(refresh_live),
         live_updates=bool(live_updates),
     )
@@ -1094,11 +1123,16 @@ def _handle_scenario_tab(
     y_key: str,
     size_key: str,
     include_estimates: bool,
-    include_proxy: bool,
     live_updates: bool,
     progress=gr.Progress(),
 ):
     corpus_key = "strict_parallel"
+    tokenizer_keys, _ = _normalize_tokenizer_selection(
+        tokenizer_keys,
+        allowed=[family["key"] for family in list_tokenizer_families(include_proxy=False)],
+        max_count=MAX_SCENARIO_TOKENIZERS,
+        context_label="Scenario Lab",
+    )
     request = ScenarioRequest.from_inputs(
         corpus_key=corpus_key,
         languages=languages,
@@ -1109,7 +1143,7 @@ def _handle_scenario_tab(
         avg_output_tokens=avg_output_tokens,
         reasoning_share=reasoning_share,
         include_estimates=include_estimates,
-        include_proxy=include_proxy,
+        include_proxy=False,
     )
     if not tokenizer_keys:
         empty = serialize_table([], SCENARIO_COLUMNS)
@@ -1228,16 +1262,17 @@ def derive_scenario_model_ids(
 
 def build_token_tax_ui() -> gr.Blocks:
     """Construct the Token Tax Workbench."""
-    tokenizer_families = list_tokenizer_families(include_proxy=True)
-    exact_tokenizers = [family["key"] for family in tokenizer_families if family["mapping_quality"] != "proxy"]
-    benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(6, len(exact_tokenizers))]
+    tokenizer_families = list_tokenizer_families(include_proxy=False)
+    exact_tokenizers = [family["key"] for family in tokenizer_families]
+    benchmark_default_tokenizers = default_benchmark_tokenizers() or exact_tokenizers[: min(MAX_BENCHMARK_TOKENIZERS, len(exact_tokenizers))]
     scenario_default_tokenizers = default_scenario_tokenizers() or benchmark_default_tokenizers
 
     with gr.Blocks(title="Token Tax Workbench") as demo:
+        proxy_disabled = gr.State(False)
         gr.HTML(
             '<section class="section-header">'
             "<h2>Token Tax Workbench</h2>"
-            "<p>Compare tokenizer behavior across languages, then translate that into cost, context, and decision-ready model trade-offs.</p>"
+            "<p>Compare tokenizer behavior across languages, then translate that into cost, context, and decision-ready model trade-offs. Strict Evidence uses aligned benchmark text for the reliable headline view, while Streaming Exploration uses looser live samples for directional checks and caveats.</p>"
             "</section>"
         )
 
@@ -1258,9 +1293,9 @@ def build_token_tax_ui() -> gr.Blocks:
                             info="The benchmark metric plotted in the heatmap and distribution views.",
                         )
                         benchmark_limit = gr.Slider(
-                            5,
-                            50,
-                            value=5,
+                            1,
+                            10,
+                            value=3,
                             step=1,
                             label="Rows per language",
                             info="How many corpus samples to benchmark per language and tokenizer family.",
@@ -1287,6 +1322,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Tokenizer Families",
                             info="Tokenizer families to benchmark against the selected corpus samples.",
                         )
+                        benchmark_tokenizer_warning = gr.HTML(value="")
                     with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=300, scale=0):
                         with gr.Accordion("Advanced Benchmark Controls", open=False):
                             preview_language = gr.Dropdown(
@@ -1314,16 +1350,22 @@ def build_token_tax_ui() -> gr.Blocks:
                                 value=False,
                                 info="Show rows that are estimated rather than strict verified evidence.",
                             )
-                            benchmark_include_proxy = gr.Checkbox(
-                                label="Include proxy mappings",
-                                value=False,
-                                info="Include tokenizer families that use a documented proxy rather than an exact mapping.",
-                            )
                             benchmark_live_updates = gr.Checkbox(
                                 label="Live diagnostics",
                                 value=False,
                                 info="Stream progress updates while the benchmark is running. Turning this off is faster.",
                             )
+                benchmark_tokenizers.change(
+                    fn=lambda selected: _normalize_tokenizer_selection(
+                        selected,
+                        allowed=exact_tokenizers,
+                        max_count=MAX_BENCHMARK_TOKENIZERS,
+                        context_label="Benchmark",
+                    ),
+                    inputs=[benchmark_tokenizers],
+                    outputs=[benchmark_tokenizers, benchmark_tokenizer_warning],
+                    queue=False,
+                )
                 benchmark_preset.change(
                     fn=apply_language_preset,
                     inputs=[benchmark_preset],
@@ -1353,14 +1395,14 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_heatmap = gr.Plot(label="Benchmark Heatmap")
                         gr.HTML(
                             build_chart_help_markdown(
-                                "How to read this chart",
+                                "",
                                 "The distribution view shows spread, not just averages. Wider boxes mean that tokenizer behaves less consistently across the selected languages."
                             )
                         )
                         benchmark_distribution = gr.Plot(label="Metric Distribution")
                         gr.HTML(
                             build_chart_help_markdown(
-                                "How to read this table",
+                                "",
                                 "This is the benchmark in spreadsheet form. Use it to inspect the exact language and tokenizer combinations feeding the overview charts."
                             )
                         )
@@ -1401,7 +1443,6 @@ def build_token_tax_ui() -> gr.Blocks:
                         benchmark_metric,
                         benchmark_limit,
                         benchmark_include_estimates,
-                        benchmark_include_proxy,
                         preview_language,
                         preview_tokenizer,
                         preview_sample_index,
@@ -1426,11 +1467,6 @@ def build_token_tax_ui() -> gr.Blocks:
 
             with gr.TabItem("Catalog"):
                 with gr.Row(equal_height=False, elem_classes="catalog-utility-row"):
-                    catalog_include_proxy = gr.Checkbox(
-                        label="Include proxy mappings",
-                        value=False,
-                        info="Include tokenizer families that rely on documented proxy mappings.",
-                    )
                     catalog_refresh_live = gr.Checkbox(
                         label="Refresh live pricing cache",
                         value=False,
@@ -1454,7 +1490,7 @@ def build_token_tax_ui() -> gr.Blocks:
                     catalog_diagnostics_md = gr.Markdown()
                 catalog_run.click(
                     fn=_handle_catalog_tab,
-                    inputs=[catalog_include_proxy, catalog_refresh_live, catalog_live_updates],
+                    inputs=[proxy_disabled, catalog_refresh_live, catalog_live_updates],
                     outputs=[catalog_table, catalog_appendix_md, catalog_diagnostics_md],
                 )
 
@@ -1475,6 +1511,7 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Benchmark Tokenizers",
                             info="Tokenizer families used to supply the strict multilingual benchmark baseline.",
                         )
+                        scenario_tokenizer_warning = gr.HTML(value="")
                         with gr.Accordion("Advanced Scenario Controls", open=False):
                             with gr.Row(elem_classes="scenario-custom-row"):
                                 slice_x = gr.Dropdown(
@@ -1504,11 +1541,6 @@ def build_token_tax_ui() -> gr.Blocks:
                                         label="Include estimated values",
                                         value=False,
                                         info="Include estimated or non-strict rows in the scenario comparison.",
-                                    )
-                                    scenario_include_proxy = gr.Checkbox(
-                                        label="Include proxy mappings",
-                                        value=False,
-                                        info="Allow tokenizer families with documented proxy mappings into the scenario.",
                                     )
                                     scenario_live_updates = gr.Checkbox(
                                         label="Live diagnostics",
@@ -1551,8 +1583,24 @@ def build_token_tax_ui() -> gr.Blocks:
                                     label="Reasoning Share",
                                     info="Extra completion-token multiplier for reasoning-heavy workloads.",
                                 )
-                        with gr.Group(elem_classes="scenario-control-stack"):
-                            scenario_run = gr.Button("Run Scenario Lab", variant="primary", size="sm", elem_classes="compact-action")
+                        with gr.Row(elem_classes="scenario-control-stack scenario-run-row"):
+                            scenario_run = gr.Button(
+                                "Run Scenario Lab",
+                                variant="primary",
+                                size="sm",
+                                elem_classes="compact-action compact-action--scenario",
+                            )
+                scenario_tokenizers.change(
+                    fn=lambda selected: _normalize_tokenizer_selection(
+                        selected,
+                        allowed=exact_tokenizers,
+                        max_count=MAX_SCENARIO_TOKENIZERS,
+                        context_label="Scenario Lab",
+                    ),
+                    inputs=[scenario_tokenizers],
+                    outputs=[scenario_tokenizers, scenario_tokenizer_warning],
+                    queue=False,
+                )
                 gr.HTML(
                     build_chart_help_markdown(
                         "How to use Scenario Lab",
@@ -1562,12 +1610,12 @@ def build_token_tax_ui() -> gr.Blocks:
 
                 with gr.Tabs():
                     with gr.TabItem("Cost"):
-                        gr.HTML(build_chart_help_markdown("How to read this chart", "Each point is a model. Farther right means more tokens for the same meaning; higher means more monthly spend."))
+                        gr.HTML(build_chart_help_markdown("", "Each point is a model. Farther right means more tokens for the same meaning; higher means more monthly spend."))
                         scenario_cost_plot = gr.Plot(label="Cost")
                         gr.HTML(build_chart_help_markdown("Language detail", "Each smaller point is one language for that model. Diamonds show the model-average point used in the headline chart above."))
                         scenario_cost_detail_plot = gr.Plot(label="Cost by language")
                     with gr.TabItem("Context Loss"):
-                        gr.HTML(build_chart_help_markdown("How to read this chart", "This shows how much usable context window you lose when a tokenizer spends more tokens on the same message. Lower is better."))
+                        gr.HTML(build_chart_help_markdown("", "This shows how much usable context window you lose when a tokenizer spends more tokens on the same message. Lower is better."))
                         scenario_context_plot = gr.Plot(label="Context Loss")
                         gr.HTML(build_chart_help_markdown("Language detail", "This lower chart shows how context loss changes by language. Diamonds mark the model-average summary point."))
                         scenario_context_detail_plot = gr.Plot(label="Context loss by language")
@@ -1575,17 +1623,17 @@ def build_token_tax_ui() -> gr.Blocks:
                         scenario_speed_summary_md = gr.Markdown(
                             value="### Speed Coverage\n- Run Scenario Lab to inspect benchmark-only speed coverage."
                         )
-                        gr.HTML(build_chart_help_markdown("How to read this chart", "This is external benchmark metadata, not the multilingual token tax itself. Use it as supporting context, not the headline decision."))
+                        gr.HTML(build_chart_help_markdown("", "This is external benchmark metadata, not the multilingual token tax itself. Use it as supporting context, not the headline decision."))
                         scenario_speed_plot = gr.Plot(label="Speed Metadata")
                     with gr.TabItem("Scale"):
-                        gr.HTML(build_chart_help_markdown("How to read this chart", "This view links monthly token volume to projected spend so you can see which models become expensive fastest at scale."))
+                        gr.HTML(build_chart_help_markdown("", "This view links monthly token volume to projected spend so you can see which models become expensive fastest at scale."))
                         scenario_scale_plot = gr.Plot(label="Scale")
                     with gr.TabItem("Custom Slice"):
-                        gr.HTML(build_chart_help_markdown("How to read this chart", "Pick any two metrics to compare and use bubble size when you want a third dimension."))
+                        gr.HTML(build_chart_help_markdown("", "Pick any two metrics to compare and use bubble size when you want a third dimension."))
                         scenario_custom_plot = gr.Plot(label="Custom Slice")
                         gr.HTML(build_chart_help_markdown("Language detail", "This lower chart keeps the same custom axes but breaks the model down by language. Diamonds show the model-average point."))
                         scenario_custom_detail_plot = gr.Plot(label="Custom Slice by language")
-                gr.HTML(build_chart_help_markdown("How to use this table", "These per-language rows feed the scenario charts above. Use them when you need the detailed assumptions behind a model-level point."))
+                gr.HTML(build_chart_help_markdown("", "These per-language rows feed the scenario charts above. Use them when you need the detailed assumptions behind a model-level point."))
                 scenario_table = gr.DataFrame(label="Scenario Rows", interactive=False)
                 gr.HTML(build_scenario_appendix_summary_html())
                 with gr.Accordion("Scenario Appendix", open=False):
@@ -1606,7 +1654,6 @@ def build_token_tax_ui() -> gr.Blocks:
                         slice_y,
                         slice_size,
                         scenario_include_estimates,
-                        scenario_include_proxy,
                         scenario_live_updates,
                     ],
                     outputs=[

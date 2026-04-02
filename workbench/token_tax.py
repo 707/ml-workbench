@@ -494,7 +494,7 @@ def _is_continued_token(token_text: str, tokenizer_key: str) -> bool:
     The determination is tokenizer-family-aware:
     - tiktoken (o200k_base, cl100k_base): leading space marks word-start
     - GPT-2: Ġ prefix marks word-start
-    - SentencePiece (llama-3, mistral, qwen-2.5, gemma-2): ▁ prefix marks word-start
+    - SentencePiece (llama-3, mistral, qwen-2.5): ▁ prefix marks word-start
     - BERT-style: ## prefix marks continuation
     - Unknown family: default to False (assume word-start — safer than assuming continuation)
     """
@@ -1074,9 +1074,8 @@ def catalog_appendix(include_proxy: bool) -> str:
         f"- Last refresh error: **{status['last_refresh_error'] or 'none'}**",
         f"- AA snapshot captured at: **{aa_status['captured_at'] or 'not available'}**",
         f"- AA benchmark matches loaded: **{aa_status['model_count']}**",
-        "- Mapping policy: exact mappings are visible by default; proxy tokenizer stand-ins are hidden unless enabled",
+        "- Mapping policy: the hosted app now exposes exact tokenizer families only.",
         f"- Proxy mappings visible: **{'yes' if include_proxy else 'no'}**",
-        "- Current proxy families: Gemma uses a Gemma-family stand-in and Command R uses a BLOOM stand-in until exact equivalence is documented",
     ]
     return "\n".join(lines)
 
@@ -1101,7 +1100,7 @@ def scenario_appendix() -> str:
 def audit_markdown() -> str:
     """Build markdown for the Audit tab."""
     manifest = build_source_manifest()
-    families = list_tokenizer_families(include_proxy=True)
+    families = list_tokenizer_families(include_proxy=False)
     lines = [
         "## Audit",
         "",
@@ -1137,7 +1136,7 @@ def audit_markdown() -> str:
         "- `byte_premium`: UTF-8 byte ratio against aligned English text",
         "- `token_fertility`: tokens per language unit in the sampled text",
         "- `context_loss_pct`: effective context loss derived from RTC",
-        "- `provenance`: strict verified, surfaced metadata, estimated, proxy, or research forward",
+        "- `provenance`: strict verified, surfaced metadata, estimated, or research forward",
     ])
     return "\n".join(lines)
 
@@ -1183,7 +1182,6 @@ def write_learning_log() -> str:
 ## Known Gaps
 - Naturalistic corpora are registered but not enabled as verified runtime benchmark sources in v1.
 - Latency/throughput fields remain empty unless surfaced metadata becomes available through a stable API path.
-- Gemma and Command R remain proxy tokenizer families and stay hidden by default.
 """
 
 

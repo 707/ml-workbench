@@ -41,38 +41,6 @@ FREE_OPENROUTER_MODELS: dict[str, tuple[str, ...]] = {
     "qwen-2.5": (
         "qwen/qwen-2.5-7b-instruct:free",
     ),
-    "qwen3-next": (
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-    ),
-    "qwen3-coder": (
-        "qwen/qwen3-coder:free",
-    ),
-    "gpt-oss": (
-        "openai/gpt-oss-20b:free",
-        "openai/gpt-oss-120b:free",
-    ),
-    "glm-4.5-air": (
-        "z-ai/glm-4.5-air:free",
-    ),
-    "nemotron-3-nano-30b": (
-        "nvidia/nemotron-3-nano-30b-a3b:free",
-    ),
-    "nemotron-3-super": (
-        "nvidia/nemotron-3-super-120b-a12b:free",
-    ),
-    "nemotron-nano-9b-v2": (
-        "nvidia/nemotron-nano-9b-v2:free",
-    ),
-    "trinity-large": (
-        "arcee-ai/trinity-large-preview:free",
-    ),
-    "trinity-mini": (
-        "arcee-ai/trinity-mini:free",
-    ),
-    "gemma-2": (
-        "google/gemma-3-27b-it:free",
-    ),
-    "command-r": (),
     "gpt2": (),
 }
 
@@ -103,21 +71,8 @@ MODEL_MAPPINGS: dict[str, ModelMapping] = {
     "meta-llama/llama-3.2-3b-instruct:free": ModelMapping("meta-llama/llama-3.2-3b-instruct:free", "llama-3", "Llama 3.2 3B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "mistralai/mistral-7b-instruct": ModelMapping("mistralai/mistral-7b-instruct", "mistral", "Mistral 7B Instruct", "exact", "strict_verified", "Static exact mapping"),
     "mistralai/mistral-7b-instruct:free": ModelMapping("mistralai/mistral-7b-instruct:free", "mistral", "Mistral 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "google/gemma-2-9b-it": ModelMapping("google/gemma-2-9b-it", "gemma-2", "Gemma 2 9B IT", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer equivalence is documented"),
-    "google/gemma-3-27b-it:free": ModelMapping("google/gemma-3-27b-it:free", "gemma-2", "Gemma 3 27B IT (Free)", "proxy", "proxy", "Tokenizer proxy until exact Gemma tokenizer equivalence is documented"),
     "qwen/qwen-2.5-7b-instruct:free": ModelMapping("qwen/qwen-2.5-7b-instruct:free", "qwen-2.5", "Qwen 2.5 7B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
     "qwen/qwen-2.5-72b-instruct": ModelMapping("qwen/qwen-2.5-72b-instruct", "qwen-2.5", "Qwen 2.5 72B Instruct", "exact", "strict_verified", "Static exact mapping"),
-    "qwen/qwen3-next-80b-a3b-instruct:free": ModelMapping("qwen/qwen3-next-80b-a3b-instruct:free", "qwen3-next", "Qwen3 Next 80B A3B Instruct (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "qwen/qwen3-coder:free": ModelMapping("qwen/qwen3-coder:free", "qwen3-coder", "Qwen3 Coder 480B A35B (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "openai/gpt-oss-20b:free": ModelMapping("openai/gpt-oss-20b:free", "gpt-oss", "gpt-oss-20b (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "openai/gpt-oss-120b:free": ModelMapping("openai/gpt-oss-120b:free", "gpt-oss", "gpt-oss-120b (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "z-ai/glm-4.5-air:free": ModelMapping("z-ai/glm-4.5-air:free", "glm-4.5-air", "GLM 4.5 Air (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "nvidia/nemotron-3-nano-30b-a3b:free": ModelMapping("nvidia/nemotron-3-nano-30b-a3b:free", "nemotron-3-nano-30b", "Nemotron 3 Nano 30B A3B (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "nvidia/nemotron-3-super-120b-a12b:free": ModelMapping("nvidia/nemotron-3-super-120b-a12b:free", "nemotron-3-super", "Nemotron 3 Super 120B A12B (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "nvidia/nemotron-nano-9b-v2:free": ModelMapping("nvidia/nemotron-nano-9b-v2:free", "nemotron-nano-9b-v2", "Nemotron Nano 9B V2 (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "arcee-ai/trinity-large-preview:free": ModelMapping("arcee-ai/trinity-large-preview:free", "trinity-large", "Trinity Large Preview (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "arcee-ai/trinity-mini:free": ModelMapping("arcee-ai/trinity-mini:free", "trinity-mini", "Trinity Mini (Free)", "exact", "strict_verified", "Static exact mapping"),
-    "cohere/command-r": ModelMapping("cohere/command-r", "command-r", "Command R", "proxy", "proxy", "Tokenizer proxy until exact Command R tokenizer is wired"),
 }
 
 

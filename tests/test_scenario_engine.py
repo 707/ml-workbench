@@ -80,7 +80,7 @@ class TestScenarioEngine:
         request = ScenarioRequest.from_inputs(
             corpus_key="strict_parallel",
             languages=["en"],
-            tokenizer_keys=["nemotron-3-super"],
+            tokenizer_keys=["qwen-2.5"],
             row_limit=25,
             monthly_requests=100000,
             avg_input_tokens=600,
@@ -99,11 +99,11 @@ class TestScenarioEngine:
                     composition_rows=[],
                 ),
             ):
-                with patch("workbench.engines.scenario.resolve_selection", return_value={"label": "Nemotron 3 Super family"}):
+                with patch("workbench.engines.scenario.resolve_selection", return_value={"label": "Qwen 2.5 family"}):
                     with patch("workbench.engines.scenario.build_catalog_entries", return_value=[]):
                         try:
                             run_scenario_request(request)
                         except RuntimeError as exc:
-                            assert "Nemotron 3 Super family" in str(exc)
+                            assert "Qwen 2.5 family" in str(exc)
                         else:
                             raise AssertionError("Expected RuntimeError for missing benchmark tokenizer")

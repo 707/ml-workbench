@@ -46,20 +46,13 @@ class TestModelTokenizerMap:
 
         assert MODEL_TOKENIZER_MAP["openai/gpt-4o"] == "o200k_base"
 
-    def test_contains_new_exact_free_model_mappings(self):
+    def test_contains_hosted_safe_free_model_mappings(self):
         from workbench.model_registry import MODEL_TOKENIZER_MAP
 
         expected = {
-            "arcee-ai/trinity-large-preview:free",
-            "arcee-ai/trinity-mini:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-nano-9b-v2:free",
-            "openai/gpt-oss-20b:free",
-            "openai/gpt-oss-120b:free",
-            "qwen/qwen3-coder:free",
-            "qwen/qwen3-next-80b-a3b-instruct:free",
-            "z-ai/glm-4.5-air:free",
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "mistralai/mistral-7b-instruct:free",
+            "qwen/qwen-2.5-7b-instruct:free",
         }
         assert expected.issubset(set(MODEL_TOKENIZER_MAP))
 
@@ -221,17 +214,14 @@ class TestTokenizerFirstCatalog:
         assert "free_models" in row
         assert "aa_matches" in row
 
-    def test_gpt_oss_family_attaches_multiple_free_models(self):
+    def test_qwen_family_attaches_free_models(self):
         from workbench.model_registry import build_tokenizer_catalog
 
         rows = build_tokenizer_catalog(include_proxy=False)
-        gpt_oss = next(row for row in rows if row["tokenizer_key"] == "gpt-oss")
+        qwen = next(row for row in rows if row["tokenizer_key"] == "qwen-2.5")
 
-        model_ids = {model["model_id"] for model in gpt_oss["free_models"]}
-        assert model_ids == {
-            "openai/gpt-oss-20b:free",
-            "openai/gpt-oss-120b:free",
-        }
+        model_ids = {model["model_id"] for model in qwen["free_models"]}
+        assert model_ids == {"qwen/qwen-2.5-7b-instruct:free"}
 
     def test_every_exact_family_has_continuation_style_metadata(self):
         from workbench.tokenizer_registry import TOKENIZER_FAMILY_SPECS
@@ -246,16 +236,18 @@ class TestTokenizerFirstCatalog:
         exact_specs = [spec for spec in TOKENIZER_FAMILY_SPECS.values() if spec.mapping_quality == "exact"]
         assert all(spec.chart_color.startswith("#") for spec in exact_specs)
 
-    def test_proxy_family_labels_call_out_stand_ins(self):
+    def test_only_hosted_safe_families_are_visible(self):
         from workbench.model_registry import list_tokenizer_families
 
         rows = list_tokenizer_families(include_proxy=True)
-
-        gemma = next(row for row in rows if row["key"] == "gemma-2")
-        command_r = next(row for row in rows if row["key"] == "command-r")
-
-        assert "proxy" in gemma["label"].lower()
-        assert "bloom" in command_r["label"].lower()
+        assert [row["key"] for row in rows] == [
+            "gpt2",
+            "llama-3",
+            "mistral",
+            "cl100k_base",
+            "o200k_base",
+            "qwen-2.5",
+        ]
 
 
 class TestArtificialAnalysisSnapshot:
@@ -334,25 +326,17 @@ class TestFreeRuntimeChoices:
         rows = list_free_runtime_choices(include_proxy=False)
         assert all(row["model_id"].endswith(":free") for row in rows)
 
-    def test_free_runtime_choices_include_new_exact_text_only_models(self):
+    def test_free_runtime_choices_include_only_hosted_safe_text_models(self):
         from workbench.model_registry import list_free_runtime_choices
 
         rows = list_free_runtime_choices(include_proxy=False)
         model_ids = {row["model_id"] for row in rows}
 
-        expected = {
-            "arcee-ai/trinity-large-preview:free",
-            "arcee-ai/trinity-mini:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "nvidia/nemotron-nano-9b-v2:free",
-            "openai/gpt-oss-20b:free",
-            "openai/gpt-oss-120b:free",
-            "qwen/qwen3-coder:free",
-            "qwen/qwen3-next-80b-a3b-instruct:free",
-            "z-ai/glm-4.5-air:free",
+        assert model_ids == {
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "mistralai/mistral-7b-instruct:free",
+            "qwen/qwen-2.5-7b-instruct:free",
         }
-        assert expected.issubset(model_ids)
 
     def test_free_runtime_choices_cover_app_comparison_models(self):
         from app import FREE_MODELS

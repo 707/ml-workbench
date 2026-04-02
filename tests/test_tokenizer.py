@@ -179,24 +179,29 @@ class TestGetTokenizer:
         assert first is second
 
     def test_supported_tokenizers_registry_has_expected_entries(self):
-        """SUPPORTED_TOKENIZERS must have at least 8 entries (v2 expansion)."""
+        """SUPPORTED_TOKENIZERS must match the hosted-safe family count."""
         from workbench.tokenizer import SUPPORTED_TOKENIZERS
 
-        assert len(SUPPORTED_TOKENIZERS) >= 8
+        assert len(SUPPORTED_TOKENIZERS) == 6
 
     def test_supported_tokenizers_keys(self):
         """SUPPORTED_TOKENIZERS must contain all v2 tokenizer keys."""
         from workbench.tokenizer import SUPPORTED_TOKENIZERS
 
-        expected = {"gpt2", "llama-3", "mistral", "o200k_base", "cl100k_base",
-                    "qwen-2.5", "gemma-2", "command-r"}
-        assert expected.issubset(set(SUPPORTED_TOKENIZERS.keys()))
+        assert set(SUPPORTED_TOKENIZERS.keys()) == {
+            "gpt2",
+            "llama-3",
+            "mistral",
+            "o200k_base",
+            "cl100k_base",
+            "qwen-2.5",
+        }
 
-    def test_supported_tokenizers_include_new_exact_free_families(self):
-        """Expanded exact families should be available to benchmark and inspect."""
+    def test_removed_heavier_families_are_absent(self):
+        """Hosted-only reduction removes heavier families from the public tokenizer set."""
         from workbench.tokenizer import SUPPORTED_TOKENIZERS
 
-        expected = {
+        removed = {
             "gpt-oss",
             "glm-4.5-air",
             "nemotron-3-nano-30b",
@@ -206,8 +211,10 @@ class TestGetTokenizer:
             "qwen3-next",
             "trinity-large",
             "trinity-mini",
+            "gemma-2",
+            "command-r",
         }
-        assert expected.issubset(set(SUPPORTED_TOKENIZERS.keys()))
+        assert removed.isdisjoint(set(SUPPORTED_TOKENIZERS.keys()))
 
     def test_supported_tokenizers_come_from_shared_family_registry(self):
         """Tokenizer loader registry should derive from the shared tokenizer-family spec map."""
