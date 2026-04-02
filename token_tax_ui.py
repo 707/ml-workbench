@@ -8,6 +8,9 @@ import tempfile
 
 import gradio as gr
 
+from benchmark_engine import run_benchmark_request
+from catalog_engine import run_catalog_request
+from catalog_viewmodels import catalog_display_rows
 from charts import (
     build_bubble_chart,
     build_category_bar,
@@ -21,30 +24,39 @@ from charts import (
 )
 from corpora import DEFAULT_BENCHMARK_LANGUAGES
 from diagnostics import clear_events, log_event, render_markdown
-from model_registry import (
-    build_tokenizer_catalog,
-    list_free_runtime_choices,
-    list_tokenizer_families,
+from model_registry import list_tokenizer_families
+from scenario_engine import (
+    derive_scenario_model_ids as derive_scenario_model_ids_for_request,
+)
+from scenario_engine import (
+    run_scenario_request,
+)
+from scenario_viewmodels import (
+    aggregate_scenario_rows,
+    build_scenario_language_detail_rows,
+    build_scenario_speed_summary,
 )
 from token_tax import (
     analyze_text_across_models,
     audit_markdown,
     benchmark_all,
     benchmark_appendix,
-    benchmark_corpus,
-    catalog_appendix,
     cost_projection,
     export_csv,
     export_json,
     generate_recommendations,
     parse_traffic_csv,
     portfolio_analysis,
-    refresh_catalog,
     run_benchmark,
-    scenario_analysis,
     scenario_appendix,
     serialize_table,
 )
+from ui_feedback import (
+    build_chart_help_html,
+    build_empty_state_markdown,
+    build_runtime_error_markdown,
+)
+from workbench_types import BenchmarkRequest, CatalogRequest, ScenarioRequest
 
 SCRIPT_FAMILY_PRESETS = {
     "All": list(DEFAULT_BENCHMARK_LANGUAGES),
@@ -154,10 +166,7 @@ def metric_display_label(metric_key: str) -> str:
 
 
 def build_chart_help_markdown(title: str, body: str) -> str:
-    return (
-        f'<div class="chart-help"><strong>{html.escape(title)}</strong>'
-        f"<p>{html.escape(body)}</p></div>"
-    )
+    return build_chart_help_html(title, body)
 
 
 def exploratory_metric_badge_html() -> str:
@@ -358,25 +367,7 @@ def configure_benchmark_metric(lane_or_corpus: str) -> dict[str, object]:
 
 
 def _catalog_display_rows(rows: list[dict]) -> list[dict]:
-    display_rows: list[dict] = []
-    for row in rows:
-        free_models = row.get("free_models", [])
-        aa_matches = row.get("aa_matches", [])
-        mapping_label = "Exact tokenizer mapping" if row["mapping_quality"] == "exact" else "Proxy tokenizer mapping"
-        display_rows.append({
-            "Tokenizer Family": row["label"],
-            "Tokenizer Key": row["tokenizer_key"],
-            "Tokenizer Source": row["tokenizer_source"],
-            "Mapping": mapping_label,
-            "Free Models": row.get("free_model_count", len(free_models)),
-            "Free Model Examples": ", ".join(model["label"] for model in free_models) or "None attached",
-            "AA Benchmarks": row.get("aa_match_count", len(aa_matches)),
-            "AA Match Examples": ", ".join(match["label"] for match in aa_matches) or "No benchmark match",
-            "Min $/1M In": row.get("min_input_per_million"),
-            "Max Context": row.get("max_context_window"),
-            "Provenance": row["provenance"],
-        })
-    return display_rows
+    return catalog_display_rows(rows)
 
 
 def _format_benchmark_value(value: float | int | None) -> str:
@@ -397,7 +388,7 @@ def build_scenario_appendix_summary_html() -> str:
     return (
         '<div class="chart-help">'
         "<strong>Scenario assumptions</strong>"
-        "<p>Scenario Lab is the strict benchmark-driven estimate. It turns Strict Evidence benchmark rows into business impact and uses measured tokenizer behavior, not the legacy 4 chars/token heuristic.</p>"
+        "<p>Scenario Lab is the strict benchmark-driven estimate. It turns Strict Evidence benchmark rows into business impact, derives valid free models from the selected tokenizer families, and uses measured tokenizer behavior instead of the legacy 4 chars/token heuristic.</p>"
         "</div>"
     )
 
@@ -690,100 +681,17 @@ def _build_benchmark_outputs(
 
 
 def _aggregate_scenario_rows(rows: list[dict]) -> list[dict]:
-    grouped: dict[str, dict] = {}
-    for row in rows:
-        key = row["model_id"]
-        weight = float(row.get("monthly_input_tokens") or 0)
-        current = grouped.setdefault(key, {
-            "label": row["label"],
-            "display_label": shorten_model_label(str(row["label"])),
-            "model_id": row["model_id"],
-            "tokenizer_key": row["tokenizer_key"],
-            "rtc_weighted_sum": 0.0,
-            "context_loss_weighted_sum": 0.0,
-            "weight": 0.0,
-            "monthly_input_tokens": 0,
-            "monthly_output_tokens": 0,
-            "monthly_cost": 0.0,
-            "ttft_seconds": row.get("ttft_seconds"),
-            "output_tokens_per_second": row.get("output_tokens_per_second"),
-            "telemetry_provider": row.get("telemetry_provider"),
-            "provenance": row.get("provenance"),
-        })
-        current["rtc_weighted_sum"] += float(row.get("rtc") or 0.0) * weight
-        current["context_loss_weighted_sum"] += float(row.get("context_loss_pct") or 0.0) * weight
-        current["weight"] += weight
-        current["monthly_input_tokens"] += int(row.get("monthly_input_tokens") or 0)
-        current["monthly_output_tokens"] += int(row.get("monthly_output_tokens") or 0)
-        current["monthly_cost"] += float(row.get("monthly_cost") or 0.0)
-
-    aggregated: list[dict] = []
-    for item in grouped.values():
-        weight = item.pop("weight")
-        rtc_weighted_sum = item.pop("rtc_weighted_sum")
-        context_loss_weighted_sum = item.pop("context_loss_weighted_sum")
-        item["rtc"] = round(rtc_weighted_sum / weight, 4) if weight else 0.0
-        item["context_loss_pct"] = round(context_loss_weighted_sum / weight, 2) if weight else 0.0
-        item["monthly_cost"] = round(item["monthly_cost"], 6)
-        aggregated.append(item)
-    return sorted(aggregated, key=lambda row: row["label"].lower())
+    return aggregate_scenario_rows(rows)
 
 
 def build_scenario_speed_summary_markdown(chart_rows: list[dict]) -> str:
     """Render a speed coverage summary for the Scenario Lab speed tab."""
-    if not chart_rows:
-        return "### Speed Coverage\n- Run Scenario Lab to inspect benchmark-only speed coverage."
-
-    matched = [
-        row for row in chart_rows
-        if isinstance(row.get("ttft_seconds"), (int, float))
-        and isinstance(row.get("output_tokens_per_second"), (int, float))
-    ]
-    unmatched = [row for row in chart_rows if row not in matched]
-
-    lines = [
-        "### Speed Coverage",
-        f"- Matched models: **{len(matched)} / {len(chart_rows)}** with benchmark-only speed metadata.",
-    ]
-    if matched:
-        fastest = min(matched, key=lambda row: float(row["ttft_seconds"]))
-        highest_tps = max(matched, key=lambda row: float(row["output_tokens_per_second"]))
-        lines.append(
-            f"- Fastest time-to-first-token: **{fastest['label']}** at **{_format_benchmark_value(fastest['ttft_seconds'])}s**."
-        )
-        lines.append(
-            f"- Highest output throughput: **{highest_tps['label']}** at **{_format_benchmark_value(highest_tps['output_tokens_per_second'])} tok/s**."
-        )
-    if unmatched:
-        labels = ", ".join(row["label"] for row in unmatched)
-        lines.append(f"- No benchmark match yet: {labels}.")
-    return "\n".join(lines)
+    return build_scenario_speed_summary(chart_rows)
 
 
 def _build_scenario_language_detail_rows(rows: list[dict]) -> list[dict]:
     """Return per-language scenario points plus one average point per model."""
-    detail_rows: list[dict] = []
-    for row in rows:
-        detail_rows.append(
-            {
-                **row,
-                "display_label": shorten_model_label(str(row.get("label", ""))),
-                "language": language_label(str(row.get("language", ""))),
-                "language_code": row.get("language"),
-                "point_kind": "language",
-            }
-        )
-
-    for row in _aggregate_scenario_rows(rows):
-        detail_rows.append(
-            {
-                **row,
-                "language": "Average",
-                "language_code": "avg",
-                "point_kind": "average",
-            }
-        )
-    return detail_rows
+    return build_scenario_language_detail_rows(rows)
 
 
 def _build_scenario_outputs(
@@ -1057,6 +965,14 @@ def _handle_benchmark_tab(
     progress=gr.Progress(),
 ):
     corpus_key = _resolve_corpus_key(lane_or_corpus)
+    request = BenchmarkRequest.from_inputs(
+        corpus_key=corpus_key,
+        languages=languages,
+        tokenizer_keys=tokenizer_keys,
+        row_limit=row_limit,
+        include_estimates=include_estimates,
+        include_proxy=include_proxy,
+    )
     benchmark_columns = _benchmark_columns_for(corpus_key)
     raw_benchmark_columns = _raw_benchmark_columns_for(corpus_key)
     metric_key = metric_key if metric_key in _benchmark_metric_choices_for(corpus_key) else _default_benchmark_metric_for(corpus_key)
@@ -1081,7 +997,10 @@ def _handle_benchmark_tab(
             empty_split,
             empty_fertility,
             empty_composition,
-            f"{benchmark_appendix(corpus_key)}\n\n**Select at least one tokenizer family.**",
+            build_empty_state_markdown(
+                benchmark_appendix(corpus_key),
+                "Select at least one tokenizer family.",
+            ),
             render_markdown(),
         )
 
@@ -1092,24 +1011,19 @@ def _handle_benchmark_tab(
             "benchmark.run.start",
             "Preparing benchmark run",
             lane=lane_or_corpus,
-            language_count=len(languages or list(DEFAULT_BENCHMARK_LANGUAGES)),
-            tokenizer_count=len(tokenizer_keys),
-            row_limit=int(row_limit),
+            language_count=len(request.languages or tuple(DEFAULT_BENCHMARK_LANGUAGES)),
+            tokenizer_count=len(request.tokenizer_keys),
+            row_limit=request.row_limit,
             live_updates=bool(live_updates),
         )
-        selected_languages = languages or list(DEFAULT_BENCHMARK_LANGUAGES)
+        selected_languages = list(request.languages) or list(DEFAULT_BENCHMARK_LANGUAGES)
         appendix = benchmark_appendix(corpus_key)
-        benchmark = benchmark_corpus(
-            corpus_key,
-            selected_languages,
-            tokenizer_keys,
-            row_limit=int(row_limit),
-            include_estimates=include_estimates,
-            include_proxy=include_proxy,
+        benchmark = run_benchmark_request(
+            request,
             progress_callback=lambda ratio, desc: progress(ratio, desc=desc),
         )
-        rows = benchmark["rows"]
-        raw_rows = benchmark["raw_rows"]
+        rows = benchmark.rows
+        raw_rows = benchmark.raw_rows
         progress(0.94, desc="Building charts…")
     except Exception as exc:
         progress(None)
@@ -1129,7 +1043,7 @@ def _handle_benchmark_tab(
             empty_split,
             empty_fertility,
             empty_composition,
-            f"{benchmark_appendix(corpus_key)}\n\n**Runtime error:** {exc}",
+            build_runtime_error_markdown(benchmark_appendix(corpus_key), str(exc)),
             render_markdown(),
         )
     outputs = _build_benchmark_outputs(
@@ -1147,21 +1061,24 @@ def _handle_benchmark_tab(
 
 
 def _handle_catalog_tab(include_proxy: bool, refresh_live: bool, live_updates: bool):
-    clear_events()
-    log_event(
-        "catalog.run.start",
-        "Loading tokenizer catalog",
+    request = CatalogRequest(
         include_proxy=bool(include_proxy),
         refresh_live=bool(refresh_live),
         live_updates=bool(live_updates),
     )
-    if refresh_live:
-        refresh_catalog()
-    rows = build_tokenizer_catalog(include_proxy=include_proxy)
+    clear_events()
+    log_event(
+        "catalog.run.start",
+        "Loading tokenizer catalog",
+        include_proxy=request.include_proxy,
+        refresh_live=request.refresh_live,
+        live_updates=request.live_updates,
+    )
+    catalog_result = run_catalog_request(request)
     return (
-        serialize_table(_catalog_display_rows(rows), CATALOG_COLUMNS),
-        catalog_appendix(include_proxy),
-        render_markdown(),
+        serialize_table(_catalog_display_rows(catalog_result.rows), CATALOG_COLUMNS),
+        catalog_result.appendix,
+        catalog_result.diagnostics,
     )
 
 
@@ -1181,6 +1098,18 @@ def _handle_scenario_tab(
     progress=gr.Progress(),
 ):
     corpus_key = "strict_parallel"
+    request = ScenarioRequest.from_inputs(
+        corpus_key=corpus_key,
+        languages=languages,
+        tokenizer_keys=tokenizer_keys,
+        row_limit=25,
+        monthly_requests=monthly_requests,
+        avg_input_tokens=avg_input_tokens,
+        avg_output_tokens=avg_output_tokens,
+        reasoning_share=reasoning_share,
+        include_estimates=include_estimates,
+        include_proxy=include_proxy,
+    )
     if not tokenizer_keys:
         empty = serialize_table([], SCENARIO_COLUMNS)
         return (
@@ -1194,11 +1123,14 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
             build_scenario_language_detail_scatter([], x_key=x_key, y_key=y_key),
-            "Select at least one benchmark tokenizer family.",
+            build_empty_state_markdown(
+                "Scenario Lab",
+                "Select at least one benchmark tokenizer family.",
+            ),
             render_markdown(),
         )
 
-    model_ids = derive_scenario_model_ids(tokenizer_keys, include_proxy=include_proxy)
+    model_ids = derive_scenario_model_ids_for_request(request.tokenizer_keys, include_proxy=request.include_proxy)
     if not model_ids:
         empty = serialize_table([], SCENARIO_COLUMNS)
         return (
@@ -1212,7 +1144,10 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
             build_scenario_language_detail_scatter([], x_key=x_key, y_key=y_key),
-            "No valid free models match the selected tokenizer families.",
+            build_empty_state_markdown(
+                "Scenario Lab",
+                "No valid free models match the selected tokenizer families.",
+            ),
             render_markdown(),
         )
 
@@ -1222,25 +1157,16 @@ def _handle_scenario_tab(
         log_event(
             "scenario.run.start",
             "Preparing scenario analysis",
-            language_count=len(languages or []),
-            tokenizer_count=len(tokenizer_keys or []),
+            language_count=len(request.languages),
+            tokenizer_count=len(request.tokenizer_keys),
             model_count=len(model_ids or []),
             live_updates=bool(live_updates),
         )
-        rows = scenario_analysis(
-            corpus_key=corpus_key,
-            languages=languages,
-            tokenizer_keys=tokenizer_keys,
-            model_ids=model_ids,
-            row_limit=25,
-            monthly_requests=int(monthly_requests),
-            avg_input_tokens=int(avg_input_tokens),
-            avg_output_tokens=int(avg_output_tokens),
-            reasoning_share=float(reasoning_share),
-            include_estimates=include_estimates,
-            include_proxy=include_proxy,
+        scenario_result = run_scenario_request(
+            request,
             progress_callback=lambda ratio, desc: progress(ratio, desc=desc),
         )
+        rows = scenario_result.rows
         progress(0.94, desc="Building charts…")
     except Exception as exc:
         empty = serialize_table([], SCENARIO_COLUMNS)
@@ -1256,7 +1182,7 @@ def _handle_scenario_tab(
             build_metric_scatter([], x_key="monthly_input_tokens", y_key="monthly_cost"),
             build_metric_scatter([], x_key=x_key, y_key=y_key),
             build_scenario_language_detail_scatter([], x_key=x_key, y_key=y_key),
-            f"{scenario_appendix()}\n\n**Runtime error:** {exc}",
+            build_runtime_error_markdown(scenario_appendix(), str(exc)),
             render_markdown(),
         )
     outputs = _build_scenario_outputs(rows, corpus_key, x_key, y_key, size_key)
@@ -1296,13 +1222,7 @@ def derive_scenario_model_ids(
     include_proxy: bool,
 ) -> list[str]:
     """Return free runtime model IDs filtered by the selected tokenizer families."""
-    selected_tokenizers = list(tokenizer_keys or [])
-    if not selected_tokenizers:
-        return []
-    rows = list_free_runtime_choices(include_proxy=include_proxy)
-    selected = set(selected_tokenizers)
-    rows = [row for row in rows if row["tokenizer_key"] in selected]
-    return [row["model_id"] for row in rows]
+    return derive_scenario_model_ids_for_request(tokenizer_keys, include_proxy=include_proxy)
 
 
 def build_token_tax_ui() -> gr.Blocks:
@@ -1344,11 +1264,6 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Rows per language",
                             info="How many corpus samples to benchmark per language and tokenizer family.",
                         )
-                        benchmark_live_updates = gr.Checkbox(
-                            label="Live diagnostics",
-                            value=False,
-                            info="Stream progress updates while the benchmark is running. Turning this off is faster.",
-                        )
                         benchmark_run = gr.Button("Run Benchmark", variant="primary", size="sm", elem_classes="compact-action")
                     with gr.Column(elem_classes="filter-rail filter-rail--wide", min_width=520, scale=1):
                         benchmark_preset = gr.Dropdown(
@@ -1372,36 +1287,42 @@ def build_token_tax_ui() -> gr.Blocks:
                             info="Tokenizer families to benchmark against the selected corpus samples.",
                         )
                     with gr.Column(elem_classes="filter-rail filter-rail--compact", min_width=300, scale=0):
-                        preview_language = gr.Dropdown(
-                            choices=language_choice_pairs(list(DEFAULT_BENCHMARK_LANGUAGES)),
-                            value="en",
-                            label="Preview Language",
-                            info="Language shown in the tokenization preview card below.",
-                        )
-                        preview_tokenizer = gr.Dropdown(
-                            choices=[(family["label"], family["key"]) for family in tokenizer_families],
-                            value=benchmark_default_tokenizers[0] if benchmark_default_tokenizers else None,
-                            label="Preview Tokenizer",
-                            info="Tokenizer family used in the visual preview sample.",
-                        )
-                        preview_sample_index = gr.Slider(
-                            0,
-                            9,
-                            value=0,
-                            step=1,
-                            label="Preview Sample Index",
-                            info="Sample row from the selected corpus slice to preview.",
-                        )
-                        benchmark_include_estimates = gr.Checkbox(
-                            label="Include estimated values",
-                            value=False,
-                            info="Show rows that are estimated rather than strict verified evidence.",
-                        )
-                        benchmark_include_proxy = gr.Checkbox(
-                            label="Include proxy mappings",
-                            value=False,
-                            info="Include tokenizer families that use a documented proxy rather than an exact mapping.",
-                        )
+                        with gr.Accordion("Advanced Benchmark Controls", open=False):
+                            preview_language = gr.Dropdown(
+                                choices=language_choice_pairs(list(DEFAULT_BENCHMARK_LANGUAGES)),
+                                value="en",
+                                label="Preview Language",
+                                info="Language shown in the tokenization preview card below.",
+                            )
+                            preview_tokenizer = gr.Dropdown(
+                                choices=[(family["label"], family["key"]) for family in tokenizer_families],
+                                value=benchmark_default_tokenizers[0] if benchmark_default_tokenizers else None,
+                                label="Preview Tokenizer",
+                                info="Tokenizer family used in the visual preview sample.",
+                            )
+                            preview_sample_index = gr.Slider(
+                                0,
+                                9,
+                                value=0,
+                                step=1,
+                                label="Preview Sample Index",
+                                info="Sample row from the selected corpus slice to preview.",
+                            )
+                            benchmark_include_estimates = gr.Checkbox(
+                                label="Include estimated values",
+                                value=False,
+                                info="Show rows that are estimated rather than strict verified evidence.",
+                            )
+                            benchmark_include_proxy = gr.Checkbox(
+                                label="Include proxy mappings",
+                                value=False,
+                                info="Include tokenizer families that use a documented proxy rather than an exact mapping.",
+                            )
+                            benchmark_live_updates = gr.Checkbox(
+                                label="Live diagnostics",
+                                value=False,
+                                info="Stream progress updates while the benchmark is running. Turning this off is faster.",
+                            )
                 benchmark_preset.change(
                     fn=apply_language_preset,
                     inputs=[benchmark_preset],
@@ -1562,45 +1483,46 @@ def build_token_tax_ui() -> gr.Blocks:
                             label="Benchmark Tokenizers",
                             info="Tokenizer families used to supply the strict multilingual benchmark baseline.",
                         )
-                        with gr.Row(elem_classes="scenario-custom-row"):
-                            slice_x = gr.Dropdown(
-                                choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
-                                value="rtc",
-                                label="Custom X",
-                                info="Metric plotted on the x-axis of the custom slice chart.",
-                                scale=1,
-                            )
-                            slice_y = gr.Dropdown(
-                                choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
-                                value="monthly_cost",
-                                label="Custom Y",
-                                info="Metric plotted on the y-axis of the custom slice chart.",
-                                scale=1,
-                            )
-                        with gr.Row(elem_classes="scenario-options-row"):
-                            slice_size = gr.Dropdown(
-                                choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
-                                value="none",
-                                label="Bubble Size",
-                                info="Optional bubble sizing field for the custom slice chart.",
-                                scale=1,
-                            )
-                            with gr.Group(elem_classes="scenario-checkbox-group checkbox-stack"):
-                                scenario_include_estimates = gr.Checkbox(
-                                    label="Include estimated values",
-                                    value=False,
-                                    info="Include estimated or non-strict rows in the scenario comparison.",
+                        with gr.Accordion("Advanced Scenario Controls", open=False):
+                            with gr.Row(elem_classes="scenario-custom-row"):
+                                slice_x = gr.Dropdown(
+                                    choices=["rtc", "monthly_cost", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
+                                    value="rtc",
+                                    label="Custom X",
+                                    info="Metric plotted on the x-axis of the custom slice chart.",
+                                    scale=1,
                                 )
-                                scenario_include_proxy = gr.Checkbox(
-                                    label="Include proxy mappings",
-                                    value=False,
-                                    info="Allow tokenizer families with documented proxy mappings into the scenario.",
+                                slice_y = gr.Dropdown(
+                                    choices=["monthly_cost", "rtc", "monthly_input_tokens", "context_loss_pct", "ttft_seconds", "output_tokens_per_second"],
+                                    value="monthly_cost",
+                                    label="Custom Y",
+                                    info="Metric plotted on the y-axis of the custom slice chart.",
+                                    scale=1,
                                 )
-                                scenario_live_updates = gr.Checkbox(
-                                    label="Live diagnostics",
-                                    value=False,
-                                    info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
+                            with gr.Row(elem_classes="scenario-options-row"):
+                                slice_size = gr.Dropdown(
+                                    choices=["none", "monthly_cost", "monthly_input_tokens", "rtc"],
+                                    value="none",
+                                    label="Bubble Size",
+                                    info="Optional bubble sizing field for the custom slice chart.",
+                                    scale=1,
                                 )
+                                with gr.Group(elem_classes="scenario-checkbox-group checkbox-stack"):
+                                    scenario_include_estimates = gr.Checkbox(
+                                        label="Include estimated values",
+                                        value=False,
+                                        info="Include estimated or non-strict rows in the scenario comparison.",
+                                    )
+                                    scenario_include_proxy = gr.Checkbox(
+                                        label="Include proxy mappings",
+                                        value=False,
+                                        info="Allow tokenizer families with documented proxy mappings into the scenario.",
+                                    )
+                                    scenario_live_updates = gr.Checkbox(
+                                        label="Live diagnostics",
+                                        value=False,
+                                        info="Stream scenario progress while computing rows and charts. Turning this off is faster.",
+                                    )
                     with gr.Column(elem_classes="filter-rail filter-rail--scenario-inputs", min_width=360, scale=0):
                         with gr.Group(elem_classes="scenario-control-grid"):
                             with gr.Column(elem_classes="scenario-control-block", min_width=160, scale=1):

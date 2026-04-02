@@ -1,0 +1,109 @@
+from unittest.mock import patch
+
+from scenario_engine import derive_scenario_model_ids, run_scenario_request
+from workbench_types import ScenarioRequest
+
+
+class TestScenarioEngine:
+    def test_derive_scenario_model_ids_filters_by_tokenizer_and_proxy(self):
+        rows = [
+            {"model_id": "a", "tokenizer_key": "llama-3"},
+            {"model_id": "b", "tokenizer_key": "mistral"},
+        ]
+        with patch("scenario_engine.list_free_runtime_choices", return_value=rows):
+            result = derive_scenario_model_ids(("mistral",), include_proxy=False)
+
+        assert result == ["b"]
+
+    def test_run_scenario_request_uses_derived_model_ids(self):
+        from workbench_types import BenchmarkResult
+
+        request = ScenarioRequest.from_inputs(
+            corpus_key="strict_parallel",
+            languages=["en"],
+            tokenizer_keys=["llama-3"],
+            row_limit=25,
+            monthly_requests=100000,
+            avg_input_tokens=600,
+            avg_output_tokens=250,
+            reasoning_share=0.1,
+        )
+        with (
+            patch("scenario_engine.derive_scenario_model_ids", return_value=["model-a"]) as mock_ids,
+            patch(
+                "scenario_engine.run_benchmark_request",
+                return_value=BenchmarkResult(
+                    rows=[
+                        {
+                            "language": "en",
+                            "tokenizer_key": "llama-3",
+                            "rtc": 1.5,
+                            "lane": "Strict Evidence",
+                        }
+                    ],
+                    raw_rows=[],
+                    matrix={("en", "llama-3"): {"rtc": 1.5}},
+                    languages=["en"],
+                    tokenizers=["llama-3"],
+                ),
+            ) as mock_benchmark,
+            patch(
+                "scenario_engine.build_catalog_entries",
+                return_value=[
+                    {
+                        "model_id": "model-a",
+                        "label": "Model A",
+                        "tokenizer_key": "llama-3",
+                        "input_per_million": 1.0,
+                        "output_per_million": 2.0,
+                        "latency_ms": None,
+                        "throughput_tps": None,
+                        "ttft_seconds": None,
+                        "output_tokens_per_second": None,
+                        "telemetry_provider": None,
+                        "provenance": "strict_verified",
+                        "mapping_quality": "exact",
+                    }
+                ],
+            ),
+        ):
+            result = run_scenario_request(request)
+
+        mock_ids.assert_called_once()
+        assert mock_benchmark.call_args.args[0] == request.to_benchmark_request()
+        assert result.model_ids == ["model-a"]
+        assert result.rows[0]["model_id"] == "model-a"
+
+    def test_run_scenario_request_raises_when_selected_tokenizer_missing_from_benchmark(self):
+        from workbench_types import BenchmarkResult
+
+        request = ScenarioRequest.from_inputs(
+            corpus_key="strict_parallel",
+            languages=["en"],
+            tokenizer_keys=["nemotron-3-super"],
+            row_limit=25,
+            monthly_requests=100000,
+            avg_input_tokens=600,
+            avg_output_tokens=250,
+            reasoning_share=0.1,
+        )
+
+        with patch("scenario_engine.derive_scenario_model_ids", return_value=["model-a"]):
+            with patch(
+                "scenario_engine.run_benchmark_request",
+                return_value=BenchmarkResult(
+                    rows=[],
+                    raw_rows=[],
+                    matrix={},
+                    languages=["en"],
+                    tokenizers=[],
+                ),
+            ):
+                with patch("scenario_engine.resolve_selection", return_value={"label": "Nemotron 3 Super family"}):
+                    with patch("scenario_engine.build_catalog_entries", return_value=[]):
+                        try:
+                            run_scenario_request(request)
+                        except RuntimeError as exc:
+                            assert "Nemotron 3 Super family" in str(exc)
+                        else:
+                            raise AssertionError("Expected RuntimeError for missing benchmark tokenizer")

@@ -68,12 +68,14 @@ class TestWorkbenchHandlers:
 
     def test_handle_scenario_tab_derives_current_model_selection(self):
         from token_tax_ui import _handle_scenario_tab
+        from workbench_types import ScenarioResult
 
         captured: dict[str, object] = {}
 
-        def _fake_scenario_analysis(**kwargs):
-            captured.update(kwargs)
-            return [
+        def _fake_run_scenario_request(request, progress_callback=None):
+            captured["request"] = request
+            return ScenarioResult(
+                rows=[
                 {
                     "label": "gpt-oss-20b (Free)",
                     "model_id": "openai/gpt-oss-20b:free",
@@ -90,9 +92,11 @@ class TestWorkbenchHandlers:
                     "mapping_quality": "exact",
                     "lane": "Strict Evidence",
                 }
-            ]
+                ],
+                model_ids=["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+            )
 
-        with patch("token_tax_ui.scenario_analysis", side_effect=_fake_scenario_analysis):
+        with patch("token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
             outputs = _handle_scenario_tab(
                 ["en"],
                 ["gpt-oss"],
@@ -108,7 +112,7 @@ class TestWorkbenchHandlers:
                 False,
             )
 
-        assert captured["model_ids"] == ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"]
+        assert list(captured["request"].tokenizer_keys) == ["gpt-oss"]
         assert outputs[0]["data"][0][2] in {"openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"}
 
     def test_handle_scenario_tab_returns_empty_state_when_no_tokenizers_selected(self):
@@ -134,6 +138,7 @@ class TestWorkbenchHandlers:
 
     def test_handle_catalog_tab_serializes_tokenizer_rows(self):
         from token_tax_ui import _handle_catalog_tab
+        from workbench_types import CatalogResult
 
         tokenizer_rows = [
             {
@@ -147,7 +152,14 @@ class TestWorkbenchHandlers:
             },
         ]
 
-        with patch("token_tax_ui.build_tokenizer_catalog", return_value=tokenizer_rows):
+        with patch(
+            "token_tax_ui.run_catalog_request",
+            return_value=CatalogResult(
+                rows=tokenizer_rows,
+                appendix="## Catalog Appendix",
+                diagnostics="## Diagnostics",
+            ),
+        ):
             table, appendix, diagnostics = _handle_catalog_tab(
                 include_proxy=False,
                 refresh_live=False,
@@ -209,6 +221,7 @@ class TestWorkbenchHandlers:
 
     def test_handle_benchmark_tab_returns_final_tuple_with_live_diagnostics_enabled(self):
         from token_tax_ui import _handle_benchmark_tab
+        from workbench_types import BenchmarkResult
 
         benchmark_rows = [
             {
@@ -244,13 +257,16 @@ class TestWorkbenchHandlers:
                 "token_preview": "hello | world",
             },
         ]
-        with patch("token_tax_ui.benchmark_corpus", return_value={
-            "rows": benchmark_rows,
-            "raw_rows": raw_rows,
-            "matrix": {("en", "gpt2"): benchmark_rows[0]},
-            "languages": ["en"],
-            "tokenizers": ["gpt2"],
-        }):
+        with patch(
+            "token_tax_ui.run_benchmark_request",
+            return_value=BenchmarkResult(
+                rows=benchmark_rows,
+                raw_rows=raw_rows,
+                matrix={("en", "gpt2"): benchmark_rows[0]},
+                languages=["en"],
+                tokenizers=["gpt2"],
+            ),
+        ):
             outputs = _handle_benchmark_tab(
                 "strict_parallel",
                 ["en"],
@@ -273,7 +289,7 @@ class TestWorkbenchHandlers:
     def test_handle_benchmark_tab_returns_runtime_message_when_benchmark_errors(self):
         from token_tax_ui import _handle_benchmark_tab
 
-        with patch("token_tax_ui.benchmark_corpus", side_effect=RuntimeError("boom")):
+        with patch("token_tax_ui.run_benchmark_request", side_effect=RuntimeError("boom")):
             outputs = _handle_benchmark_tab(
                 "Strict Evidence",
                 ["en"],
@@ -541,11 +557,12 @@ class TestWorkbenchHandlers:
 
     def test_handle_scenario_tab_recomputes_chart_outputs_across_runs(self):
         from token_tax_ui import _handle_scenario_tab
+        from workbench_types import ScenarioResult
 
-        def _fake_scenario_analysis(**kwargs):
-            tokenizer_key = kwargs["tokenizer_keys"][0]
+        def _fake_run_scenario_request(request, progress_callback=None):
+            tokenizer_key = request.tokenizer_keys[0]
             if tokenizer_key == "llama-3":
-                return [
+                return ScenarioResult(rows=[
                     {
                         "label": "Llama 3.2 3B Instruct (Free)",
                         "model_id": "meta-llama/llama-3.2-3b-instruct:free",
@@ -560,8 +577,8 @@ class TestWorkbenchHandlers:
                         "output_tokens_per_second": None,
                         "provenance": "strict_verified",
                     }
-                ]
-            return [
+                ], model_ids=["meta-llama/llama-3.2-3b-instruct:free"])
+            return ScenarioResult(rows=[
                 {
                     "label": "Qwen 2.5 7B Instruct (Free)",
                     "model_id": "qwen/qwen-2.5-7b-instruct:free",
@@ -576,9 +593,9 @@ class TestWorkbenchHandlers:
                     "output_tokens_per_second": None,
                     "provenance": "strict_verified",
                 }
-            ]
+            ], model_ids=["qwen/qwen-2.5-7b-instruct:free"])
 
-        with patch("token_tax_ui.scenario_analysis", side_effect=_fake_scenario_analysis):
+        with patch("token_tax_ui.run_scenario_request", side_effect=_fake_run_scenario_request):
             first = _handle_scenario_tab(
                 ["en"], ["llama-3"], 100000, 600, 250, 0.1, "rtc", "monthly_cost", "none", False, False, False
             )
@@ -590,8 +607,9 @@ class TestWorkbenchHandlers:
 
     def test_handle_scenario_tab_returns_final_tuple_not_streaming_generator(self):
         from token_tax_ui import _handle_scenario_tab
+        from workbench_types import ScenarioResult
 
-        with patch("token_tax_ui.scenario_analysis", return_value=[]):
+        with patch("token_tax_ui.run_scenario_request", return_value=ScenarioResult(rows=[], model_ids=[])):
             result = _handle_scenario_tab(
                 ["en"],
                 ["llama-3"],
