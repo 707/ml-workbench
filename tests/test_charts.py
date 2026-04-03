@@ -285,6 +285,23 @@ class TestBuildMetricScatter:
         sizes = [trace.marker.size for trace in fig.data]
         assert sizes[0] == pytest.approx(sizes[1])
 
+    def test_metric_scatter_adds_in_chart_key_for_tokenizer_families(self):
+        from workbench.charts import build_metric_scatter
+
+        fig = build_metric_scatter(
+            [
+                {"label": "A", "rtc": 1.0, "monthly_cost": 10.0, "tokenizer_key": "llama-3"},
+                {"label": "B", "rtc": 2.0, "monthly_cost": 20.0, "tokenizer_key": "mistral"},
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+        )
+
+        assert fig.layout.annotations
+        assert "Key" in fig.layout.annotations[0].text
+        assert "Llama 3 family" in fig.layout.annotations[0].text
+        assert "Mistral family" in fig.layout.annotations[0].text
+
 
 class TestBenchmarkBarCharts:
     def test_build_category_bar_returns_grouped_bar_chart(self):
@@ -398,6 +415,38 @@ class TestBuildScenarioLanguageDetailScatter:
         assert fig.layout.paper_bgcolor == "#ffffff"
         assert fig.layout.plot_bgcolor == "#ffffff"
         assert fig.layout.font.color == "#111111"
+
+    def test_language_detail_scatter_adds_point_kind_key(self):
+        from workbench.charts import build_scenario_language_detail_scatter
+
+        fig = build_scenario_language_detail_scatter(
+            [
+                {
+                    "label": "Model",
+                    "language": "English",
+                    "language_code": "en",
+                    "rtc": 1.0,
+                    "monthly_cost": 10.0,
+                    "tokenizer_key": "llama-3",
+                    "point_kind": "language",
+                },
+                {
+                    "label": "Model",
+                    "language": "Average",
+                    "language_code": "avg",
+                    "rtc": 1.2,
+                    "monthly_cost": 11.0,
+                    "tokenizer_key": "llama-3",
+                    "point_kind": "average",
+                },
+            ],
+            x_key="rtc",
+            y_key="monthly_cost",
+        )
+
+        assert fig.layout.annotations
+        assert "Language point" in fig.layout.annotations[0].text
+        assert "Model average" in fig.layout.annotations[0].text
 
 
 # ---------------------------------------------------------------------------

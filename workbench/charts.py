@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from workbench.tokenizer_registry import tokenizer_color_map
+from workbench.tokenizer_registry import TOKENIZER_FAMILY_SPECS, tokenizer_color_map
 
 RISK_COLORS = {
     "low": "#4CAF50",
@@ -15,6 +15,10 @@ RISK_COLORS = {
 
 
 TOKENIZER_COLORS = tokenizer_color_map()
+TOKENIZER_LABELS = {
+    key: spec.label
+    for key, spec in TOKENIZER_FAMILY_SPECS.items()
+}
 
 _MIN_BUBBLE_SIZE = 14
 _MAX_BUBBLE_SIZE = 34
@@ -68,6 +72,42 @@ def _apply_theme(fig):
         title_font={"color": "#111111"},
     )
     return fig
+
+
+def _scenario_key_annotation(
+    tokenizer_keys: list[str],
+    *,
+    include_point_kinds: bool = False,
+):
+    unique_keys = [key for key in dict.fromkeys(tokenizer_keys) if key in TOKENIZER_COLORS]
+    if not unique_keys and not include_point_kinds:
+        return None
+
+    lines = ["<b>Key</b>"]
+    for key in unique_keys:
+        color = TOKENIZER_COLORS.get(key, "#4C78A8")
+        label = TOKENIZER_LABELS.get(key, key)
+        lines.append(f'<span style="color:{color}">●</span> {label}')
+    if include_point_kinds:
+        lines.append('<span style="color:#111111">●</span> Language point')
+        lines.append('<span style="color:#111111">◆</span> Model average')
+
+    return {
+        "text": "<br>".join(lines),
+        "xref": "paper",
+        "yref": "paper",
+        "x": 0.01,
+        "y": 0.99,
+        "xanchor": "left",
+        "yanchor": "top",
+        "showarrow": False,
+        "align": "left",
+        "bgcolor": "rgba(255, 255, 255, 0.88)",
+        "bordercolor": "#cbd5e1",
+        "borderwidth": 1,
+        "borderpad": 6,
+        "font": {"size": 11, "color": "#111111"},
+    }
 
 
 def _normalize_bubble_sizes(values: list[float]) -> list[float]:
@@ -175,6 +215,9 @@ def build_metric_scatter(
         yaxis_title=y_title or y_key,
         showlegend=False,
     )
+    key_annotation = _scenario_key_annotation([str(row.get(color_key, "")) for row in filtered])
+    if key_annotation is not None:
+        fig.update_layout(annotations=[key_annotation])
     return _apply_theme(fig)
 
 
@@ -241,6 +284,12 @@ def build_scenario_language_detail_scatter(
         yaxis_title=y_title or y_key,
         showlegend=False,
     )
+    key_annotation = _scenario_key_annotation(
+        [str(row.get("tokenizer_key", "")) for row in filtered],
+        include_point_kinds=True,
+    )
+    if key_annotation is not None:
+        fig.update_layout(annotations=[key_annotation])
     return _apply_theme(fig)
 
 
