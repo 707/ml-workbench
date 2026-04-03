@@ -261,8 +261,11 @@ def build_scenario_language_detail_scatter(
         fig.add_trace(go.Scatter(
             x=[row[x_key]],
             y=[row[y_key]],
-            mode="markers",
+            mode="markers+text" if point_kind == "language" else "markers",
             name=hover_title,
+            text=[language] if point_kind == "language" else None,
+            textposition="top center",
+            textfont={"size": 10, "color": "#111111"},
             marker={
                 "size": size,
                 "symbol": symbol,

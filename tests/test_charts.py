@@ -392,6 +392,10 @@ class TestBuildScenarioLanguageDetailScatter:
 
         assert len(fig.data) == 3
         assert {trace.marker.symbol for trace in fig.data} == {"circle", "diamond"}
+        language_traces = [trace for trace in fig.data if trace.marker.symbol == "circle"]
+        assert {trace.text[0] for trace in language_traces} == {"English", "Arabic"}
+        average_traces = [trace for trace in fig.data if trace.marker.symbol == "diamond"]
+        assert all(trace.text is None for trace in average_traces)
 
     def test_keeps_white_chart_theme(self):
         from workbench.charts import build_scenario_language_detail_scatter
